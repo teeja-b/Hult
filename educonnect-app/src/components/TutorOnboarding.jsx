@@ -70,7 +70,7 @@ const handleSubmit = async (e) => {
       hourlyRate: formData.hourlyRate || null
     };
     
-    const response = await fetch('http://localhost:5000/api/tutor/profile', {
+    const response = await fetch('https://hult-ten.vercel.app /api/tutor/profile', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
