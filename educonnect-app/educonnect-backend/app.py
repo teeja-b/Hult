@@ -549,9 +549,24 @@ def register():
         )
         
         db.session.add(new_user)
-        db.session.commit()
+        db.session.flush()  # Get the user ID
         
         print(f"[REGISTER] User created with ID: {new_user.id}")
+        
+        # ✅ NEW: Create tutor profile immediately if user is a tutor
+        if new_user.user_type == 'tutor':
+            tutor_profile = TutorProfile(
+                user_id=new_user.id,
+                expertise=json.dumps([]),  # Empty, will be filled during onboarding
+                languages=json.dumps(['English']),
+                availability=json.dumps({}),
+                verified=False  # Set to False initially
+            )
+            db.session.add(tutor_profile)
+            db.session.flush()
+            print(f"[REGISTER] ✅ Created tutor profile with ID: {tutor_profile.id}")
+        
+        db.session.commit()
         
         # Create token
         access_token = create_access_token(identity=str(new_user.id))
@@ -565,15 +580,12 @@ def register():
             'income_level': new_user.income_level
         }
         
-        # ✅ CRITICAL: Check for tutor profile (will be null for new tutors)
+        # ✅ Add tutor_profile_id for tutors
         if new_user.user_type == 'tutor':
             tutor_profile = TutorProfile.query.filter_by(user_id=new_user.id).first()
             if tutor_profile:
                 user_data['tutor_profile_id'] = tutor_profile.id
-                print(f"[REGISTER] ✅ Found existing tutor_profile_id: {tutor_profile.id}")
-            else:
-                user_data['tutor_profile_id'] = None
-                print(f"[REGISTER] 📝 New tutor - profile will be created during onboarding")
+                print(f"[REGISTER] ✅ Returning tutor_profile_id: {tutor_profile.id}")
         
         return jsonify({
             'token': access_token,
@@ -586,7 +598,74 @@ def register():
         import traceback
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
+@app.route('/api/tutor/onboarding', methods=['POST', 'OPTIONS'])
+@jwt_required()
+def complete_tutor_onboarding():
+    """Complete tutor onboarding and save profile"""
+    
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        print("\n[ONBOARDING] Tutor onboarding endpoint hit")
+        
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can complete onboarding'}), 403
+        
+        data = request.get_json()
+        print(f"[ONBOARDING] Received data: {json.dumps(data, indent=2)}")
+        
+        # Get or create tutor profile
+        profile = user.tutor_profile
+        if not profile:
+            print("[ONBOARDING] Creating new tutor profile")
+            profile = TutorProfile(user_id=user.id)
+            db.session.add(profile)
+            db.session.flush()
+        else:
+            print(f"[ONBOARDING] Updating existing profile {profile.id}")
+        
+        # Update profile fields
+        if 'expertise' in data:
+            profile.expertise = json.dumps(data['expertise'])
+        if 'bio' in data:
+            profile.bio = data['bio']
+        if 'hourlyRate' in data or 'hourly_rate' in data:
+            profile.hourly_rate = float(data.get('hourlyRate') or data.get('hourly_rate', 0))
+        if 'languages' in data:
+            profile.languages = json.dumps(data['languages'])
+        if 'availability' in data:
+            profile.availability = json.dumps(data['availability'])
+        
+        # Set as verified (or require admin approval)
+        profile.verified = True  # Change to False if you want manual verification
+        
+        db.session.commit()
+        
+        print(f"✅ [ONBOARDING] Profile saved successfully! ID: {profile.id}")
+        
+        return jsonify({
+            'message': 'Onboarding completed successfully',
+            'tutor_profile_id': profile.id,
+            'profile': {
+                'id': profile.id,
+                'expertise': json.loads(profile.expertise or '[]'),
+                'bio': profile.bio,
+                'hourly_rate': profile.hourly_rate,
+                'verified': profile.verified
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [ONBOARDING ERROR] {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': 'Failed to complete onboarding'}), 500
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login_alt():
     """Alternative login endpoint without /auth/ prefix"""
@@ -1920,7 +1999,7 @@ def update_tutor_profile():
 @app.route('/api/tutors', methods=['GET'])
 def get_all_tutors():
     """Get all verified tutors"""
-    tutors = TutorProfile.query.filter_by(verified=True).all()
+    tutors = TutorProfile.query.all() 
     
     tutors_list = []
     for tutor in tutors:
