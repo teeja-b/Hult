@@ -30,7 +30,7 @@ app = Flask(__name__)
 # At the top of your file, replace CORS(app) with:
 CORS(app, resources={
     r"/api/*": {
-        "origins":"https://educonnect.vercel.app",  # Your Vercel URL
+        "origins":"https://*.vercel.app",  # Your Vercel URL
             "http://localhost:3000"   # Your frontend URL
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
