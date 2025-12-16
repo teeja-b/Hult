@@ -20,6 +20,17 @@ import io
 from datetime import datetime
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import Table, TableStyle
+import os
+import sys
+
+# Reduce memory usage
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+
+# Add timeout protection
+import signal
+signal.signal(signal.SIGALRM, lambda signum, frame: sys.exit(1))
+signal.alarm(60)  # 60 second timeout for startup
 
 
 # IMPORT YOUR ML SYSTEM
@@ -30,13 +41,8 @@ app = Flask(__name__)
 # At the top of your file, replace CORS(app) with:
 CORS(app, resources={
     r"/api/*": {
-<<<<<<< HEAD
-        "origins":"https://*.vercel.app",  # Your Vercel URL
-            "http://localhost:3000"   # Your frontend URL
-=======
         "origins":["https://educonnect.vercel.app",  # Your Vercel URL
             "http://localhost:3000"],   # Your frontend URL
->>>>>>> 8af5b9b (Updated)
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
@@ -94,7 +100,14 @@ def token_required(f):
     return decorated
 
 # INITIALIZE ML MATCHING SYSTEM
-matcher = TutorMatchingSystem()
+matcher = None
+
+def get_matcher():
+    global matcher
+    if matcher is None:
+        from ml_matcher import TutorMatchingSystem
+        matcher = TutorMatchingSystem()
+    return matcher
 
 # ============================================================================
 # DATABASE MODELS
@@ -725,7 +738,7 @@ def match_tutors():
         print(f"[MATCH] Prepared {len(tutors_data)} tutor records")
         print(f"[MATCH] Calling ML matcher...")
 
-        ml_matches = matcher.get_top_matches(student_data, tutors_data, top_n=10)
+        ml_matches = get_matcher().get_top_matches(student_data, tutors_data, top_n=10)
         print(f"[MATCH] ML matcher returned {len(ml_matches)} matches")
 
         matches = []
@@ -2329,4 +2342,5 @@ with app.app_context():
     db.create_all()
 
 if __name__ == '__main__':
+    signal.alarm(0)
     app.run(debug=True, port=5000)
