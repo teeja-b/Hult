@@ -59,7 +59,7 @@ os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'materials'), exist_ok=Tru
 
 db.init_app(app)
 bcrypt = Bcrypt(app)
-jwt_manager = JWTManager(app) 
+jwt = JWTManager(app) 
 
 def token_required(f):
     @wraps(f)
