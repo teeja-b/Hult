@@ -818,7 +818,7 @@ const downloadCourse = async (course) => {
     const token = localStorage.getItem('token');
     
     // Step 1: Record the download
-    const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${course.id}/download`, {
+    const response = await fetch('https://hult.onrender.com'/api/courses/${course.id}/download`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -834,7 +834,7 @@ const downloadCourse = async (course) => {
     const data = await response.json();
     
     // Step 2: Fetch all course materials
-    const materialsResponse = await fetch(`https://educonnect-backend.onrender.com/api/courses/${course.id}/materials`, {
+    const materialsResponse = await fetch('https://hult.onrender.com'/api/courses/${course.id}/materials`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
@@ -843,7 +843,7 @@ const downloadCourse = async (course) => {
     // Step 3: Download each material file
     for (const material of materialsData.materials || []) {
       try {
-        const fileResponse = await fetch(`https://educonnect-backend.onrender.com/api/materials/${material.id}/stream`);
+        const fileResponse = await fetch('https://hult.onrender.com'/api/materials/${material.id}/stream`);
         const blob = await fileResponse.blob();
         
         // Create download link
@@ -1530,7 +1530,7 @@ const MyCoursesView = () => {
   const updateProgress = async (enrollmentId, newProgress) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/enrollments/${enrollmentId}/progress`, {
+      const response = await fetch('https://hult.onrender.com'/api/enrollments/${enrollmentId}/progress`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1767,7 +1767,7 @@ const OfflineView = () => {
       
       // Step 1: Record download in database
       console.log('🔵 Step 1: Recording download...');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${course.course_id}/download`, {
+      const response = await fetch('https://hult.onrender.com'/api/courses/${course.course_id}/download`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1785,7 +1785,7 @@ const OfflineView = () => {
       
       // Step 2: Fetch course materials
       console.log('🔵 Step 2: Fetching materials...');
-      const materialsResponse = await fetch(`https://educonnect-backend.onrender.com/api/courses/${course.course_id}/materials`, {
+      const materialsResponse = await fetch('https://hult.onrender.com'/api/courses/${course.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1812,7 +1812,7 @@ const OfflineView = () => {
         try {
           console.log(`📥 Downloading: ${material.title}`);
           
-          const fileResponse = await fetch(`https://educonnect-backend.onrender.com/api/materials/${material.id}/download`, {
+          const fileResponse = await fetch('https://hult.onrender.com'/api/materials/${material.id}/download`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -1863,7 +1863,7 @@ const OfflineView = () => {
       const token = localStorage.getItem('token');
       const download = offlineDownloads.find(d => d.id === downloadId);
       
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${download.course_id}/download`, {
+      const response = await fetch('https://hult.onrender.com'/api/courses/${download.course_id}/download`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -2108,7 +2108,7 @@ const OfflineMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch('https://hult.onrender.com'/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2140,7 +2140,7 @@ const OfflineMaterialsView = () => {
   const handleDownloadMaterial = async (material) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/materials/${material.id}/download`, {
+      const response = await fetch('https://hult.onrender.com'/api/materials/${material.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -2242,7 +2242,7 @@ const OfflineMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2252,7 +2252,7 @@ const OfflineMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2264,7 +2264,7 @@ const OfflineMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2291,7 +2291,7 @@ const CourseMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch('https://hult.onrender.com'/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2406,7 +2406,7 @@ const CourseMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2416,7 +2416,7 @@ const CourseMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2428,7 +2428,7 @@ const CourseMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`https://educonnect-backend.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={'https://hult.onrender.com'/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2534,7 +2534,7 @@ const CourseMaterialsView = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://educonnect-backend.onrender.com/api/courses/${selectedCourse.id}/enroll`, {
+      const response = await fetch('https://hult.onrender.com'/api/courses/${selectedCourse.id}/enroll`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
