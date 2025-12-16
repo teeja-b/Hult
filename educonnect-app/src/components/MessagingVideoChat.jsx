@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Video, X } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://hult.onrender.com/api';
 
 const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
   const [tutors, setTutors] = useState([]);
