@@ -36,14 +36,7 @@ db = SQLAlchemy()
 app = Flask(__name__)
 
 # At the top of your file, replace CORS(app) with:
-CORS(app, resources={
-    r"/api/*": {
-        "origins":["hult-ten.vercel.app",
-            "http://localhost:3000"],   # Your frontend URL
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app, supports_credentials=True)
 
 # Configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///educonnect.db'
