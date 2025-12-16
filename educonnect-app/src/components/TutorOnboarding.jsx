@@ -70,7 +70,7 @@ const handleSubmit = async (e) => {
       hourlyRate: formData.hourlyRate || null
     };
     
-    const response = await fetch('https://hult.onrender.com/api/tutor/profile', {
+    const response = await fetch('https://hult.onrender.com/api/tutor/onboarding', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
