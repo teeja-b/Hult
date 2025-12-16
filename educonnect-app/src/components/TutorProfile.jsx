@@ -21,7 +21,7 @@ const TutorProfile = ({ onClose }) => {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://hult.onrender.comapi/tutor/profile', {
+      const response = await fetch('https://hult.onrender.com/api/tutor/profile', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -46,7 +46,7 @@ const TutorProfile = ({ onClose }) => {
   const handleSave = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://hult.onrender.comapi/tutor/profile', {
+      const response = await fetch('https://hult.onrender.com/api/tutor/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
