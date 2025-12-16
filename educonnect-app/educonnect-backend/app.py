@@ -1667,7 +1667,7 @@ def stream_material(material_id):
     # Handle CORS preflight
     if request.method == 'OPTIONS':
         response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        
         response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
@@ -1734,7 +1734,7 @@ def stream_material(material_id):
         )
         
         # Add CORS headers
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        
         response.headers['Access-Control-Allow-Credentials'] = 'true'
         
         print(f"✅ [STREAM] File sent successfully!")
@@ -1756,7 +1756,7 @@ def download_material(material_id):
     
     if request.method == 'OPTIONS':
         response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        
         return response
     
     try:
@@ -1783,7 +1783,7 @@ def download_material(material_id):
             download_name=f"{material.title}.{file_ext}"
         )
         
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        
         
         print(f"✅ [DOWNLOAD] File sent successfully")
         
