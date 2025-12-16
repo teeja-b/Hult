@@ -27,10 +27,7 @@ import sys
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 
-# Add timeout protection
-import signal
-signal.signal(signal.SIGALRM, lambda signum, frame: sys.exit(1))
-signal.alarm(60)  # 60 second timeout for startup
+
 
 
 # IMPORT YOUR ML SYSTEM
@@ -62,7 +59,7 @@ os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'materials'), exist_ok=Tru
 
 db.init_app(app)
 bcrypt = Bcrypt(app)
-jwt = JWTManager(app)
+jwt_manager = JWTManager(app) 
 
 def token_required(f):
     @wraps(f)
@@ -105,7 +102,6 @@ matcher = None
 def get_matcher():
     global matcher
     if matcher is None:
-        from ml_matcher import TutorMatchingSystem
         matcher = TutorMatchingSystem()
     return matcher
 
