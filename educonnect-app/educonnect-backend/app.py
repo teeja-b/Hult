@@ -36,6 +36,24 @@ db = SQLAlchemy()
 app = Flask(__name__)
 
 # At the top of your file, replace CORS(app) with:
+CORS(app, 
+     origins=[
+         "https://hult-ten.vercel.app",
+         "http://localhost:3000",
+         "http://localhost:5173",
+         "http://127.0.0.1:3000",
+         "http://127.0.0.1:5173"
+     ],
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization", "Accept"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     expose_headers=["Content-Type", "Authorization"])
+
+print("✅ CORS configured for:", [
+    "https://hult-ten.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173"
+])
 
 
 # Configuration
