@@ -14,7 +14,7 @@ import TutorMessagingView from './components/TutorMessagingView';
 
 
 const EduConnectApp = () => {
-  const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-backend.onrender.com';
+  const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-backend.onrender.com' || 'http://localhost:5000';
   const [showCourseManager, setShowCourseManager] = useState(false);
 const [tutorStats, setTutorStats] = useState({
   totalCourses: 0,
