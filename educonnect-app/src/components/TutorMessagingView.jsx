@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, User, Send, X, Clock, Search, ArrowLeft } from 'lucide-react';
 
-const API_URL = 'https://hult-ten.vercel.appapi';
+const API_URL = 'https://hult.onrender.com/api';
 
 // ✅ IMPORTANT: Pass the tutor's USER ID, not profile ID
 const TutorMessagingView = ({ 
