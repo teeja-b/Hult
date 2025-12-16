@@ -1089,7 +1089,7 @@ const LoginModal = () => {
             setUserType(response.data.user.user_type);
             setShowLogin(false);
             alert('Login successful!');
-          
+            localStorage.setItem('token', data.access_token);
           } catch (error) {
             console.error('Login error:', error);
             alert('Login failed: ' + (error.response?.data?.message || 'Unknown error'));
