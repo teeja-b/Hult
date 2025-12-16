@@ -34,7 +34,7 @@ const TutorCourseManager = ({ onClose }) => {
   const fetchCourses = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://hult-ten.vercel.app /api/tutor/courses', {
+      const response = await fetch('https://hult-ten.vercel.app/api/tutor/courses', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -52,7 +52,7 @@ const TutorCourseManager = ({ onClose }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://hult-ten.vercel.app /api/courses/create', {
+      const response = await fetch('https://hult-ten.vercel.app/api/courses/create', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -105,7 +105,7 @@ if (!response.ok) {
       formData.append('order', materialForm.order);
       formData.append('duration', materialForm.duration);
 
-      const response = await fetch('https://hult-ten.vercel.app /api/upload/material', {
+      const response = await fetch('https://hult-ten.vercel.app/api/upload/material', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -140,7 +140,7 @@ if (!response.ok) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`'https://hult-ten.vercel.app /api/courses/${courseId}`, {
+      const response = await fetch(`'https://hult-ten.vercel.app/api/courses/${courseId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -159,7 +159,7 @@ if (!response.ok) {
   const handleTogglePublish = async (course) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`'https://hult-ten.vercel.app /api/courses/${course.id}`, {
+      const response = await fetch(`'https://hult-ten.vercel.app/api/courses/${course.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
