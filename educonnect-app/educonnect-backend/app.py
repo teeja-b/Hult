@@ -37,14 +37,8 @@ app = Flask(__name__)
 
 # At the top of your file, replace CORS(app) with:
 CORS(app, 
-     origins=[
-         "https://hult-ten.vercel.app",
-         "http://localhost:3000",
-         "http://localhost:5173",
-         "http://127.0.0.1:3000",
-         "http://127.0.0.1:5173"
-     ],
-     supports_credentials=True,
+     origins="*",
+     supports_credentials=False,
      allow_headers=["Content-Type", "Authorization", "Accept"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      expose_headers=["Content-Type", "Authorization"])
@@ -1825,7 +1819,7 @@ def stream_material(material_id):
         
         # Add CORS headers
         
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        
         
         print(f"✅ [STREAM] File sent successfully!")
         print(f"{'='*70}\n")
