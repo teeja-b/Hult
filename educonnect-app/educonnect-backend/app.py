@@ -35,6 +35,23 @@ from ml_matcher import TutorMatchingSystem
 db = SQLAlchemy()
 app = Flask(__name__)
 
+CORS(app, 
+     resources={
+         r"/api/*": {
+             "origins": [
+                 "https://hult-ten.vercel.app",
+                 "https://hult-eo7epc9zc-teejas-projects-4aa98298.vercel.app",  # ✅ Your specific preview URL
+                 "https://*.vercel.app",  # Allow all Vercel preview deployments
+                 "http://localhost:3000",
+                 "http://localhost:5173"
+             ],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization", "Accept"],
+             "expose_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": False,  # ✅ Must be False when origins is "*" or you don't need cookies
+             "max_age": 3600
+         }
+     })
 
 
 print("✅ CORS configured for:", [
@@ -60,21 +77,7 @@ db.init_app(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app) 
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    return response
 
-@app.before_request
-def handle_preflight():
-    if request.method == 'OPTIONS':
-        response = make_response('', 200)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
 
 def token_required(f):
     @wraps(f)
