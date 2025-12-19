@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // FIXED: Use REACT_APP_API_URL and fallback to production URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' || 'http://localhost:3000';
 
 console.log('🔥 API Base URL:', API_BASE_URL); // Debug log
 
@@ -10,7 +10,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: false, // IMPORTANT: Include credentials for CORS
+   // IMPORTANT: Include credentials for CORS
 });
 
 // Attach JWT token to all requests
