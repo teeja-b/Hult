@@ -1,284 +1,601 @@
-import React, { useState } from 'react';
-import { CheckCircle, X, BookOpen, Clock, Globe, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { GraduationCap, Briefcase, DollarSign, Globe, Clock, BookOpen, ChevronRight, ChevronLeft, Save } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const TutorOnboarding = ({ onComplete, onSkip }) => {
-  const [step, setStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const totalSteps = 5;
+  
   const [formData, setFormData] = useState({
     expertise: [],
     bio: '',
-    languages: ['English'],
-    availability: { morning: false, afternoon: false, evening: false },
-    teachingStyle: 'adaptive',
-    hourlyRate: ''
+    hourly_rate: '',
+    languages: [],
+    availability: {
+      morning: false,
+      afternoon: false,
+      evening: false,
+      weekends: false
+    },
+    teaching_style: 'adaptive',
+    years_experience: '',
+    education: ''
   });
-
-  const [customSubject, setCustomSubject] = useState('');
-
-  const subjectOptions = [
-    'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Computer Science',
-    'Programming', 'Web Development', 'English', 'Literature', 'Writing',
-    'History', 'Geography', 'Economics', 'Business', 'Art', 'Music'
-  ];
-
-  const languageOptions = ['English', 'Spanish', 'French', 'Mandarin', 'German', 'Arabic', 'Hindi'];
   
-  const teachingStyles = [
-    { value: 'adaptive', label: 'Adaptive' },
-    { value: 'visual', label: 'Visual' },
-    { value: 'hands-on', label: 'Hands-on' },
-    { value: 'auditory', label: 'Auditory' }
-  ];
+  const [expertiseInput, setExpertiseInput] = useState('');
+  const [languageInput, setLanguageInput] = useState('');
 
-  const toggleSubject = (subject) => {
-    setFormData(prev => ({
-      ...prev,
-      expertise: prev.expertise.includes(subject)
-        ? prev.expertise.filter(s => s !== subject)
-        : [...prev.expertise, subject]
-    }));
+  // Load saved progress on mount
+  useEffect(() => {
+    loadSavedProgress();
+  }, []);
+
+  // Auto-save whenever formData changes (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (currentStep > 1) { // Don't auto-save on first step before user starts
+        autoSaveProgress();
+      }
+    }, 2000); // Save 2 seconds after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [formData]);
+
+  const loadSavedProgress = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/tutor/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.profile) {
+          setFormData({
+            expertise: data.profile.expertise || [],
+            bio: data.profile.bio || '',
+            hourly_rate: data.profile.hourly_rate?.toString() || '',
+            languages: data.profile.languages || [],
+            availability: data.profile.availability || {
+              morning: false,
+              afternoon: false,
+              evening: false,
+              weekends: false
+            },
+            teaching_style: data.profile.teaching_style || 'adaptive',
+            years_experience: data.profile.years_experience || '',
+            education: data.profile.education || ''
+          });
+          
+          console.log('✅ Loaded saved progress from server');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load saved progress:', error);
+    }
   };
 
-  const toggleLanguage = (language) => {
-    setFormData(prev => ({
-      ...prev,
-      languages: prev.languages.includes(language)
-        ? prev.languages.filter(l => l !== language)
-        : [...prev.languages, language]
-    }));
+  const autoSaveProgress = async () => {
+    setAutoSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_URL}/api/tutor/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expertise: formData.expertise,
+          bio: formData.bio,
+          hourly_rate: parseFloat(formData.hourly_rate) || 0,
+          languages: formData.languages,
+          availability: formData.availability,
+          teaching_style: formData.teaching_style,
+          years_experience: formData.years_experience,
+          education: formData.education
+        })
+      });
+      
+      console.log('💾 Auto-saved progress');
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    } finally {
+      setTimeout(() => setAutoSaving(false), 1000);
+    }
+  };
+
+  const handleComplete = async () => {
+    // Validation
+    if (formData.expertise.length === 0) {
+      alert('Please add at least one subject you can teach');
+      setCurrentStep(1);
+      return;
+    }
+    
+    if (!formData.bio || formData.bio.length < 20) {
+      alert('Please write a bio (at least 20 characters)');
+      setCurrentStep(2);
+      return;
+    }
+    
+    if (!formData.hourly_rate || parseFloat(formData.hourly_rate) <= 0) {
+      alert('Please set your hourly rate');
+      setCurrentStep(3);
+      return;
+    }
+    
+    if (formData.languages.length === 0) {
+      alert('Please add at least one language');
+      setCurrentStep(4);
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/tutor/onboarding`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expertise: formData.expertise,
+          bio: formData.bio,
+          hourlyRate: parseFloat(formData.hourly_rate),
+          languages: formData.languages,
+          availability: formData.availability,
+          teaching_style: formData.teaching_style,
+          years_experience: formData.years_experience,
+          education: formData.education
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Onboarding completed!');
+        
+        // Update localStorage
+        localStorage.setItem('profileComplete', 'true');
+        
+        if (data.tutor_profile_id) {
+          localStorage.setItem('tutorProfileId', data.tutor_profile_id);
+        }
+        
+        onComplete && onComplete(data);
+      } else {
+        const error = await response.json();
+        alert(`Failed to complete onboarding: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Onboarding error:', error);
+      alert('Failed to complete onboarding. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addExpertise = () => {
+    if (expertiseInput.trim() && !formData.expertise.includes(expertiseInput.trim())) {
+      setFormData({
+        ...formData,
+        expertise: [...formData.expertise, expertiseInput.trim()]
+      });
+      setExpertiseInput('');
+    }
+  };
+
+  const removeExpertise = (subject) => {
+    setFormData({
+      ...formData,
+      expertise: formData.expertise.filter(s => s !== subject)
+    });
+  };
+
+  const addLanguage = () => {
+    if (languageInput.trim() && !formData.languages.includes(languageInput.trim())) {
+      setFormData({
+        ...formData,
+        languages: [...formData.languages, languageInput.trim()]
+      });
+      setLanguageInput('');
+    }
+  };
+
+  const removeLanguage = (lang) => {
+    setFormData({
+      ...formData,
+      languages: formData.languages.filter(l => l !== lang)
+    });
   };
 
   const toggleAvailability = (time) => {
-    setFormData(prev => ({
-      ...prev,
-      availability: { ...prev.availability, [time]: !prev.availability[time] }
-    }));
+    setFormData({
+      ...formData,
+      availability: {
+        ...formData.availability,
+        [time]: !formData.availability[time]
+      }
+    });
   };
 
-const handleSubmit = async (e) => {
-  if (e) e.preventDefault();
-  
-  try {
-    const token = localStorage.getItem('token');
-    
-    // Construct the profile data from formData state
-    const profileData = {
-      expertise: formData.expertise,
-      bio: formData.bio,
-      languages: formData.languages,
-      availability: formData.availability,
-      teachingStyle: formData.teachingStyle,
-      hourlyRate: formData.hourlyRate || null
-    };
-    
-    const response = await fetch('https://hult.onrender.com/api/tutor/onboarding', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(profileData)
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      // ✅ Pass the profile data back to the parent
-      onComplete(data); // This should include tutor_profile_id
-    } else {
-      alert('Failed to save profile: ' + data.error);
+  const renderStep = () => {
+    switch(currentStep) {
+      case 1:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <BookOpen className="text-green-600" size={32} />
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">What do you teach?</h3>
+                <p className="text-sm text-gray-600">Add subjects you're qualified to teach</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={expertiseInput}
+                onChange={(e) => setExpertiseInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addExpertise()}
+                placeholder="e.g., Mathematics, Physics, Programming"
+                className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-green-500"
+              />
+              <button
+                onClick={addExpertise}
+                className="bg-green-600 text-white px-6 rounded-lg hover:bg-green-700 transition"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 min-h-[60px]">
+              {formData.expertise.map((subject, idx) => (
+                <span
+                  key={idx}
+                  className="bg-green-100 text-green-800 px-4 py-2 rounded-full flex items-center gap-2"
+                >
+                  {subject}
+                  <button
+                    onClick={() => removeExpertise(subject)}
+                    className="text-green-600 hover:text-green-800 font-bold"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {formData.expertise.length === 0 && (
+                <p className="text-gray-400 italic">No subjects added yet</p>
+              )}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+              <p className="text-sm text-blue-800">
+                💡 Tip: Add at least 2-3 subjects to attract more students
+              </p>
+            </div>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <GraduationCap className="text-green-600" size={32} />
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">Tell us about yourself</h3>
+                <p className="text-sm text-gray-600">Write a compelling bio for students</p>
+              </div>
+            </div>
+
+            <textarea
+              value={formData.bio}
+              onChange={(e) => setFormData({...formData, bio: e.target.value})}
+              placeholder="Share your teaching experience, qualifications, and what makes you a great tutor..."
+              className="w-full p-4 border rounded-lg h-48 focus:ring-2 focus:ring-green-500"
+            />
+
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">
+                {formData.bio.length} characters
+              </span>
+              <span className={formData.bio.length >= 20 ? 'text-green-600' : 'text-gray-400'}>
+                Minimum: 20 characters
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Years of Experience (optional)
+                </label>
+                <input
+                  type="number"
+                  value={formData.years_experience}
+                  onChange={(e) => setFormData({...formData, years_experience: e.target.value})}
+                  placeholder="5"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Education & Certifications (optional)
+                </label>
+                <textarea
+                  value={formData.education}
+                  onChange={(e) => setFormData({...formData, education: e.target.value})}
+                  placeholder="e.g., Bachelor's in Education, Teaching Certification..."
+                  className="w-full p-3 border rounded-lg h-24 focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 mb-4">
+              <DollarSign className="text-green-600" size={32} />
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">Set your rate</h3>
+                <p className="text-sm text-gray-600">How much do you charge per hour?</p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute left-4 top-4 text-gray-500 text-xl">$</span>
+              <input
+                type="number"
+                value={formData.hourly_rate}
+                onChange={(e) => setFormData({...formData, hourly_rate: e.target.value})}
+                placeholder="25"
+                className="w-full p-4 pl-10 border rounded-lg text-xl focus:ring-2 focus:ring-green-500"
+              />
+              <span className="absolute right-4 top-4 text-gray-500">/hour</span>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <h4 className="font-semibold text-gray-800 mb-3">Suggested rates:</h4>
+              <div className="space-y-2">
+                {[
+                  { rate: 15, level: 'Beginner tutor' },
+                  { rate: 25, level: 'Experienced tutor' },
+                  { rate: 40, level: 'Expert/Specialized' },
+                  { rate: 60, level: 'Professional educator' }
+                ].map(({ rate, level }) => (
+                  <button
+                    key={rate}
+                    onClick={() => setFormData({...formData, hourly_rate: rate.toString()})}
+                    className="w-full flex justify-between items-center p-3 bg-white rounded-lg hover:bg-green-50 transition border"
+                  >
+                    <span className="text-gray-700">{level}</span>
+                    <span className="font-bold text-green-600">${rate}/hr</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Teaching Style
+              </label>
+              <select
+                value={formData.teaching_style}
+                onChange={(e) => setFormData({...formData, teaching_style: e.target.value})}
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-green-500"
+              >
+                <option value="adaptive">Adaptive - Adjust to student needs</option>
+                <option value="structured">Structured - Follow curriculum closely</option>
+                <option value="interactive">Interactive - Lots of discussions</option>
+                <option value="hands-on">Hands-on - Practical exercises</option>
+              </select>
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Globe className="text-green-600" size={32} />
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">Languages</h3>
+                <p className="text-sm text-gray-600">What languages can you teach in?</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={languageInput}
+                onChange={(e) => setLanguageInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addLanguage()}
+                placeholder="e.g., English, Spanish, French"
+                className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-green-500"
+              />
+              <button
+                onClick={addLanguage}
+                className="bg-green-600 text-white px-6 rounded-lg hover:bg-green-700 transition"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 min-h-[60px]">
+              {formData.languages.map((lang, idx) => (
+                <span
+                  key={idx}
+                  className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full flex items-center gap-2"
+                >
+                  {lang}
+                  <button
+                    onClick={() => removeLanguage(lang)}
+                    className="text-blue-600 hover:text-blue-800 font-bold"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {formData.languages.length === 0 && (
+                <p className="text-gray-400 italic">No languages added yet</p>
+              )}
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+              <p className="text-sm text-yellow-800">
+                💡 Adding multiple languages helps you reach more students
+              </p>
+            </div>
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Clock className="text-green-600" size={32} />
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">Availability</h3>
+                <p className="text-sm text-gray-600">When are you available to teach?</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'morning', label: 'Morning', icon: '🌅' },
+                { key: 'afternoon', label: 'Afternoon', icon: '☀️' },
+                { key: 'evening', label: 'Evening', icon: '🌙' },
+                { key: 'weekends', label: 'Weekends', icon: '📅' }
+              ].map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => toggleAvailability(key)}
+                  className={`p-4 rounded-lg border-2 transition ${
+                    formData.availability[key]
+                      ? 'bg-green-100 border-green-500 text-green-800'
+                      : 'bg-gray-50 border-gray-200 text-gray-600'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{icon}</div>
+                  <div className="font-semibold">{label}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-6">
+              <h4 className="font-semibold text-green-900 mb-2">Review Your Profile</h4>
+              <div className="space-y-2 text-sm">
+                <p>✓ Expertise: {formData.expertise.join(', ')}</p>
+                <p>✓ Rate: ${formData.hourly_rate}/hour</p>
+                <p>✓ Languages: {formData.languages.join(', ')}</p>
+                <p>✓ Available: {Object.entries(formData.availability).filter(([k, v]) => v).map(([k]) => k).join(', ')}</p>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
     }
-  } catch (error) {
-    console.error('Error saving profile:', error);
-    alert('Failed to save profile');
-  }
-};
+  };
+
+  const canProceed = () => {
+    switch(currentStep) {
+      case 1: return formData.expertise.length > 0;
+      case 2: return formData.bio.length >= 20;
+      case 3: return formData.hourly_rate && parseFloat(formData.hourly_rate) > 0;
+      case 4: return formData.languages.length > 0;
+      case 5: return Object.values(formData.availability).some(v => v);
+      default: return false;
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 text-white p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h2 className="text-2xl font-bold">Welcome to EduConnect! 🎓</h2>
-              <p className="text-green-100 text-sm">Set up your tutor profile</p>
-            </div>
-            <button onClick={onSkip} className="text-white hover:bg-white/20 p-2 rounded">
-              <X size={24} />
-            </button>
-          </div>
-          <div className="w-full bg-white/20 rounded-full h-2">
-            <div className="bg-white h-2 rounded-full" style={{ width: `${(step/5)*100}%` }}></div>
-          </div>
-          <p className="text-xs text-green-100 mt-2">Step {step} of 5</p>
-        </div>
-
-        <div className="p-6">
-          {step === 1 && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">What subjects do you teach?</h3>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {subjectOptions.map(subject => (
-                  <button
-                    key={subject}
-                    onClick={() => toggleSubject(subject)}
-                    className={`p-3 rounded-lg border-2 transition ${
-                      formData.expertise.includes(subject)
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 hover:border-green-300'
-                    }`}
-                  >
-                    {formData.expertise.includes(subject) && <CheckCircle size={16} className="inline mr-1" />}
-                    {subject}
-                  </button>
-                ))}
+      <div className="bg-white rounded-lg max-w-2xl w-full">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 text-white p-6 rounded-t-lg">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Complete Your Tutor Profile</h2>
+            {autoSaving && (
+              <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full">
+                <Save size={16} className="animate-pulse" />
+                <span className="text-sm">Saving...</span>
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customSubject}
-                  onChange={(e) => setCustomSubject(e.target.value)}
-                  placeholder="Add custom subject"
-                  className="flex-1 p-2 border rounded"
-                />
-                <button
-                  onClick={() => {
-                    if (customSubject.trim()) {
-                      toggleSubject(customSubject.trim());
-                      setCustomSubject('');
-                    }
-                  }}
-                  className="bg-green-600 text-white px-4 py-2 rounded"
-                >
-                  Add
-                </button>
-              </div>
-              <p className="text-sm text-gray-600 mt-4">Selected: {formData.expertise.length} subjects</p>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">Tell students about yourself</h3>
-              <textarea
-                value={formData.bio}
-                onChange={(e) => setFormData({...formData, bio: e.target.value})}
-                placeholder="Share your teaching experience, qualifications, and teaching philosophy..."
-                className="w-full p-3 border rounded h-32"
+            )}
+          </div>
+          <div className="flex gap-2">
+            {[...Array(totalSteps)].map((_, idx) => (
+              <div
+                key={idx}
+                className={`flex-1 h-2 rounded-full transition-all ${
+                  idx < currentStep ? 'bg-white' : 'bg-white/30'
+                }`}
               />
-              <p className="text-sm text-gray-600 mt-2">{formData.bio.length}/500 characters (min 20)</p>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">When are you available?</h3>
-              <div className="space-y-3">
-                {['morning', 'afternoon', 'evening'].map(time => (
-                  <button
-                    key={time}
-                    onClick={() => toggleAvailability(time)}
-                    className={`w-full p-4 rounded-lg border-2 transition text-left ${
-                      formData.availability[time]
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-green-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Clock size={20} />
-                        <span className="font-semibold capitalize">{time}</span>
-                      </div>
-                      {formData.availability[time] && <CheckCircle className="text-green-600" size={20} />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">What languages do you speak?</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {languageOptions.map(language => (
-                  <button
-                    key={language}
-                    onClick={() => toggleLanguage(language)}
-                    className={`p-3 rounded-lg border-2 transition ${
-                      formData.languages.includes(language)
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 hover:border-green-300'
-                    }`}
-                  >
-                    {formData.languages.includes(language) && <CheckCircle size={16} className="inline mr-1" />}
-                    {language}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div>
-              <h3 className="text-xl font-bold mb-4">What's your teaching style?</h3>
-              <div className="space-y-2 mb-4">
-                {teachingStyles.map(style => (
-                  <button
-                    key={style.value}
-                    onClick={() => setFormData({...formData, teachingStyle: style.value})}
-                    className={`w-full p-4 rounded-lg border-2 transition text-left ${
-                      formData.teachingStyle === style.value
-                        ? 'border-green-500 bg-green-50'
-                        : 'border-gray-200 hover:border-green-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">{style.label}</span>
-                      {formData.teachingStyle === style.value && <CheckCircle className="text-green-600" size={20} />}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Hourly Rate (Optional)</label>
-                <input
-                  type="number"
-                  value={formData.hourlyRate}
-                  onChange={(e) => setFormData({...formData, hourlyRate: e.target.value})}
-                  placeholder="e.g., 25"
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
+          <p className="text-sm text-green-100 mt-2">
+            Step {currentStep} of {totalSteps}
+          </p>
         </div>
 
-        <div className="p-6 border-t flex justify-between">
-          {step > 1 && (
+        {/* Content */}
+        <div className="p-6 min-h-[400px]">
+          {renderStep()}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t bg-gray-50 rounded-b-lg flex justify-between">
+          <div className="flex gap-2">
+            {currentStep > 1 && (
+              <button
+                onClick={() => setCurrentStep(currentStep - 1)}
+                className="flex items-center gap-2 px-6 py-3 border rounded-lg hover:bg-gray-100 transition"
+              >
+                <ChevronLeft size={20} />
+                Back
+              </button>
+            )}
             <button
-              onClick={() => setStep(step - 1)}
-              className="px-6 py-2 border rounded hover:bg-gray-50"
+              onClick={onSkip}
+              className="px-6 py-3 text-gray-600 hover:text-gray-800 transition"
             >
-              Back
+              Skip for now
+            </button>
+          </div>
+
+          {currentStep < totalSteps ? (
+            <button
+              onClick={() => setCurrentStep(currentStep + 1)}
+              disabled={!canProceed()}
+              className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <ChevronRight size={20} />
+            </button>
+          ) : (
+            <button
+              onClick={handleComplete}
+              disabled={saving || !canProceed()}
+              className="bg-gradient-to-r from-green-600 to-teal-600 text-white px-8 py-3 rounded-lg hover:shadow-lg transition disabled:opacity-50 flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Completing...
+                </>
+              ) : (
+                'Complete Profile'
+              )}
             </button>
           )}
-          <button
-            onClick={() => step < 5 ? setStep(step + 1) : handleSubmit()}
-            disabled={
-              (step === 1 && formData.expertise.length === 0) ||
-              (step === 2 && formData.bio.length < 20) ||
-              (step === 3 && !Object.values(formData.availability).some(v => v))
-            }
-            className={`px-6 py-2 rounded ml-auto ${
-              (step === 1 && formData.expertise.length === 0) ||
-              (step === 2 && formData.bio.length < 20) ||
-              (step === 3 && !Object.values(formData.availability).some(v => v))
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700'
-            }`}
-          >
-            {step === 5 ? 'Complete' : 'Next'}
-          </button>
         </div>
       </div>
     </div>

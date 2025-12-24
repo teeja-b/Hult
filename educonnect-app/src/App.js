@@ -4,17 +4,22 @@ import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
 import { register, login, getMatchedTutors } from './services/api';
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Users, Award, Heart, Download, Menu, X, Search, Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, Video, FileText, CheckCircle, MapPin, Shield, AlertCircle } from 'lucide-react';
+import { BookOpen, Users, Award, Heart, Download, Menu, X, Search, Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, Video, FileText, CheckCircle, MapPin, Shield, AlertCircle,Lock } from 'lucide-react';
 import { LogOut } from 'lucide-react';
 import TutorCourseManager from './components/TutorCourseManager';
 import MessagingVideoChat from './components/MessagingVideoChat';
 import TutorMessagingView from './components/TutorMessagingView';
-
-
-
+import { 
+  EnhancedRegisterModal, 
+  EnhancedLoginModal, 
+  ForgotPasswordModal,
+  EmailVerificationBanner 
+} from './components/AuthModals';
+import PasswordResetPage from './components/PasswordResetPage';
+import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
 
 const EduConnectApp = () => {
-  const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' || 'http://localhost:5000';
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000' ;
   const [showCourseManager, setShowCourseManager] = useState(false);
 const [tutorStats, setTutorStats] = useState({
   totalCourses: 0,
@@ -23,6 +28,9 @@ const [tutorStats, setTutorStats] = useState({
 
 });
 
+
+  // Add this with your other state declarations (around line 40)
+const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showStudentProfile, setShowStudentProfile] = useState(false);
   const [showTutorProfile, setShowTutorProfile] = useState(false);
   const [showTutorOnboarding, setShowTutorOnboarding] = useState(false);
@@ -41,18 +49,12 @@ const [tutorStats, setTutorStats] = useState({
   const [matchedTutors, setMatchedTutors] = useState([]);
   const [showVerification, setShowVerification] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-
-
+  const [courses, setCourses] = useState([]);
+const [tutors, setTutors] = useState([]);
+  const [showProfileCompletionPrompt, setShowProfileCompletionPrompt] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [registerData, setRegisterData] = useState({ 
-    name: '',
-    email: '', 
-    password: '',
-    role: 'student'
-  });
 
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [bookingData, setBookingData] = useState({
@@ -248,18 +250,19 @@ const [downloading, setDownloading] = useState(null);
     'UY': { name: 'Uruguay', income: 'high-income' },
   };
 
-  const courses = [
-    { id: 1, title: 'Introduction to Mathematics', tutor: 'Dr. Sarah Johnson', level: 'Beginner', duration: '8 weeks', rating: 4.8, students: 1234, offline: true, category: 'Math' },
-    { id: 2, title: 'Web Development Basics', tutor: 'John Smith', level: 'Intermediate', duration: '10 weeks', rating: 4.9, students: 2341, offline: true, category: 'Technology' },
-    { id: 3, title: 'English Grammar Mastery', tutor: 'Emma Williams', level: 'Beginner', duration: '6 weeks', rating: 4.7, students: 987, offline: false, category: 'Language' },
-    { id: 4, title: 'Physics Fundamentals', tutor: 'Prof. Michael Chen', level: 'Advanced', duration: '12 weeks', rating: 4.9, students: 1567, offline: true, category: 'Science' },
-  ];
-
-  const tutors = [
-    { id: 1, name: 'Dr. Sarah Johnson', expertise: 'Mathematics, Physics', rating: 4.9, sessions: 234, languages: ['English', 'Spanish'], availability: 'Morning', matchScore: 95 },
-    { id: 2, name: 'John Smith', expertise: 'Web Development, Programming', rating: 4.8, sessions: 189, languages: ['English'], availability: 'Evening', matchScore: 88 },
-    { id: 3, name: 'Emma Williams', expertise: 'English, Literature', rating: 4.7, sessions: 156, languages: ['English', 'French'], availability: 'Afternoon', matchScore: 92 },
-  ];
+useEffect(() => {
+  if (isAuthenticated && userType === 'tutor') {
+    const profileComplete = localStorage.getItem('profileComplete');
+    const promptDismissed = sessionStorage.getItem('profilePromptDismissed');
+    
+    if (profileComplete !== 'true' && !promptDismissed) {
+      // Show prompt after a short delay
+      setTimeout(() => {
+        setShowProfileCompletionPrompt(true);
+      }, 1000);
+    }
+  }
+}, [isAuthenticated, userType]);
 
 const NavBar = ({ 
   userType,
@@ -302,6 +305,12 @@ const NavBar = ({
                 onClick={() => setShowLogin(true)} 
                 className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/30 transition"
               >
+                 {userType === 'tutor' && localStorage.getItem('profileComplete') === 'false' && (
+                <div className="hidden sm:flex items-center gap-2 bg-yellow-100 px-3 py-2 rounded-lg border border-yellow-300">
+                  <AlertCircle size={16} className="text-yellow-600" />
+                  <span className="text-xs font-medium text-yellow-800">Profile Incomplete</span>
+                </div>
+              )}
                 Login
               </button>
               <button 
@@ -429,6 +438,17 @@ const NavBar = ({
               </button>
             )}
 
+<button 
+  onClick={() => {
+    setShowPasswordReset(true);
+    setMenuOpen(false);
+  }}
+  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+>
+  <Lock size={20} />
+  <span className="font-medium">Change Password</span>
+</button>
+
             {/* Tutor-specific - MANAGE COURSES BUTTON */}
             {isAuthenticated && userType === 'tutor' && (
               <button 
@@ -463,17 +483,110 @@ const NavBar = ({
     </div>
   );
 };
+// In your App.js, add this test component temporarily:
 
+const DebugTutorFetch = () => {
+  const [tutors, setTutors] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchTutors = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/tutors');
+      const data = await response.json();
+      console.log('📊 Frontend received:', data);
+      setTutors(data.tutors || []);
+    } catch (error) {
+      console.error('❌ Fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+      <h3 className="font-bold mb-2">🔍 Debug: Tutor Fetch Test</h3>
+      <button 
+        onClick={fetchTutors}
+        className="bg-blue-600 text-white px-4 py-2 rounded mb-2"
+      >
+        Fetch Tutors
+      </button>
+      
+      {loading && <p>Loading...</p>}
+      
+      {tutors.length > 0 && (
+        <div className="mt-2">
+          <p className="font-semibold">Found {tutors.length} tutors:</p>
+          <ul className="text-xs space-y-1 mt-2">
+            {tutors.map(t => (
+              <li key={t.id} className="bg-white p-2 rounded">
+                {t.name} - {t.expertise?.slice(0, 50)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Add this to your HomeView temporarily:
+{userType === 'student' && <DebugTutorFetch />}
 // Replace your existing useEffect (around line 489) with these TWO separate effects:
 
+// Replace your initial useEffect with this:
 useEffect(() => {
   detectUserLocation();
+  
   const token = localStorage.getItem('token');
   const storedUserType = localStorage.getItem('userType');
-  if (token) {
+  const profileComplete = localStorage.getItem('profileComplete');
+  
+  console.log('🔍 App Mount - Checking stored data:');
+  console.log('- token:', token ? 'exists' : 'missing');
+  console.log('- userType:', storedUserType);
+  console.log('- profileComplete:', profileComplete);
+  
+  if (token && storedUserType) {
     setIsAuthenticated(true);
     setUserType(storedUserType);
+    
+    // ✅ CRITICAL: Don't show onboarding if profile is complete
+    if (storedUserType === 'tutor') {
+      const isComplete = profileComplete === 'true';
+      console.log('📝 Tutor detected on mount, profileComplete =', isComplete);
+      
+      // Only show onboarding if explicitly incomplete
+      if (!isComplete) {
+        console.log('⚠️ Profile incomplete, will show prompt if needed');
+      } else {
+        console.log('✅ Profile complete, no prompt needed');
+      }
+    }
   }
+}, []);
+
+// Fetch courses and tutors count for student home dashboard
+// Fetch courses and tutors count for student home dashboard
+useEffect(() => {
+  const fetchHomeStats = async () => {
+    try {
+      const coursesRes = await fetch(`${API_URL}/api/courses`);
+      const coursesData = await coursesRes.json();
+      setCourses(coursesData.courses || []);
+      
+      const tutorsRes = await fetch(`${API_URL}/api/tutors`);
+      const tutorsData = await tutorsRes.json();
+      setTutors(tutorsData.tutors || []);
+    } catch (error) {
+      console.error('Failed to fetch home stats:', error);
+      setCourses([]);
+      setTutors([]);
+    }
+  };
+  
+  fetchHomeStats();
 }, []);
 
 // NEW: Separate effect to fetch tutor stats when authentication and userType are ready
@@ -818,7 +931,7 @@ const downloadCourse = async (course) => {
     const token = localStorage.getItem('token');
     
     // Step 1: Record the download
-    const response = await fetch(`https://hult.onrender.com/api/courses/${course.id}/download`, {
+    const response = await fetch(`http://localhost:5000/api/courses/${course.id}/download`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -834,7 +947,7 @@ const downloadCourse = async (course) => {
     const data = await response.json();
     
     // Step 2: Fetch all course materials
-    const materialsResponse = await fetch(`https://hult.onrender.com/api/courses/${course.id}/materials`, {
+    const materialsResponse = await fetch(`http://localhost:5000/api/courses/${course.id}/materials`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
@@ -843,7 +956,7 @@ const downloadCourse = async (course) => {
     // Step 3: Download each material file
     for (const material of materialsData.materials || []) {
       try {
-        const fileResponse = await fetch(`https://hult.onrender.com/api/materials/${material.id}/stream`);
+        const fileResponse = await fetch(`http://localhost:5000/api/materials/${material.id}/stream`);
         const blob = await fileResponse.blob();
         
         // Create download link
@@ -920,236 +1033,36 @@ useEffect(() => {
     }
   };
 const [showSurvey, setShowSurvey] = useState(false);
-const RegisterModal = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold mb-4">Create Account</h2>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const response = await register({ name, email, password, role });
-            console.log('🔍 Register response:', response.data);
-            
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('userId', response.data.user.id);
-            localStorage.setItem('userName', response.data.user.name);
-            localStorage.setItem('userType', response.data.user.user_type);
-            setIsAuthenticated(true);
-            setUserType(response.data.user.user_type);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
 
-            // ✅ CRITICAL: Handle tutor_profile_id for new tutors
-            if (role === 'tutor') {
-              if (response.data.user.tutor_profile_id) {
-                localStorage.setItem('tutorProfileId', response.data.user.tutor_profile_id);
-                console.log('✅ Stored tutorProfileId:', response.data.user.tutor_profile_id);
-              } else {
-                console.log('📝 New tutor registered - will get profile ID after onboarding');
-              }
-              setShowTutorOnboarding(true);
-            }
-            
-            alert('Registration successful! ' + (role === 'tutor' ? 'Please complete your tutor profile.' : 'Welcome!'));
-            setShowRegister(false);
-            
-            if (role === 'student') {
-              setShowLogin(false); // Keep them logged in
-            }
-          } catch (error) {
-            console.error('Registration error:', error);
-            alert('Registration failed: ' + (error.response?.data?.message || 'Unknown error'));
-          }
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Full Name</label>
-              <input 
-                type="text" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
-              <input 
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded"
-                minLength="6"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">I am a...</label>
-              <select 
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full p-2 border rounded"
-              >
-                <option value="student">Student</option>
-                <option value="tutor">Tutor</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex gap-2 mt-6">
-            <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700">
-              Register
-            </button>
-            <button type="button" onClick={() => setShowRegister(false)} className="flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400">
-              Cancel
-            </button>
-          </div>
-          
-          <p className="text-sm text-center mt-3">
-            Already have an account?{' '}
-            <button 
-              type="button"
-              onClick={() => { setShowRegister(false); setShowLogin(true); }}
-              className="text-blue-600 hover:underline"
-            >
-              Login here
-            </button>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
-};
-const LoginModal = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold mb-4">Login to Continue</h2>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const response = await login({ email, password });
-            console.log('🔍 Login response:', response.data);
-            
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('userId', response.data.user.id);
-            localStorage.setItem('userName', response.data.user.name);
-            localStorage.setItem('userType', response.data.user.user_type);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-
-            // ✅ CRITICAL: Handle tutor_profile_id
-            if (response.data.user.user_type === 'tutor') {
-              if (response.data.user.tutor_profile_id) {
-                localStorage.setItem('tutorProfileId', response.data.user.tutor_profile_id);
-                console.log('✅ Stored tutorProfileId:', response.data.user.tutor_profile_id);
-              } else {
-                // Try to fetch tutor profile from backend
-                console.warn('⚠️ No tutor_profile_id in login response. Fetching from API...');
-                try {
-                  const token = response.data.token;
-                  const profileResponse = await fetch('https://hult.onrender.com/api/tutor/profile', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                  });
-                  const profileData = await profileResponse.json();
-                  
-                  if (profileData.tutor_profile_id) {
-                    localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
-                    console.log('✅ Fetched and stored tutorProfileId:', profileData.tutor_profile_id);
-                  } else {
-                    alert('⚠️ Your tutor profile is incomplete. Please complete onboarding first.');
-                    setShowTutorOnboarding(true);
-                  }
-                } catch (fetchError) {
-                  console.error('Failed to fetch tutor profile:', fetchError);
-                  alert('⚠️ Could not load tutor profile. Please complete your profile setup.');
-                  setShowTutorOnboarding(true);
-                }
-              }
-            }
-            
-            setIsAuthenticated(true);
-            setUserType(response.data.user.user_type);
-            setShowLogin(false);
-            alert('Login successful!');
-            
-          } catch (error) {
-            console.error('Login error:', error);
-            alert('Login failed: ' + (error.response?.data?.message || 'Unknown error'));
-          }
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
-              <input 
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="flex gap-2 mt-6">
-            <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-              Login
-            </button>
-            <button type="button" onClick={() => setShowLogin(false)} className="flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400">
-              Cancel
-            </button>
-          </div>
-          
-          <p className="text-sm text-center mt-3">
-            Don't have an account?{' '}
-            <button 
-              type="button"
-              onClick={() => { setShowLogin(false); setShowRegister(true); }}
-              className="text-blue-600 hover:underline"
-            >
-              Register here
-            </button>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 const HomeView = () => {
 
 
   return (
     <div className="p-4">
-    {showRegister && <RegisterModal />}
-    {showLogin && <LoginModal />}
+{showRegister && (
+  <EnhancedRegisterModal 
+    onClose={() => setShowRegister(false)}
+    onSuccess={(data) => {
+      setIsAuthenticated(true);
+      setUserType(data.user.user_type);
+      setShowRegister(false);
+      // Handle onboarding if needed
+    }}
+  />
+)}
+
+{showLogin && (
+  <EnhancedLoginModal 
+    onClose={() => setShowLogin(false)}
+    onSuccess={(data) => {
+      setIsAuthenticated(true);
+      setUserType(data.user.user_type);
+      setShowLogin(false);
+    }}
+  />
+)}
     {showSurvey && (
   <StudentSurvey
     onClose={() => setShowSurvey(false)}
@@ -1374,7 +1287,7 @@ const CoursesView = () => {
 
   const fetchAllCourses = async () => {
     try {
-      const response = await fetch('https://hult.onrender.com/api/courses');
+      const response = await fetch('http://localhost:5000/api/courses');
       const data = await response.json();
       setAllCourses(data.courses || []);
     } catch (error) {
@@ -1460,7 +1373,7 @@ const fetchTutorStats = async () => {
   try {
     const token = localStorage.getItem('token');
     
-    const response = await fetch('https://hult.onrender.com/api/tutor/stats', {
+    const response = await fetch('http://localhost:5000/api/tutor/stats', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
@@ -1509,7 +1422,7 @@ const MyCoursesView = () => {
       const token = localStorage.getItem('token');
       console.log('🔵 Token:', token ? 'exists' : 'missing');
       
-      const response = await fetch('https://hult.onrender.com/api/student/enrollments', {
+      const response = await fetch('http://localhost:5000/api/student/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1531,7 +1444,7 @@ const MyCoursesView = () => {
   const updateProgress = async (enrollmentId, newProgress) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://hult.onrender.com/api/enrollments/${enrollmentId}/progress`, {
+      const response = await fetch(`http://localhost:5000/api/enrollments/${enrollmentId}/progress`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1735,13 +1648,13 @@ const OfflineView = () => {
       const token = localStorage.getItem('token');
       
       // Fetch user's offline downloads
-      const downloadsResponse = await fetch('https://hult.onrender.com/api/student/downloads', {
+      const downloadsResponse = await fetch('http://localhost:5000/api/student/downloads', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const downloadsData = await downloadsResponse.json();
       
       // Fetch enrolled courses that are offline-available
-      const enrollmentsResponse = await fetch('https://hult.onrender.com/api/student/enrollments', {
+      const enrollmentsResponse = await fetch('http://localhost:5000/api/student/enrollments', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const enrollmentsData = await enrollmentsResponse.json();
@@ -1768,7 +1681,7 @@ const OfflineView = () => {
       
       // Step 1: Record download in database
       console.log('🔵 Step 1: Recording download...');
-      const response = await fetch(`https://hult.onrender.com/api/courses/${course.course_id}/download`, {
+      const response = await fetch(`http://localhost:5000/api/courses/${course.course_id}/download`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1786,7 +1699,7 @@ const OfflineView = () => {
       
       // Step 2: Fetch course materials
       console.log('🔵 Step 2: Fetching materials...');
-      const materialsResponse = await fetch(`https://hult.onrender.com/api/courses/${course.course_id}/materials`, {
+      const materialsResponse = await fetch(`http://localhost:5000/api/courses/${course.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1813,7 +1726,7 @@ const OfflineView = () => {
         try {
           console.log(`📥 Downloading: ${material.title}`);
           
-          const fileResponse = await fetch(`https://hult.onrender.com/api/materials/${material.id}/download`, {
+          const fileResponse = await fetch(`http://localhost:5000/api/materials/${material.id}/download`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -1864,7 +1777,7 @@ const OfflineView = () => {
       const token = localStorage.getItem('token');
       const download = offlineDownloads.find(d => d.id === downloadId);
       
-      const response = await fetch(`https://hult.onrender.com/api/courses/${download.course_id}/download`, {
+      const response = await fetch(`http://localhost:5000/api/courses/${download.course_id}/download`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -2109,7 +2022,7 @@ const OfflineMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2141,7 +2054,7 @@ const OfflineMaterialsView = () => {
   const handleDownloadMaterial = async (material) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://hult.onrender.com/api/materials/${material.id}/download`, {
+      const response = await fetch(`http://localhost:5000/api/materials/${material.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -2243,7 +2156,7 @@ const OfflineMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2253,7 +2166,7 @@ const OfflineMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2265,7 +2178,7 @@ const OfflineMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2292,7 +2205,7 @@ const CourseMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2407,7 +2320,7 @@ const CourseMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2417,7 +2330,7 @@ const CourseMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2429,7 +2342,7 @@ const CourseMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
+                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2535,7 +2448,7 @@ const CourseMaterialsView = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.id}/enroll`, {
+      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.id}/enroll`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2575,7 +2488,7 @@ const CourseMaterialsView = () => {
 
   const fetchTutors = async () => {
     try {
-      const response = await fetch('https://hult.onrender.com/api/tutors');
+      const response = await fetch('http://localhost:5000/api/tutors');
       const data = await response.json();
       setAllTutors(data.tutors || []);
     } catch (error) {
@@ -2722,7 +2635,11 @@ const CourseMaterialsView = () => {
     </div>
   );
 return (
+
+
   <div className="max-w-md mx-auto bg-gray-50 min-h-screen">
+    
+ 
     <NavBar 
       userType={userType}
       isAuthenticated={isAuthenticated}
@@ -2737,6 +2654,8 @@ return (
       setShowTutorProfile={setShowTutorProfile}
       setShowCourseManager={setShowCourseManager}
     />
+
+    
 
     {/* Always show HomeView when not authenticated, otherwise show requested view */}
     {!isAuthenticated ? (
@@ -2753,6 +2672,7 @@ return (
         {currentView === 'matched-tutors' && <MatchedTutorsView />}
         {currentView === 'my-courses' && <MyCoursesView key={currentView} />}
         {currentView === 'course-materials' && <CourseMaterialsView />}
+        
        
       </>
     )}
@@ -2785,22 +2705,51 @@ return (
     )}
 
     {/* Modals and profiles - available for authenticated users */}
-    {showTutorOnboarding && (
-      <TutorOnboarding
-        onComplete={(profileData) => {
-          if (profileData?.tutor_profile_id) {
-            localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
-            console.log('✅ Saved tutorProfileId from onboarding:', profileData.tutor_profile_id);
-          }
-          setShowTutorOnboarding(false);
-          alert('Profile setup complete! You can now be matched with students.');
-        }}
-        onSkip={() => {
-          setShowTutorOnboarding(false);
-          alert('⚠️ Warning: You need to complete your profile to receive messages from students.');
-        }}
-      />
-    )}
+ {showTutorOnboarding && (
+  <TutorOnboarding
+    onComplete={(profileData) => {
+      // ✅ Update localStorage to mark profile as complete
+      localStorage.setItem('profileComplete', 'true');
+      
+      if (profileData?.tutor_profile_id) {
+        localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
+        console.log('✅ Saved tutorProfileId from onboarding:', profileData.tutor_profile_id);
+      }
+      
+      // ✅ Update user object in localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        user.profile_complete = true;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      
+      setShowTutorOnboarding(false);
+      alert('✅ Profile setup complete! You can now be matched with students.');
+    }}
+    onSkip={() => {
+      setShowTutorOnboarding(false);
+      alert('⚠️ Warning: You need to complete your profile to receive messages from students.');
+    }}
+  />
+)}
+
+{showProfileCompletionPrompt && (
+  <ProfileCompletionPrompt
+    onComplete={() => {
+      setShowTutorProfile(true);
+      setShowProfileCompletionPrompt(false);
+    }}
+    onDismiss={() => {
+      sessionStorage.setItem('profilePromptDismissed', 'true');
+      setShowProfileCompletionPrompt(false);
+    }}
+  />
+)}
+
+{showPasswordReset && (
+  <PasswordResetPage onClose={() => setShowPasswordReset(false)} />
+)}
 
     {showStudentProfile && (
       <StudentProfile onClose={() => setShowStudentProfile(false)} />
@@ -2864,7 +2813,9 @@ return (
   </div>
 )}
   </div>
+
 );
+
 };
 
 export default EduConnectApp;
