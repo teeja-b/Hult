@@ -52,7 +52,7 @@ const handleSubmit = async () => {
 
     console.log('📤 About to send survey request...');
 
-    const surveyResponse = await fetch('https://hult.onrender.com/api/student/survey', {
+    const surveyResponse = await fetch('http://localhost:5000/api/student/survey', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ const handleSubmit = async () => {
     console.log('✅ Survey saved! Now updating profile...');
 
     // Update profile
-    const profileResponse = await fetch('https://hult.onrender.com/api/student/profile', {
+    const profileResponse = await fetch('http://localhost:5000/api/student/profile', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

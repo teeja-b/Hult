@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Video, X } from 'lucide-react';
+// File: MessagingVideoChat.jsx (or .js)
+// This is the STUDENT messaging component
 
-const API_URL = 'https://hult.onrender.com/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare, X, Send, CheckCheck, Check } from 'lucide-react';
+import io from 'socket.io-client';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
   const [tutors, setTutors] = useState([]);
@@ -9,15 +13,16 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showMessages, setShowMessages] = useState(false);
-  const [showVideoCall, setShowVideoCall] = useState(false);
-  const [localStream, setLocalStream] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [conversationId, setConversationId] = useState(null);
 
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
+  const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
-  // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -26,26 +31,113 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     scrollToBottom();
   }, [messages]);
 
-  // Fetch tutors from database
+  // Initialize Socket.IO connection
+  useEffect(() => {
+    console.log('🔌 [STUDENT] Connecting to Socket.IO server...');
+    
+    socketRef.current = io(API_URL, {
+      auth: { userId: currentUserId },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+    const socket = socketRef.current;
+
+    socket.on('connect', () => {
+      console.log('✅ [STUDENT] Socket connected:', socket.id);
+      setConnectionStatus('connected');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ [STUDENT] Socket disconnected');
+      setConnectionStatus('disconnected');
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[STUDENT] Socket connection error:', error);
+      setConnectionStatus('error');
+    });
+
+    socket.on('receive_message', (data) => {
+      console.log('📩 [STUDENT] Received message:', data);
+      console.log('📩 [STUDENT] Sender:', data.sender_id, 'Receiver:', data.receiver_id);
+      console.log('📩 [STUDENT] Current user ID:', currentUserId);
+      console.log('📩 [STUDENT] Selected tutor:', selectedTutor?.user_id);
+      
+      if (selectedTutor) {
+        const isRelevant = data.sender_id === selectedTutor.user_id || 
+                          data.sender_id === currentUserId;
+        
+        console.log('📩 [STUDENT] Is relevant to current chat?', isRelevant);
+        
+        if (isRelevant) {
+          setMessages(prev => {
+            // 🔥 Check for duplicate by ID
+            if (prev.some(m => m.id === data.id)) {
+              console.log('📩 [STUDENT] ⚠️ Duplicate message detected, skipping');
+              return prev;
+            }
+            console.log('📩 [STUDENT] ✅ Adding new message to chat');
+            return [...prev, {
+              ...data,
+              isOwn: data.sender_id === currentUserId
+            }];
+          });
+        }
+      }
+    });
+
+    socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
+      console.log('✅ [STUDENT] Message delivered:', messageId);
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId ? { ...msg, id: dbMessageId, status } : msg
+      ));
+    });
+
+    socket.on('user_typing', ({ userId, conversationId }) => {
+      if (selectedTutor && userId === selectedTutor.user_id) {
+        setIsTyping(true);
+        setTimeout(() => setIsTyping(false), 3000);
+      }
+    });
+
+    socket.on('users_online', (userIds) => {
+      setOnlineUsers(new Set(userIds));
+    });
+
+    socket.on('user_status', ({ userId, status }) => {
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        if (status === 'online') {
+          newSet.add(userId);
+        } else {
+          newSet.delete(userId);
+        }
+        return newSet;
+      });
+    });
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, [currentUserId]); // 🔥 REMOVED selectedTutor from dependencies
+
+  // Fetch tutors
   useEffect(() => {
     const fetchTutors = async () => {
       try {
-        const res = await fetch(`${API_URL}/tutors`);
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        const res = await fetch(`${API_URL}/api/tutors`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
-        console.log('Fetched tutors:', data);
         
-        // Handle different response formats
         if (Array.isArray(data)) {
           setTutors(data);
         } else if (data.tutors && Array.isArray(data.tutors)) {
           setTutors(data.tutors);
-        } else if (data.data && Array.isArray(data.data)) {
-          setTutors(data.data);
         } else {
-          console.error('Unexpected response format:', data);
           setTutors([]);
         }
       } catch (err) {
@@ -56,188 +148,215 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     fetchTutors();
   }, []);
 
-const openConversation = async (tutor) => {
-  setSelectedTutor(tutor);
-  setShowMessages(true);
-  setLoading(true);
+  const openConversation = async (tutor) => {
+    setSelectedTutor(tutor);
+    setShowMessages(true);
+    setLoading(true);
 
-  try {
-    const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-    
-    console.log(`Opening conversation with key: ${conversationKey}`);
-    console.log(`Student ID: ${currentUserId}, Tutor Profile ID: ${tutorProfileId}`);
-    console.log(`Tutor User ID: ${tutor.user_id}`);
+    try {
+      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
+      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      
+      // 🔥 FIX: Join socket room with partnerId
+      if (socketRef.current) {
+        socketRef.current.emit('join_conversation', {
+          conversationId: conversationKey,
+          userId: currentUserId,
+          partnerId: tutor.user_id  // ✅ Pass tutor's user_id
+        });
+        
+        console.log(`[STUDENT] Joined conversation ${conversationKey} with tutor ${tutor.user_id}`);
+      }
 
-    // Try window.storage first, fallback to localStorage
-    let result;
-    if (window.storage && window.storage.get) {
-      result = await window.storage.get(conversationKey);
-      if (result) {
-        const conversationData = JSON.parse(result.value);
-        // ✅ FIX: Properly mark messages based on sender_id
-        const processedMessages = (conversationData.messages || []).map(m => {
-          const isOwn = String(m.sender_id) === String(currentUserId);
-          console.log(`[STUDENT] Message from ${m.sender_id}, isOwn: ${isOwn}`);
-          return {
-            ...m,
-            isOwn: isOwn
-          };
-        });
-        console.log(`[STUDENT] Loaded ${processedMessages.length} messages`);
-        setMessages(processedMessages);
-      } else {
-        setMessages([]);
+      // Try to load messages from database first
+      try {
+        // Find conversation ID from database
+        const convsRes = await fetch(`${API_URL}/api/students/${currentUserId}/conversations`);
+        if (convsRes.ok) {
+          const conversations = await convsRes.json();
+          const conv = conversations.find(c => c.partnerId === tutor.user_id);
+          
+          if (conv && conv.id) {
+            setConversationId(conv.id);
+            
+            // Load messages from database
+            const messagesRes = await fetch(`${API_URL}/api/conversations/${conv.id}/messages`);
+            if (messagesRes.ok) {
+              const messagesData = await messagesRes.json();
+              const processedMessages = (messagesData.messages || []).map(m => ({
+                ...m,
+                isOwn: String(m.sender_id) === String(currentUserId)
+              }));
+              console.log('[STUDENT] Loaded messages from database:', processedMessages.length);
+              setMessages(processedMessages);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (dbError) {
+        console.log('[STUDENT] Database load failed, falling back to storage:', dbError);
       }
-    } else {
-      const data = localStorage.getItem(conversationKey);
-      if (data) {
-        const conversationData = JSON.parse(data);
-        // ✅ FIX: Properly mark messages based on sender_id
-        const processedMessages = (conversationData.messages || []).map(m => {
-          const isOwn = String(m.sender_id) === String(currentUserId);
-          console.log(`[STUDENT] Message from ${m.sender_id}, isOwn: ${isOwn}`);
-          return {
-            ...m,
-            isOwn: isOwn
-          };
-        });
-        console.log(`[STUDENT] Loaded ${processedMessages.length} messages from localStorage`);
-        setMessages(processedMessages);
+
+      // Fallback to storage if database fails
+      let result;
+      if (window.storage && window.storage.get) {
+        try {
+          result = await window.storage.get(conversationKey);
+          if (result) {
+            const conversationData = JSON.parse(result.value);
+            const processedMessages = (conversationData.messages || []).map(m => ({
+              ...m,
+              isOwn: String(m.sender_id) === String(currentUserId)
+            }));
+            setMessages(processedMessages);
+          } else {
+            setMessages([]);
+          }
+        } catch (storageErr) {
+          setMessages([]);
+        }
       } else {
-        setMessages([]);
+        const data = localStorage.getItem(conversationKey);
+        if (data) {
+          const conversationData = JSON.parse(data);
+          const processedMessages = (conversationData.messages || []).map(m => ({
+            ...m,
+            isOwn: String(m.sender_id) === String(currentUserId)
+          }));
+          setMessages(processedMessages);
+        } else {
+          setMessages([]);
+        }
       }
+    } catch (err) {
+      console.error('[STUDENT] Failed to load messages:', err);
+      setMessages([]);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Failed to load messages:', err);
-    setMessages([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedTutor) return;
 
+    const tempId = Date.now();
     const msg = {
-      id: Date.now(),
+      id: tempId,
       sender_id: currentUserId,
       text: newMessage.trim(),
       timestamp: new Date().toISOString(),
-      isOwn: true
+      isOwn: true,
+      status: 'sending'
     };
-     console.log(`[TUTOR SEND] Message sender_id: ${msg.sender_id}, isOwn: ${msg.isOwn}`);
-console.log(`[TUTOR SEND] Current tutor user ID: ${currentUserId}`);
-    try {
+
     const updatedMessages = [...messages, msg];
     setMessages(updatedMessages);
     setNewMessage('');
 
-      // ✅ FIX: Use tutor.id (tutor_profile_id) for consistency with TutorMessagingView
+    try {
       const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
       const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
 
+      // Emit message via Socket.IO (will be saved to database by backend)
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('send_message', {
+          conversationId: conversationKey,
+          sender_id: currentUserId,
+          receiver_id: selectedTutor.user_id,  // ✅ Pass tutor's user_id
+          text: msg.text,
+          timestamp: msg.timestamp,
+          messageId: tempId
+        });
+
+        console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
+
+        setMessages(prev => prev.map(m => 
+          m.id === tempId ? { ...m, status: 'sent' } : m
+        ));
+      }
+
+      // Also save to storage as backup
       const conversationData = {
-        tutorUserId: selectedTutor.user_id,          // user ID (for sender identification)
-        tutorProfileId: tutorProfileId,               // profile ID (for conversation key)
+        tutorUserId: selectedTutor.user_id,
+        tutorProfileId: tutorProfileId,
         tutorName: selectedTutor.name,
         studentId: currentUserId,
-        studentName: 'Student Name', // Replace with auth name if available
+        studentName: 'Student Name',
         lastMessage: msg.text,
         lastMessageTime: msg.timestamp,
         messages: updatedMessages
       };
 
-      console.log(`💾 Saving message with key: ${conversationKey}`);
-      console.log(`💾 Tutor User ID: ${selectedTutor.user_id}, Profile ID: ${tutorProfileId}`);
-
-      // Save to storage
       if (window.storage && window.storage.set) {
         await window.storage.set(conversationKey, JSON.stringify(conversationData));
       } else {
         localStorage.setItem(conversationKey, JSON.stringify(conversationData));
       }
 
-      // Simulate tutor response
-      const currentTutor = selectedTutor;
-      const currentConversationData = conversationData;
+    } catch (err) {
+      console.error('[STUDENT] Failed to send message:', err);
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, status: 'failed' } : m
+      ));
+    }
+  };
 
-      setTimeout(async () => {
-        const responses = [
-          "That's a great question! Let me explain...",
-          "I'd be happy to help you with that.",
-          "Good observation! Here's what you need to know:",
-          "Let me break this down for you step by step.",
-          "That's an interesting topic. Let's explore it together.",
-          "I understand what you're asking. Here's my take:",
-        ];
+  const handleTyping = () => {
+    if (socketRef.current && selectedTutor) {
+      const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
+      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      
+      socketRef.current.emit('typing', {
+        conversationId: conversationKey,
+        userId: currentUserId
+      });
 
-        const tutorMsg = {
-          id: Date.now() + 1,
-          sender_id: currentTutor.user_id,
-          text: responses[Math.floor(Math.random() * responses.length)],
-          timestamp: new Date().toISOString(),
-          isOwn: false
-        };
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
 
-        setMessages(prevMessages => {
-          if (selectedTutor?.user_id === currentTutor.user_id) {
-            return [...prevMessages, tutorMsg];
-          }
-          return prevMessages;
+      typingTimeoutRef.current = setTimeout(() => {
+        socketRef.current.emit('stop_typing', {
+          conversationId: conversationKey,
+          userId: currentUserId
         });
-
-        // Update storage
-        currentConversationData.messages = [...updatedMessages, tutorMsg];
-        currentConversationData.lastMessage = tutorMsg.text;
-        currentConversationData.lastMessageTime = tutorMsg.timestamp;
-
-        if (window.storage && window.storage.set) {
-          await window.storage.set(conversationKey, JSON.stringify(currentConversationData));
-        } else {
-          localStorage.setItem(conversationKey, JSON.stringify(currentConversationData));
-        }
-      }, 1000 + Math.random() * 1000);
-
-    } catch (err) {
-      console.error('Failed to save message:', err);
-      alert('Failed to send message. Please try again.');
+      }, 2000);
     }
   };
 
-  const startVideoCall = async (tutor) => {
-    setShowVideoCall(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setLocalStream(stream);
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
-    } catch (err) {
-      console.error('Video call failed:', err);
-      alert('Cannot access camera/microphone. Please check permissions.');
-      setShowVideoCall(false);
+  const getMessageStatus = (msg) => {
+    if (!msg.isOwn) return null;
+    
+    switch (msg.status) {
+      case 'sending':
+        return <Check size={14} className="text-gray-400" />;
+      case 'sent':
+        return <CheckCheck size={14} className="text-gray-400" />;
+      case 'delivered':
+        return <CheckCheck size={14} className="text-blue-400" />;
+      case 'failed':
+        return <span className="text-red-400 text-xs">Failed</span>;
+      default:
+        return <CheckCheck size={14} className="text-gray-400" />;
     }
-  };
-
-  const endVideoCall = () => {
-    if (localStream) localStream.getTracks().forEach(t => t.stop());
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    setLocalStream(null);
-    setShowVideoCall(false);
   };
 
   return (
     <div className="max-w-4xl mx-auto p-4 min-h-screen bg-gray-50">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">Registered Tutors</h1>
 
-      {/* Debug Info */}
-      <div className="bg-blue-100 border-l-4 border-blue-500 p-3 text-sm mb-4">
-        <p className="font-semibold">🔍 Student Debug Info:</p>
-        <p>Current Student ID: <strong>{currentUserId}</strong></p>
-        <p className="text-xs mt-1 text-gray-600">
-          Conversation keys format: conversation:{currentUserId}:tutorProfileId
-        </p>
+      {/* Connection Status Indicator */}
+      <div className={`mb-4 px-3 py-2 rounded-lg text-sm ${
+        connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :
+        connectionStatus === 'disconnected' ? 'bg-yellow-100 text-yellow-800' :
+        'bg-red-100 text-red-800'
+      }`}>
+        <span className="font-semibold">
+          {connectionStatus === 'connected' ? '🟢 Connected - Messages saved to database' :
+           connectionStatus === 'disconnected' ? '🟡 Connecting...' :
+           '🔴 Connection Error'}
+        </span>
       </div>
 
       {/* Tutor List */}
@@ -248,36 +367,34 @@ console.log(`[TUTOR SEND] Current tutor user ID: ${currentUserId}`);
           tutors.map(tutor => (
             <div key={tutor.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {tutor.avatar && <div className="text-3xl flex-shrink-0">{tutor.avatar}</div>}
+                <div className="relative">
+                  {tutor.avatar && <div className="text-3xl flex-shrink-0">{tutor.avatar}</div>}
+                  {onlineUsers.has(tutor.user_id) && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-gray-800 truncate">{tutor.name}</div>
-                  <div className="text-sm text-gray-600 truncate">{tutor.expertise}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Profile ID: <strong>{tutor.tutor_profile_id || tutor.id}</strong> | 
-                    User ID: {tutor.user_id}
+                  <div className="font-semibold text-gray-800 truncate flex items-center gap-2">
+                    {tutor.name}
+                    {onlineUsers.has(tutor.user_id) && (
+                      <span className="text-xs text-green-600 font-normal">● Online</span>
+                    )}
                   </div>
+                  <div className="text-sm text-gray-600 truncate">{tutor.expertise}</div>
                 </div>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors whitespace-nowrap"
-                  onClick={() => openConversation(tutor)}
-                >
-                  <MessageSquare size={16} /> Message
-                </button>
-                <button
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors whitespace-nowrap"
-                  onClick={() => startVideoCall(tutor)}
-                >
-                  <Video size={16} /> Call
-                </button>
-              </div>
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors whitespace-nowrap"
+                onClick={() => openConversation(tutor)}
+              >
+                <MessageSquare size={16} /> Message
+              </button>
             </div>
           ))
         )}
       </div>
 
-      {/* Messages Side Panel */}
+      {/* Messages Panel */}
       {showMessages && selectedTutor && (
         <div className="fixed right-0 top-0 bottom-0 w-full md:w-96 bg-white z-50 flex flex-col shadow-2xl">
           {/* Header */}
@@ -286,7 +403,9 @@ console.log(`[TUTOR SEND] Current tutor user ID: ${currentUserId}`);
               <span className="text-2xl">{selectedTutor.avatar}</span>
               <div>
                 <h2 className="font-semibold">{selectedTutor.name}</h2>
-                <p className="text-xs text-blue-100">{selectedTutor.expertise}</p>
+                <p className="text-xs text-blue-100">
+                  {onlineUsers.has(selectedTutor.user_id) ? '● Online' : 'Offline'}
+                </p>
               </div>
             </div>
             <button 
@@ -317,12 +436,26 @@ console.log(`[TUTOR SEND] Current tutor user ID: ${currentUserId}`);
                         : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
                     }`}>
                       <p className="break-words">{msg.text}</p>
-                      <span className={`text-xs block mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <span className="text-xs">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {getMessageStatus(msg)}
+                      </div>
                     </div>
                   </div>
                 ))}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-200 px-4 py-2 rounded-2xl rounded-bl-sm">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -336,51 +469,18 @@ console.log(`[TUTOR SEND] Current tutor user ID: ${currentUserId}`);
                 placeholder="Type a message..."
                 className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
+                onChange={e => {
+                  setNewMessage(e.target.value);
+                  handleTyping();
+                }}
                 onKeyDown={e => e.key === 'Enter' && sendMessage()}
               />
               <button 
                 onClick={sendMessage} 
-                className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!newMessage.trim()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={!newMessage.trim() || connectionStatus !== 'connected'}
               >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Video Call Modal */}
-      {showVideoCall && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-          <div className="relative w-full max-w-3xl aspect-video bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
-            {/* Remote Video */}
-            <video 
-              ref={remoteVideoRef} 
-              autoPlay 
-              playsInline 
-              className="w-full h-full object-cover"
-            />
-            
-            {/* Local Video (Picture-in-Picture) */}
-            <div className="absolute top-4 right-4 w-32 h-24 md:w-40 md:h-30 bg-gray-800 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-              <video 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            {/* Controls */}
-            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
-              <button
-                onClick={endVideoCall}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full flex items-center gap-2 shadow-lg transition-colors font-medium"
-              >
-                <X size={20} /> End Call
+                <Send size={16} />
               </button>
             </div>
           </div>
