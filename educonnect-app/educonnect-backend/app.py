@@ -35,7 +35,8 @@ from flask_bcrypt import check_password_hash, generate_password_hash
 from flask import Flask, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ml_matcher import RLTutorMatchingSystem
-import os
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 load_dotenv()
 # Reduce memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -65,8 +66,10 @@ CORS(app)
 
 # Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'educonnect.db')
-
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    'DATABASE_URL',
+    'sqlite:///educonnect.db'  # Fallback for local development
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-in-production'
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=30)
@@ -90,7 +93,8 @@ app.config['SECRET_KEY'] = os.environ.get(
     'SECRET_KEY',
     'dev-secret-key-change-in-production'
 )
-
+if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 mail = Mail(app)
 serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -149,7 +153,19 @@ def token_required(f):
     
     return decorated
 
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA cache_size=-64000")  # 64MB cache
+    cursor.close()
 
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 3600,
+    'pool_pre_ping': True
+}
 
 
 
