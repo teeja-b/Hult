@@ -32,17 +32,26 @@ import secrets
 from dotenv import load_dotenv
 import os
 from flask_bcrypt import check_password_hash, generate_password_hash
-
+from flask import Flask, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from ml_matcher import RLTutorMatchingSystem
+import os
 load_dotenv()
 # Reduce memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 
+rl_system = RLTutorMatchingSystem()
 
+MODEL_PATH = 'rl_model.pkl'
+if os.path.exists(MODEL_PATH):
+    rl_system.load_model(MODEL_PATH)
+    print("✓ Loaded existing RL model")
+else:
+    print("✓ Starting with fresh RL model")
 
+update_counter = 0
 
-# IMPORT YOUR ML SYSTEM
-from ml_matcher import TutorMatchingSystem
 db = SQLAlchemy()
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
@@ -140,14 +149,9 @@ def token_required(f):
     
     return decorated
 
-# INITIALIZE ML MATCHING SYSTEM
-matcher = None
 
-def get_matcher():
-    global matcher
-    if matcher is None:
-        matcher = TutorMatchingSystem()
-    return matcher
+
+
 
 # ============================================================================
 # DATABASE MODELS
@@ -1659,152 +1663,480 @@ def login_alt():
 # ML-POWERED TUTOR MATCHING ENDPOINT
 # ============================================================================
 
-@app.route('/api/student/match', methods=['POST', 'OPTIONS'])
-def match_tutors():
-    """ML-powered tutor matching endpoint"""
-    
-    if request.method == 'OPTIONS':
-        return '', 200
-    
+def save_model_if_needed():
+    """Save model every 10 updates"""
+    global update_counter
+    update_counter += 1
+    if update_counter % 10 == 0:
+        rl_system.save_model(MODEL_PATH)
+        print(f"✓ Auto-saved RL model (update #{update_counter})")
+
+
+@app.route('/api/match/tutors', methods=['POST'], endpoint="match")
+@jwt_required()
+def get_tutor_matches():
+    """
+    Get RL-enhanced tutor recommendations
+    """
     try:
-        print("\n" + "="*70)
-        print("[MATCH] Starting tutor matching...")
-        print("="*70)
+        student_id = get_jwt_identity()
+        data = request.get_json()
         
-        from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
-        try:
-            verify_jwt_in_request()
-        except Exception as e:
-            print(f"[MATCH ERROR] JWT verification failed: {e}")
-            return jsonify({'error': 'Authentication required', 'details': str(e)}), 401
+        student_profile = data.get('student_profile')
+        use_rl = data.get('use_rl', True)
         
-        user_id_str = get_jwt_identity()
-        print(f"[MATCH] User ID: {user_id_str}")
+        if not student_profile:
+            return jsonify({'error': 'Student profile required'}), 400
         
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-
-        if not user:
-            print(f"[MATCH ERROR] User not found: {user_id}")
-            return jsonify({'error': 'User not found'}), 404
-            
-        if user.user_type != 'student':
-            print(f"[MATCH ERROR] Not a student: {user.user_type}")
-            return jsonify({'error': 'Not a student account'}), 403
-
-        data = request.get_json() or {}
-        print(f"[MATCH] Received data: {data}")
-
-        profile = user.student_profile
-        if not profile:
-            print("[MATCH] Creating new student profile")
-            profile = StudentProfile(user_id=user.id)
-            db.session.add(profile)
-            db.session.flush()
-
-        profile.learning_style = data.get('learningStyle') or profile.learning_style or 'visual'
-        profile.preferred_subjects = json.dumps(data.get('subjects', []))
-        profile.learning_goals = data.get('goals', profile.learning_goals or '')
-        profile.available_time = data.get('availability', profile.available_time or 'evening')
-        profile.skill_level = data.get('skill_level', profile.skill_level or 'intermediate')
-        profile.preferred_languages = json.dumps(data.get('preferred_languages', ['English']))
-        profile.survey_completed = True
-
-        db.session.commit()
-        print("[MATCH] Profile saved successfully")
-
-        student_data = {
-            'learning_style': profile.learning_style,
-            'preferred_subjects': json.loads(profile.preferred_subjects),
-            'skill_level': profile.skill_level,
-            'available_time': profile.available_time,
-            'preferred_languages': json.loads(profile.preferred_languages)
-        }
-        print(f"[MATCH] Student data: {student_data}")
-
-        all_tutors = TutorProfile.query.filter_by(verified=True).all()
-        print(f"[MATCH] Found {len(all_tutors)} verified tutors")
-
-        if len(all_tutors) == 0:
-            print("[MATCH] No tutors available")
-            return jsonify({
-                'matches': [],
-                'message': 'No tutors available yet. Please check back later.',
-                'algorithm': 'Weighted Feature Matching with ML'
-            }), 200
-
-        tutors_data = []
-        for t in all_tutors:
-            # Explicitly load user
-            tutor_user = User.query.get(t.user_id) if t.user_id else None
-            
-            if not tutor_user:
-                print(f"[MATCH WARNING] Tutor {t.id} has no associated user, skipping")
-                continue
-            
-            tutor_dict = {
-                'id': t.id,
-                'user_id': t.user_id,
-                'name': tutor_user.full_name,
-                'expertise': json.loads(t.expertise or '[]'),
-                'languages': json.loads(t.languages or '["English"]'),
-                'availability': json.loads(t.availability or '{}'),
-                'rating': t.rating or 4.5,
-                'total_sessions': t.total_sessions or 0,
-                'teaching_style': 'adaptive'
-            }
-            tutors_data.append(tutor_dict)
+        # Get all tutors from database
+        tutors = db.session.query(TutorProfile).join(User).filter(
+            User.user_type == 'tutor',
+            TutorProfile.verified == True
+        ).all()
         
-        print(f"[MATCH] Prepared {len(tutors_data)} tutor records")
-        print(f"[MATCH] Calling ML matcher...")
-
-        ml_matches = get_matcher().get_top_matches(student_data, tutors_data, top_n=10)
-        print(f"[MATCH] ML matcher returned {len(ml_matches)} matches")
-
-        matches = []
-        for ml_match in ml_matches:
-            tutor = next((t for t in all_tutors if t.id == ml_match['tutor_id']), None)
-            if not tutor:
-                continue
-            
-            # Explicitly load user again
-            tutor_user = User.query.get(tutor.user_id)
-            if not tutor_user:
-                continue
-                
-            matches.append({
-                'id': tutor.id,
-                'user_id': tutor.user_id,
-                'name': tutor_user.full_name,
-                'expertise': ', '.join(json.loads(tutor.expertise or '[]')),
-                'rating': tutor.rating or 4.5,
-                'sessions': tutor.total_sessions or 0,
-                'languages': json.loads(tutor.languages or '["English"]'),
-                'matchScore': ml_match['match_score'],
-                'breakdown': ml_match.get('breakdown', {}),
-                'explanations': matcher.explain_match(ml_match)
+        # Convert to dict format for matching system
+        tutors_list = []
+        for tutor in tutors:
+            tutors_list.append({
+                'id': tutor.user_id,
+                'name': tutor.user.full_name,
+                'expertise': json.loads(tutor.expertise) if tutor.expertise else [],
+                'languages': json.loads(tutor.languages) if tutor.languages else [],
+                'availability': json.loads(tutor.availability) if tutor.availability else {},
+                'rating': tutor.rating or 4.0,
+                'total_sessions': tutor.total_sessions or 0,
+                'teaching_style': getattr(tutor, 'teaching_style', 'adaptive')
             })
-
-        print(f"[MATCH] Returning {len(matches)} matches")
-        print("="*70 + "\n")
-
+        
+        # Get matches using RL system
+        matches = rl_system.match_student_to_tutors(
+            student_id,
+            student_profile,
+            tutors_list,
+            use_rl=use_rl
+        )
+        
+        # Enhance with additional tutor info
+        enhanced_matches = []
+        for match in matches[:10]:  # Top 10
+            tutor = next((t for t in tutors if t.user_id == match['tutor_id']), None)
+            if tutor:
+                enhanced_matches.append({
+                    **match,
+                    'bio': tutor.bio,
+                    'hourly_rate': tutor.hourly_rate,
+                    'years_experience': getattr(tutor, 'years_experience', ''),
+                    'education': getattr(tutor, 'education', '')
+                })
+        
         return jsonify({
-            'matches': matches,
-            'message': f'ML matching found {len(matches)} tutors',
-            'algorithm': 'Weighted Feature Matching with ML'
+            'success': True,
+            'matches': enhanced_matches,
+            'using_rl': use_rl
         }), 200
         
     except Exception as e:
-        print(f"\n❌ [MATCH ERROR] Exception occurred: {str(e)}")
+        print(f"Error in get_tutor_matches: {str(e)}")
         import traceback
-        print(traceback.format_exc())
-        print("="*70 + "\n")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/check-tutor-data', methods=['GET'])
+def check_tutor_data():
+    """Check for tutors with invalid data"""
+    tutors = TutorProfile.query.filter_by(verified=True).all()
+    
+    issues = []
+    for tutor in tutors:
+        tutor_issues = {
+            'id': tutor.id,
+            'name': tutor.user.full_name if tutor.user else 'NO USER',
+            'problems': []
+        }
+        
+        # Check expertise
+        try:
+            expertise = json.loads(tutor.expertise) if tutor.expertise else []
+            if not expertise:
+                tutor_issues['problems'].append('No expertise')
+            elif any(not e or not str(e).strip() for e in expertise):
+                tutor_issues['problems'].append(f'Invalid expertise values: {expertise}')
+        except:
+            tutor_issues['problems'].append('Invalid expertise JSON')
+        
+        # Check languages
+        try:
+            languages = json.loads(tutor.languages) if tutor.languages else []
+            if not languages:
+                tutor_issues['problems'].append('No languages')
+            elif any(not l or not str(l).strip() for l in languages):
+                tutor_issues['problems'].append(f'Invalid language values: {languages}')
+        except:
+            tutor_issues['problems'].append('Invalid languages JSON')
+        
+        if tutor_issues['problems']:
+            issues.append(tutor_issues)
+    
+    return jsonify({
+        'total_tutors': len(tutors),
+        'tutors_with_issues': len(issues),
+        'issues': issues
+    }), 200
+@app.route('/api/debug/test-match', methods=['POST'])
+def test_match():
+    """Debug matching with detailed logging"""
+    try:
+        data = request.get_json()
+        student_profile = data.get('student_profile')
+        
+        print("\n" + "="*70)
+        print("DEBUG: Testing Match")
+        print("="*70)
+        print(f"Student profile received: {json.dumps(student_profile, indent=2)}")
+        
+        # Check for None values
+        none_fields = []
+        for key, value in student_profile.items():
+            if value is None:
+                none_fields.append(key)
+            elif isinstance(value, list):
+                if None in value:
+                    none_fields.append(f"{key} (contains None)")
+        
+        if none_fields:
+            print(f"⚠️ WARNING: Fields with None values: {none_fields}")
+        
+        # Test prepare_student_features
+        try:
+            student_features = rl_system.prepare_student_features(student_profile)
+            print(f"✅ Student features prepared: {student_features}")
+        except Exception as e:
+            print(f"❌ Error in prepare_student_features: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Error preparing student features: {str(e)}'}), 500
+        
+        # Get tutors
+        tutors = db.session.query(TutorProfile).join(User).filter(
+            User.user_type == 'tutor',
+            TutorProfile.verified == True
+        ).all()
+        
+        print(f"Found {len(tutors)} tutors")
+        
+        # Test each tutor
+        for tutor in tutors:
+            try:
+                expertise = json.loads(tutor.expertise) if tutor.expertise else []
+                languages = json.loads(tutor.languages) if tutor.languages else []
+                
+                tutor_dict = {
+                    'id': tutor.user_id,
+                    'name': tutor.user.full_name,
+                    'expertise': expertise,
+                    'languages': languages,
+                    'availability': json.loads(tutor.availability) if tutor.availability else {},
+                    'rating': tutor.rating or 4.0,
+                    'total_sessions': tutor.total_sessions or 0,
+                    'teaching_style': getattr(tutor, 'teaching_style', 'adaptive')
+                }
+                
+                print(f"\nTesting tutor: {tutor_dict['name']}")
+                print(f"  Expertise: {tutor_dict['expertise']}")
+                print(f"  Languages: {tutor_dict['languages']}")
+                
+                # Test prepare_tutor_features
+                tutor_features = rl_system.prepare_tutor_features(tutor_dict)
+                print(f"  ✅ Tutor features prepared: {tutor_features}")
+                
+            except Exception as e:
+                print(f"  ❌ Error with tutor {tutor.user.full_name}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        return jsonify({'success': True, 'message': 'Check server logs'}), 200
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+@app.route('/api/match/record-outcome', methods=['POST'],endpoint="record-outcome")
+@jwt_required()
+def record_match_outcome():
+    """
+    Record the outcome of a student-tutor match for RL learning
+    
+    Request body:
+    {
+        "tutor_id": "tutor_123",
+        "outcome": {
+            "satisfaction_rating": 5,  // 1-5
+            "completed": true,
+            "would_recommend": true,
+            "response_time": 2.5,  // hours
+            "punctuality_score": 0.95  // 0-1
+        },
+        "student_profile": {...},  // Current student profile
+        "session_type": "initial" | "ongoing" | "completed"
+    }
+    """
+    try:
+        student_id = get_jwt_identity()
+        data = request.get_json()
+        
+        tutor_id = data.get('tutor_id')
+        outcome = data.get('outcome')
+        student_profile = data.get('student_profile')
+        
+        if not all([tutor_id, outcome, student_profile]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Get tutor profile
+        tutor = db.session.query(TutorProfile).filter_by(user_id=tutor_id).first()
+        if not tutor:
+            return jsonify({'error': 'Tutor not found'}), 404
+        
+        tutor_profile = {
+            'id': tutor.user_id,
+            'expertise': tutor.expertise or [],
+            'languages': tutor.languages or [],
+            'availability': tutor.availability or {},
+            'rating': tutor.rating or 4.0,
+            'total_sessions': tutor.total_sessions or 0,
+            'teaching_style': tutor.teaching_style or 'adaptive'
+        }
+        
+        # Record outcome in RL system
+        reward = rl_system.record_match_outcome(
+            student_id,
+            tutor_id,
+            student_profile,
+            tutor_profile,
+            outcome
+        )
+        
+        # Update tutor statistics in database
+        tutor.total_sessions = rl_system.tutor_performance[tutor_id]['total_matches']
+        
+        # Update average rating
+        satisfaction = outcome.get('satisfaction_rating', 3) / 5.0
+        if tutor.rating:
+            # Running average
+            n = tutor.total_sessions
+            tutor.rating = (tutor.rating * (n - 1) + (satisfaction * 5)) / n
+        else:
+            tutor.rating = satisfaction * 5
+        
+        db.session.commit()
+        
+        # Save model periodically
+        save_model_if_needed()
         
         return jsonify({
-            'error': 'Internal server error',
-            'details': str(e),
-            'message': 'Failed to match tutors. Please try again.'
-        }), 500
+            'success': True,
+            'reward': round(reward, 3),
+            'message': 'Outcome recorded and model updated'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in record_match_outcome: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/match/quick-feedback', methods=['POST'],endpoint="quick feedback")
+@jwt_required()
+def record_quick_feedback():
+    """
+    Quick feedback recording (simpler than full outcome)
+    
+    Request body:
+    {
+        "tutor_id": "tutor_123",
+        "rating": 4,  // 1-5 stars
+        "completed": true
+    }
+    """
+    try:
+        student_id = get_jwt_identity()
+        data = request.get_json()
+        
+        tutor_id = data.get('tutor_id')
+        
+        completed = data.get('completed', True)
+        
+        # Get student and tutor profiles
+        student = db.session.query(StudentProfile).filter_by(user_id=student_id).first()
+        tutor = db.session.query(TutorProfile).filter_by(user_id=tutor_id).first()
+        
+        if not student or not tutor:
+            return jsonify({'error': 'Profile not found'}), 404
+        
+        # Create simplified outcome
+        outcome = data.get('outcome')
+
+        if not outcome:
+                return jsonify({'error': 'Outcome required'}), 400
+        
+        student_profile = {
+            'preferred_subjects': student.preferred_subjects or [],
+            'skill_level': student.skill_level or 'intermediate',
+            'learning_style': student.learning_style or 'visual',
+            'available_time': student.available_time or 'evening',
+            'preferred_languages': student.preferred_languages or ['english'],
+            'math_score': student.math_score or 5,
+            'science_score': student.science_score or 5,
+            'language_score': student.language_score or 5,
+            'tech_score': student.tech_score or 5,
+            'motivation_level': student.motivation_level or 7
+        }
+        
+        tutor_profile = {
+            'id': tutor.user_id,
+            'expertise': tutor.expertise or [],
+            'languages': tutor.languages or [],
+            'availability': tutor.availability or {},
+            'rating': tutor.rating or 4.0,
+            'total_sessions': tutor.total_sessions or 0,
+            'teaching_style': tutor.teaching_style or 'adaptive'
+        }
+        
+        # Record in RL system
+        reward = rl_system.record_match_outcome(
+            student_id,
+            tutor_id,
+            student_profile,
+            tutor_profile,
+            outcome
+        )
+        
+        save_model_if_needed()
+        
+        return jsonify({
+            'success': True,
+            'reward': round(reward, 3),
+            'message': 'Feedback recorded'
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in record_quick_feedback: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/tutor/performance/<tutor_id>', methods=['GET'])
+@jwt_required()
+def get_tutor_performance(tutor_id):
+    """
+    Get detailed performance metrics for a tutor
+    """
+    try:
+        perf = rl_system.tutor_performance[tutor_id]
+        
+        if perf['total_matches'] == 0:
+            return jsonify({
+                'success': True,
+                'has_data': False,
+                'message': 'No performance data yet'
+            }), 200
+        
+        return jsonify({
+            'success': True,
+            'has_data': True,
+            'performance': {
+                'total_matches': perf['total_matches'],
+                'successful_matches': perf['successful_matches'],
+                'success_rate': perf['successful_matches'] / perf['total_matches'],
+                'avg_satisfaction': perf['avg_satisfaction'],
+                'completion_rate': perf['completion_rate'],
+                'student_retention': perf['student_retention'],
+                'response_time_score': perf['response_time_score'],
+                'reliability_score': perf['reliability_score'],
+                'overall_score': rl_system.calculate_tutor_performance_score(tutor_id)
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in get_tutor_performance: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/student/preferences', methods=['GET'])
+@jwt_required()
+def get_student_preferences():
+    """
+    Get learned preferences for current student
+    """
+    try:
+        student_id = get_jwt_identity()
+        prefs = rl_system.student_preferences[student_id]
+        
+        if not prefs['match_history']:
+            return jsonify({
+                'success': True,
+                'has_data': False,
+                'message': 'No learning data yet'
+            }), 200
+        
+        return jsonify({
+            'success': True,
+            'has_data': True,
+            'preferences': {
+                'total_matches': len(prefs['match_history']),
+                'avg_satisfaction': (
+                    sum(prefs['satisfaction_history']) / len(prefs['satisfaction_history'])
+                    if prefs['satisfaction_history'] else 0
+                ),
+                'weight_adjustments': prefs['weight_adjustments'],
+                'recent_matches': prefs['match_history'][-5:]  # Last 5
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in get_student_preferences: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+# Manual model management endpoints (admin only)
+@app.route('/api/admin/rl-model/save', methods=['POST'])
+@jwt_required()
+def admin_save_model():
+    """Admin endpoint to manually save model"""
+    try:
+        # Check if admin (you'd add proper admin check here)
+        rl_system.save_model(MODEL_PATH)
+        return jsonify({
+            'success': True,
+            'message': 'Model saved successfully'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/rl-model/stats', methods=['GET'])
+@jwt_required()
+def admin_get_stats():
+    """Get overall RL system statistics"""
+    try:
+        total_tutors = len(rl_system.tutor_performance)
+        total_students = len(rl_system.student_preferences)
+        total_matches = sum(
+            perf['total_matches'] 
+            for perf in rl_system.tutor_performance.values()
+        )
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_tutors_tracked': total_tutors,
+                'total_students_tracked': total_students,
+                'total_matches_recorded': total_matches,
+                'model_updates': update_counter,
+                'exploration_rate': rl_system.epsilon
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/debug/check-profile/<int:profile_id>', methods=['GET'])
 def debug_check_profile(profile_id):
     """Debug endpoint to check tutor profile"""
@@ -1866,8 +2198,8 @@ def debug_request():
 # STUDENT ENDPOINTS
 # ============================================================================
 
-@app.route('/api/student/survey', methods=['POST', 'OPTIONS'])
-@jwt_required
+@app.route('/api/student/survey', methods=['POST'], endpoint="Survey")
+@jwt_required()
 def save_student_survey():
     """Save student survey/preferences - with comprehensive debugging"""
     
@@ -1876,9 +2208,7 @@ def save_student_survey():
     print("🔵"*35)
     
     # Handle OPTIONS request for CORS preflight
-    if request.method == 'OPTIONS':
-        print("[SURVEY] Handling OPTIONS preflight request")
-        return '', 200
+
     
     try:
         print(f"[SURVEY] Method: {request.method}")
@@ -2098,7 +2428,7 @@ def get_student_profile_enhanced():
 
 
 @app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material')
-@jwt_required
+@jwt_required()
 def upload_material():
     """Upload course material (video, PDF, document, etc.)"""
     
@@ -3299,7 +3629,7 @@ def debug_tutors():
     
     return jsonify({'tutors': debug_info}), 200
 @app.route('/api/courses/create', methods=['POST', 'OPTIONS'], endpoint = "courses_create")
-@jwt_required
+@jwt_required()
 def create_course():
     """Create a new course (tutor only)"""
     
@@ -3544,6 +3874,7 @@ def debug_tutor_status():
 # ============================================================================
 # INITIALIZE DATABASE
 # ============================================================================
+
 
 
 

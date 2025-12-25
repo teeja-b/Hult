@@ -17,7 +17,7 @@ import {
 } from './components/AuthModals';
 import PasswordResetPage from './components/PasswordResetPage';
 import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
-
+import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackModal';
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' ;
   const [showCourseManager, setShowCourseManager] = useState(false);
@@ -55,8 +55,9 @@ const [tutors, setTutors] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-
-  const [selectedTutor, setSelectedTutor] = useState(null);
+ const [selectedTutor, setSelectedTutor] = useState(null);
+const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+const [feedbackTutor, setFeedbackTutor] = useState(null);
   const [bookingData, setBookingData] = useState({
     subject: '',
     date: '',
@@ -492,7 +493,7 @@ const DebugTutorFetch = () => {
   const fetchTutors = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/tutors');
+      const response = await fetch('https://hult.onrender.com/api/tutors');
       const data = await response.json();
       console.log('📊 Frontend received:', data);
       setTutors(data.tutors || []);
@@ -633,7 +634,9 @@ useEffect(() => {
     }, 1500);
   };
 
-  const handleAIMatching = async () => {
+  // Replace the handleAIMatching function in your App.js with this fixed version:
+
+const handleAIMatching = async () => {
   if (!isAuthenticated) {
     alert('Please log in first to use AI matching!');
     setShowLogin(true);
@@ -641,8 +644,9 @@ useEffect(() => {
   }
 
   const surveyString = localStorage.getItem('studentSurvey');
+  
   if (!surveyString) {
-    alert('Please complete your survey first!');
+    alert('Please complete your survey first to enable AI matching!');
     setShowSurvey(true);
     return;
   }
@@ -653,46 +657,120 @@ useEffect(() => {
   } catch (error) {
     console.error('Failed to parse survey data:', error);
     alert('Survey data is corrupted. Please complete the survey again.');
+    setShowSurvey(true);
+    return;
+  }
+
+  console.log('📊 Survey data for AI matching:', survey);
+
+  // Validate that survey has required fields (camelCase)
+  if (!survey.learningStyle || !survey.preferredSubjects || !survey.skillLevel || 
+      !survey.availableTime || !survey.preferredLanguages || !survey.learningGoals) {
+    console.warn('Missing survey fields');
+    alert('Please complete all survey fields.');
+    setShowSurvey(true);
     return;
   }
 
   setAiMatching(true);
   
   try {
-    const response = await getMatchedTutors(survey);
-    console.log('ML API Response:', response.data);
+    const token = localStorage.getItem('token');
     
-    // Handle response from Flask backend
-    if (response.data && response.data.matches) {
-      setMatchedTutors(response.data.matches);
-      setCurrentView('matched-tutors'); // Navigate to results page
-    } else if (Array.isArray(response.data)) {
-      setMatchedTutors(response.data);
-      setCurrentView('matched-tutors'); // Navigate to results page
+    // Convert camelCase to snake_case for backend
+    const studentProfile = {
+      learning_style: survey.learningStyle,
+      preferred_subjects: survey.preferredSubjects,
+      skill_level: survey.skillLevel,
+      learning_goals: survey.learningGoals,
+      available_time: survey.availableTime,
+      preferred_languages: survey.preferredLanguages,
+      math_score: survey.mathScore || 5,
+      science_score: survey.scienceScore || 5,
+      language_score: survey.languageScore || 5,
+      tech_score: survey.techScore || 5,
+      motivation_level: survey.motivationLevel || 7
+    };
+
+    console.log('🎯 Sending student profile to ML API:', studentProfile);
+
+    const response = await fetch(`${API_URL}/api/match/tutors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        student_profile: studentProfile,
+        use_rl: true
+      })
+    });
+
+    const testResponse = await fetch(`${API_URL}/api/debug/test-match`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    student_profile: studentProfile
+  })
+});
+
+const testResult = await testResponse.json();
+console.log('🧪 Test result:', testResult);
+
+    console.log('📡 ML API Response status:', response.status);
+
+    console.log('🎯 Sending to AI:', {
+  learningStyle: survey.learningStyle,
+  subjects: survey.preferredSubjects,
+  skillLevel: survey.skillLevel,
+  mathScore: survey.mathScore,
+  scienceScore: survey.scienceScore,
+  languageScore: survey.languageScore,
+  techScore: survey.techScore,
+  motivationLevel: survey.motivationLevel
+});
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ ML API Response data:', data);
+    
+    if (data.success && data.matches && data.matches.length > 0) {
+      console.log(`🎉 Found ${data.matches.length} matches!`);
+      setMatchedTutors(data.matches);
+      setCurrentView('matched-tutors');
+    } else {
+      console.warn('⚠️ No matches found');
+      alert('No tutors found matching your criteria. Try updating your preferences or browse all tutors.');
+      setCurrentView('tutors');
     }
     
   } catch (error) {
-    console.error('ML API Error:', error);
+    console.error('❌ ML API Error:', error);
     
-    if (error.response) {
-      if (error.response.status === 422) {
-        alert(`Validation Error: ${JSON.stringify(error.response.data)}`);
-      } else if (error.response.status === 401) {
-        alert('Authentication failed. Please log in again.');
-        setIsAuthenticated(false);
-        localStorage.removeItem('token');
-        setShowLogin(true);
-      } else {
-        alert(`Server error: ${error.response.data.message || 'Unknown error'}`);
-      }
+    if (error.message.includes('401')) {
+      alert('Authentication failed. Please log in again.');
+      setIsAuthenticated(false);
+      localStorage.removeItem('token');
+      setShowLogin(true);
+    } else if (error.message.includes('422')) {
+      alert('Invalid survey data. Please complete the survey again.');
+      setShowSurvey(true);
+    } else if (error.message.includes('fetch')) {
+      alert('Cannot connect to matching server. Please check your connection and try again.');
     } else {
-      alert('Cannot connect to ML server. Please check your connection.');
+      alert(`Matching failed: ${error.message}`);
     }
   } finally {
     setAiMatching(false);
   }
 };
-
 // MATCHED TUTORS RESULTS VIEW - Displays ML-generated matches
 const MatchedTutorsView = () => {
   if (!matchedTutors || matchedTutors.length === 0) {
@@ -727,6 +805,16 @@ const MatchedTutorsView = () => {
     );
   }
 
+  const handleOpenFeedback = (tutor) => {
+    setFeedbackTutor(tutor);
+    setShowFeedbackModal(true);
+  };
+
+  const handleFeedbackSubmit = () => {
+    // Refresh matches after feedback
+    handleAIMatching();
+  };
+
   return (
     <div className="p-4">
       <button 
@@ -736,7 +824,7 @@ const MatchedTutorsView = () => {
         ← Back to Find Tutors
       </button>
 
-      {/* Success Header - Shows ML algorithm info */}
+      {/* Success Header */}
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-6 rounded-lg mb-4">
         <div className="flex items-center gap-3 mb-2">
           <Award size={32} />
@@ -751,7 +839,7 @@ const MatchedTutorsView = () => {
             <span className="text-2xl font-bold">{matchedTutors.length}</span>
           </div>
           <div className="text-xs mt-2 opacity-80">
-            Using: Weighted Feature Matching with ML
+            Using: ML-Powered Matching with Performance History
           </div>
         </div>
       </div>
@@ -761,105 +849,30 @@ const MatchedTutorsView = () => {
         <div className="flex items-start gap-2">
           <BarChart3 className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
           <div>
-            <h4 className="font-semibold text-blue-900 mb-1">How ML Matching Works</h4>
+            <h4 className="font-semibold text-blue-900 mb-1">Enhanced ML Matching</h4>
             <p className="text-sm text-blue-800">
-              Our machine learning algorithm analyzes your learning style, goals, subjects, 
-              and preferences to calculate compatibility scores with each tutor. 
-              The breakdown shows how well each factor matches.
+              Our algorithm now learns from student feedback to improve recommendations over time.
+              Rate your tutors to help us match you better!
             </p>
           </div>
         </div>
       </div>
 
-      {/* Matched Tutors List - Data from ML backend */}
+      {/* Matched Tutors using TutorMatchCard */}
       <div className="space-y-4">
-        {matchedTutors.map((tutor, index) => (
-          <div 
-            key={tutor.id} 
-            className="bg-white rounded-lg shadow-lg p-4 border-2 border-purple-200 hover:border-purple-400 transition"
-          >
-            {/* Rank Badge */}
-            <div className="flex items-start gap-3 mb-3">
-              <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">
-                #{index + 1}
-              </div>
-              
-              <div className="flex-1">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h3 className="font-bold text-gray-800 text-lg">{tutor.name}</h3>
-                    <p className="text-sm text-gray-600">{tutor.expertise}</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full">
-                    <span className="text-lg font-bold">{tutor.matchScore}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Match Breakdown - From ML model */}
-            {tutor.breakdown && (
-              <div className="bg-purple-50 rounded-lg p-3 mb-3">
-                <h4 className="text-xs font-semibold text-purple-900 mb-2 flex items-center gap-1">
-                  <BarChart3 size={14} />
-                  ML Match Breakdown
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(tutor.breakdown).slice(0, 4).map(([key, value]) => {
-                    const percentage = Math.round(value);
-                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    
-                    return (
-                      <div key={key} className="bg-white rounded p-2">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-600 truncate">{label}</span>
-                          <span className="font-semibold text-purple-700">{percentage}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div 
-                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Why This Match - From ML explanations */}
-            {tutor.explanations && tutor.explanations.length > 0 && (
-              <div className="bg-green-50 rounded-lg p-3 mb-3">
-                <h4 className="text-xs font-semibold text-green-900 mb-2 flex items-center gap-1">
-                  <CheckCircle size={14} />
-                  Why This Match?
-                </h4>
-                <ul className="space-y-1">
-                  {tutor.explanations.slice(0, 3).map((exp, idx) => (
-                    <li key={idx} className="text-xs text-gray-700 flex items-start gap-1">
-                      <span className="text-green-600 flex-shrink-0">•</span>
-                      <span>{exp}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Tutor Stats */}
-            <div className="flex gap-2 text-xs text-gray-600 mb-3 flex-wrap">
-              <span className="bg-yellow-100 px-2 py-1 rounded">⭐ {tutor.rating}</span>
-              <span className="bg-blue-100 px-2 py-1 rounded">{tutor.sessions} sessions</span>
-              <span className="bg-green-100 px-2 py-1 rounded">
-                {Array.isArray(tutor.languages) ? tutor.languages.join(', ') : tutor.languages}
-              </span>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
+        {matchedTutors.map((match, index) => (
+          <div key={match.tutor_id || index}>
+            <TutorMatchCard 
+              match={match}
+              onFeedback={handleOpenFeedback}
+              showPerformance={true}
+            />
+            
+            {/* Additional Action Buttons */}
+            <div className="flex gap-2 mt-2">
               <button 
                 onClick={() => {
-                  setSelectedTutor(tutor);
+                  setSelectedTutor(match);
                   setCurrentView('tutor-profile');
                 }}
                 className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 rounded-lg hover:shadow-lg transition text-sm font-semibold"
@@ -868,12 +881,12 @@ const MatchedTutorsView = () => {
               </button>
               <button 
                 onClick={() => {
-                  setSelectedTutor(tutor);
-                  setCurrentView('tutor-profile');
+                  setSelectedTutor(match);
+                  setCurrentView('chat');
                 }}
                 className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
               >
-                Book Now
+                Message Tutor
               </button>
             </div>
           </div>
@@ -882,10 +895,9 @@ const MatchedTutorsView = () => {
 
       {/* Bottom CTA */}
       <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-purple-200 rounded-lg p-4">
-        <h4 className="font-semibold text-gray-800 mb-2">Not satisfied with these matches?</h4>
+        <h4 className="font-semibold text-gray-800 mb-2">Help us improve your matches</h4>
         <p className="text-sm text-gray-600 mb-3">
-          The ML model improves with more data. Try updating your learning preferences 
-          or browse all available tutors.
+          After working with a tutor, rate your experience to get even better recommendations!
         </p>
         <div className="flex gap-2">
           <button 
@@ -905,11 +917,24 @@ const MatchedTutorsView = () => {
           </button>
         </div>
       </div>
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && feedbackTutor && (
+        <TutorFeedbackModal
+          tutor={{
+            id: feedbackTutor.tutor_id,
+            name: feedbackTutor.tutor_name
+          }}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackTutor(null);
+          }}
+          onSubmit={handleFeedbackSubmit}
+        />
+      )}
     </div>
   );
 };
-
-
 
 
 // Enhanced download function with actual downloading
@@ -931,7 +956,7 @@ const downloadCourse = async (course) => {
     const token = localStorage.getItem('token');
     
     // Step 1: Record the download
-    const response = await fetch(`http://localhost:5000/api/courses/${course.id}/download`, {
+    const response = await fetch(`https://hult.onrender.com/api/courses/${course.id}/download`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -947,7 +972,7 @@ const downloadCourse = async (course) => {
     const data = await response.json();
     
     // Step 2: Fetch all course materials
-    const materialsResponse = await fetch(`http://localhost:5000/api/courses/${course.id}/materials`, {
+    const materialsResponse = await fetch(`https://hult.onrender.com/api/courses/${course.id}/materials`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
@@ -956,7 +981,7 @@ const downloadCourse = async (course) => {
     // Step 3: Download each material file
     for (const material of materialsData.materials || []) {
       try {
-        const fileResponse = await fetch(`http://localhost:5000/api/materials/${material.id}/stream`);
+        const fileResponse = await fetch(`https://hult.onrender.com/api/materials/${material.id}/stream`);
         const blob = await fileResponse.blob();
         
         // Create download link
@@ -1063,17 +1088,21 @@ const HomeView = () => {
     }}
   />
 )}
-    {showSurvey && (
+{showSurvey && (
   <StudentSurvey
     onClose={() => setShowSurvey(false)}
     onComplete={() => {
-      const surveyData = { completed: true };
-      localStorage.setItem('studentSurvey', JSON.stringify(surveyData));
+      console.log('📋 Survey completed successfully');
+      
+      // The survey data is already saved to the backend via the handleSubmit in StudentSurvey
+      // No need to process it here, just close and show success
+      
       setShowSurvey(false);
-      alert('Survey completed! You can now use AI matching.');
+      alert('✅ Survey completed! You can now use AI matching to find your perfect tutor.');
     }}
   />
 )}
+
 
     
       {isDetecting ? (
@@ -1287,7 +1316,7 @@ const CoursesView = () => {
 
   const fetchAllCourses = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/courses');
+      const response = await fetch('https://hult.onrender.com/api/courses');
       const data = await response.json();
       setAllCourses(data.courses || []);
     } catch (error) {
@@ -1373,7 +1402,7 @@ const fetchTutorStats = async () => {
   try {
     const token = localStorage.getItem('token');
     
-    const response = await fetch('http://localhost:5000/api/tutor/stats', {
+    const response = await fetch('https://hult.onrender.com/api/tutor/stats', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
@@ -1422,7 +1451,7 @@ const MyCoursesView = () => {
       const token = localStorage.getItem('token');
       console.log('🔵 Token:', token ? 'exists' : 'missing');
       
-      const response = await fetch('http://localhost:5000/api/student/enrollments', {
+      const response = await fetch('https://hult.onrender.com/api/student/enrollments', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1444,7 +1473,7 @@ const MyCoursesView = () => {
   const updateProgress = async (enrollmentId, newProgress) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/enrollments/${enrollmentId}/progress`, {
+      const response = await fetch(`https://hult.onrender.com/api/enrollments/${enrollmentId}/progress`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1648,13 +1677,13 @@ const OfflineView = () => {
       const token = localStorage.getItem('token');
       
       // Fetch user's offline downloads
-      const downloadsResponse = await fetch('http://localhost:5000/api/student/downloads', {
+      const downloadsResponse = await fetch('https://hult.onrender.com/api/student/downloads', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const downloadsData = await downloadsResponse.json();
       
       // Fetch enrolled courses that are offline-available
-      const enrollmentsResponse = await fetch('http://localhost:5000/api/student/enrollments', {
+      const enrollmentsResponse = await fetch('https://hult.onrender.com/api/student/enrollments', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const enrollmentsData = await enrollmentsResponse.json();
@@ -1681,7 +1710,7 @@ const OfflineView = () => {
       
       // Step 1: Record download in database
       console.log('🔵 Step 1: Recording download...');
-      const response = await fetch(`http://localhost:5000/api/courses/${course.course_id}/download`, {
+      const response = await fetch(`https://hult.onrender.com/api/courses/${course.course_id}/download`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1699,7 +1728,7 @@ const OfflineView = () => {
       
       // Step 2: Fetch course materials
       console.log('🔵 Step 2: Fetching materials...');
-      const materialsResponse = await fetch(`http://localhost:5000/api/courses/${course.course_id}/materials`, {
+      const materialsResponse = await fetch(`https://hult.onrender.com/api/courses/${course.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -1726,7 +1755,7 @@ const OfflineView = () => {
         try {
           console.log(`📥 Downloading: ${material.title}`);
           
-          const fileResponse = await fetch(`http://localhost:5000/api/materials/${material.id}/download`, {
+          const fileResponse = await fetch(`https://hult.onrender.com/api/materials/${material.id}/download`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           
@@ -1777,7 +1806,7 @@ const OfflineView = () => {
       const token = localStorage.getItem('token');
       const download = offlineDownloads.find(d => d.id === downloadId);
       
-      const response = await fetch(`http://localhost:5000/api/courses/${download.course_id}/download`, {
+      const response = await fetch(`https://hult.onrender.com/api/courses/${download.course_id}/download`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -2022,7 +2051,7 @@ const OfflineMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2054,7 +2083,7 @@ const OfflineMaterialsView = () => {
   const handleDownloadMaterial = async (material) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/materials/${material.id}/download`, {
+      const response = await fetch(`https://hult.onrender.com/api/materials/${material.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -2156,7 +2185,7 @@ const OfflineMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2166,7 +2195,7 @@ const OfflineMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2178,7 +2207,7 @@ const OfflineMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2205,7 +2234,7 @@ const CourseMaterialsView = () => {
   const fetchMaterials = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.course_id}/materials`, {
+      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.course_id}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -2320,7 +2349,7 @@ const CourseMaterialsView = () => {
                   <video 
                     controls 
                     className="w-full h-full"
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the video tag.
                   </video>
@@ -2330,7 +2359,7 @@ const CourseMaterialsView = () => {
               {selectedMaterial.type === 'document' && (
                 <div className="bg-white rounded-lg min-h-[500px]">
                   <iframe
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                     className="w-full h-[600px] rounded-lg"
                     title={selectedMaterial.title}
                   />
@@ -2342,7 +2371,7 @@ const CourseMaterialsView = () => {
                   <audio 
                     controls 
                     className="w-full"
-                    src={`http://localhost:5000/api/materials/${selectedMaterial.id}/stream`}
+                    src={`https://hult.onrender.com/api/materials/${selectedMaterial.id}/stream`}
                   >
                     Your browser does not support the audio element.
                   </audio>
@@ -2448,7 +2477,7 @@ const CourseMaterialsView = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${selectedCourse.id}/enroll`, {
+      const response = await fetch(`https://hult.onrender.com/api/courses/${selectedCourse.id}/enroll`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2488,7 +2517,7 @@ const CourseMaterialsView = () => {
 
   const fetchTutors = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/tutors');
+      const response = await fetch('https://hult.onrender.com/api/tutors');
       const data = await response.json();
       setAllTutors(data.tutors || []);
     } catch (error) {
@@ -2496,6 +2525,11 @@ const CourseMaterialsView = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenFeedback = (tutor) => {
+    setFeedbackTutor(tutor);
+    setShowFeedbackModal(true);
   };
 
   if (loading) {
@@ -2558,6 +2592,12 @@ const CourseMaterialsView = () => {
               <button className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 transition text-sm">
                 Message
               </button>
+              <button 
+                onClick={() => handleOpenFeedback(tutor)}
+                className="bg-purple-100 text-purple-700 px-3 py-2 rounded hover:bg-purple-200 transition text-sm font-semibold"
+              >
+                Rate
+              </button>
             </div>
           </div>
         ))}
@@ -2568,12 +2608,24 @@ const CourseMaterialsView = () => {
           </div>
         )}
       </div>
+
+      {/* 👇 PLACE THE FEEDBACK MODAL HERE - Right before the closing </div> */}
+      {showFeedbackModal && feedbackTutor && (
+        <TutorFeedbackModal
+          tutor={feedbackTutor}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackTutor(null);
+          }}
+          onSubmit={() => {
+            // Optionally refresh tutor list
+            fetchTutors();
+          }}
+        />
+      )}
     </div>
   );
 };
-
-
-
 
   const DonateView = () => (
     <div className="p-4">
