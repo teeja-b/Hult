@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Lock, CheckCircle, AlertCircle, Eye, EyeOff, X } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 export default function PasswordResetPage({ onClose }) {
   const [currentPassword, setCurrentPassword] = useState('');

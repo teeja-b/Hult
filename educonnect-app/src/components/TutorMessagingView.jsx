@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search } from 'lucide-react';
 import io from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorMessagingView = ({ 
   currentTutorUserId,  

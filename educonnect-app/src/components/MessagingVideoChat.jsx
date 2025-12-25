@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, CheckCheck, Check } from 'lucide-react';
 import io from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
   const [tutors, setTutors] = useState([]);

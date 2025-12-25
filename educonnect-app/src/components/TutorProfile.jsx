@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, BookOpen, Clock, Globe, DollarSign, Star, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Award, Briefcase, GraduationCap } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorProfile = ({ onClose }) => {
   const [profile, setProfile] = useState(null);

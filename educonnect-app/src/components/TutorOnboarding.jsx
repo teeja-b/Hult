@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GraduationCap, Briefcase, DollarSign, Globe, Clock, BookOpen, ChevronRight, ChevronLeft, Save } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorOnboarding = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(1);
