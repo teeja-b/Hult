@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 // ============================================================================
 // EMAIL VERIFICATION BANNER
