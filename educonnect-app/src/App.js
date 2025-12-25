@@ -19,7 +19,7 @@ import PasswordResetPage from './components/PasswordResetPage';
 import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
 
 const EduConnectApp = () => {
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000' ;
+  const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' ;
   const [showCourseManager, setShowCourseManager] = useState(false);
 const [tutorStats, setTutorStats] = useState({
   totalCourses: 0,
