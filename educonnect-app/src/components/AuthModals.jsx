@@ -403,14 +403,14 @@ export const EnhancedLoginModal = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
-          <button
+          /**<button
             type="button"
             onClick={() => setShowForgotPassword(true)}
             className="text-sm text-blue-600 hover:underline"
           >
             Forgot password?
           </button>
-
+          *\
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
               <p className="text-red-700 text-sm">{error}</p>
