@@ -910,7 +910,7 @@ def register_with_verification():
         print(traceback.format_exc())
         print(f"{'='*70}\n")
         return jsonify({'error': 'Registration failed', 'details': str(e)})
-""""
+"""
  @app.route('/api/auth/verify-email', methods=['GET'])
 def verify_email():
     """Verify email address"""
@@ -985,7 +985,7 @@ def resend_verification():
         print(f"[RESEND ERROR] {str(e)}")
         return jsonify({'error': 'Failed to resend verification'}), 500
 
-""""
+"""
 
 # Add this new endpoint around line 1500 (after other message endpoints)
 
