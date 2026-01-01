@@ -986,6 +986,65 @@ def resend_verification():
         return jsonify({'error': 'Failed to resend verification'}), 500
 
 """"
+
+# Add this new endpoint around line 1500 (after other message endpoints)
+
+@app.route('/api/messages/upload', methods=['POST'])
+@jwt_required()
+def upload_message_attachment():
+    """Upload file attachment for messages"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        conversation_id = request.form.get('conversation_id')
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Validate file size (10MB max)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > 10 * 1024 * 1024:
+            return jsonify({'error': 'File too large (max 10MB)'}), 400
+        
+        # Secure filename
+        filename = secure_filename(file.filename)
+        unique_filename = f"{conversation_id}_{datetime.utcnow().timestamp()}_{filename}"
+        
+        # Create attachments directory
+        attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
+        os.makedirs(attachments_dir, exist_ok=True)
+        
+        # Save file
+        file_path = os.path.join(attachments_dir, unique_filename)
+        file.save(file_path)
+        
+        # Return URL (adjust based on your hosting)
+        file_url = f"/api/attachments/{unique_filename}"
+        
+        return jsonify({
+            'file_url': file_url,
+            'file_name': filename,
+            'file_size': file_size
+        }), 200
+        
+    except Exception as e:
+        print(f"[UPLOAD ERROR] {str(e)}")
+        return jsonify({'error': 'Upload failed'}), 500
+
+
+@app.route('/api/attachments/<filename>', methods=['GET'])
+def serve_attachment(filename):
+    """Serve uploaded attachment"""
+    try:
+        attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
+        return send_file(os.path.join(attachments_dir, filename))
+    except Exception as e:
+        return jsonify({'error': 'File not found'}), 404
 @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
 def login():
     """Fixed login endpoint"""

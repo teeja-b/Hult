@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, CheckCheck, Check } from 'lucide-react';
 import io from 'socket.io-client';
-
+import { Paperclip, Mic, X, FileText, Image as ImageIcon } from 'lucide-react';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
@@ -27,6 +27,11 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const [attachmentFile, setAttachmentFile] = useState(null);
+const [isRecording, setIsRecording] = useState(false);
+const [mediaRecorder, setMediaRecorder] = useState(null);
+const [audioChunks, setAudioChunks] = useState([]);
+const fileInputRef = useRef(null);
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -236,71 +241,161 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
       setLoading(false);
     }
   };
+const handleFileSelect = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File too large. Maximum size is 10MB');
+      return;
+    }
+    setAttachmentFile(file);
+  }
+};
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedTutor) return;
+const removeAttachment = () => {
+  setAttachmentFile(null);
+  if (fileInputRef.current) fileInputRef.current.value = '';
+};
 
-    const tempId = Date.now();
-    const msg = {
-      id: tempId,
-      sender_id: currentUserId,
-      text: newMessage.trim(),
-      timestamp: new Date().toISOString(),
-      isOwn: true,
-      status: 'sending'
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    const chunks = [];
+
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+      setAttachmentFile(file);
+      stream.getTracks().forEach(track => track.stop());
     };
 
-    const updatedMessages = [...messages, msg];
-    setMessages(updatedMessages);
-    setNewMessage('');
+    recorder.start();
+    setMediaRecorder(recorder);
+    setIsRecording(true);
+    setAudioChunks(chunks);
+  } catch (err) {
+    console.error('Microphone access denied:', err);
+    alert('Please allow microphone access to record voice messages');
+  }
+};
 
+const stopRecording = () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    setIsRecording(false);
+    setMediaRecorder(null);
+  }
+};
+
+const uploadAttachment = async (file, conversationId) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('conversation_id', conversationId);
+  
+  const token = localStorage.getItem('token');
+  
+  const response = await fetch(`${API_URL}/api/messages/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData
+  });
+  
+  if (!response.ok) throw new Error('Upload failed');
+  
+  const data = await response.json();
+  return data.file_url;
+};
+
+
+
+
+const sendMessage = async () => {
+  if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
+
+  const tempId = Date.now();
+  let fileUrl = null;
+  let fileType = null;
+  let fileName = null;
+
+  if (attachmentFile) {
     try {
       const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
       const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-
-      // Emit message via Socket.IO (will be saved to database by backend)
-      if (socketRef.current && socketRef.current.connected) {
-        socketRef.current.emit('send_message', {
-          conversationId: conversationKey,
-          sender_id: currentUserId,
-          receiver_id: selectedTutor.user_id,  // ✅ Pass tutor's user_id
-          text: msg.text,
-          timestamp: msg.timestamp,
-          messageId: tempId
-        });
-
-        console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
-
-        setMessages(prev => prev.map(m => 
-          m.id === tempId ? { ...m, status: 'sent' } : m
-        ));
-      }
-
-      // Also save to storage as backup
-      const conversationData = {
-        tutorUserId: selectedTutor.user_id,
-        tutorProfileId: tutorProfileId,
-        tutorName: selectedTutor.name,
-        studentId: currentUserId,
-        studentName: 'Student Name',
-        lastMessage: msg.text,
-        lastMessageTime: msg.timestamp,
-        messages: updatedMessages
-      };
-
-      if (window.storage && window.storage.set) {
-        await window.storage.set(conversationKey, JSON.stringify(conversationData));
-      } else {
-        localStorage.setItem(conversationKey, JSON.stringify(conversationData));
-      }
-
+      fileUrl = await uploadAttachment(attachmentFile, conversationKey);
+      fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+                 attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+      fileName = attachmentFile.name;
     } catch (err) {
-      console.error('[STUDENT] Failed to send message:', err);
-      setMessages(prev => prev.map(m => 
-        m.id === tempId ? { ...m, status: 'failed' } : m
-      ));
+      console.error('[STUDENT] Upload failed:', err);
+      alert('Failed to upload attachment');
+      return;
     }
+  }
+
+  const msg = {
+    id: tempId,
+    sender_id: currentUserId,
+    text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
+    timestamp: new Date().toISOString(),
+    isOwn: true,
+    status: 'sending',
+    file_url: fileUrl,
+    file_type: fileType,
+    file_name: fileName
   };
+
+  const updatedMessages = [...messages, msg];
+  setMessages(updatedMessages);
+  setNewMessage('');
+  setAttachmentFile(null);
+  if (fileInputRef.current) fileInputRef.current.value = '';
+
+  try {
+    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
+    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('send_message', {
+        conversationId: conversationKey,
+        sender_id: currentUserId,
+        receiver_id: selectedTutor.user_id,
+        text: msg.text,
+        timestamp: msg.timestamp,
+        messageId: tempId,
+        file_url: fileUrl,
+        file_type: fileType,
+        file_name: fileName
+      });
+
+      console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+    }
+
+    const conversationData = {
+      tutorUserId: selectedTutor.user_id,
+      tutorProfileId: tutorProfileId,
+      tutorName: selectedTutor.name,
+      studentId: currentUserId,
+      studentName: 'Student Name',
+      lastMessage: msg.text,
+      lastMessageTime: msg.timestamp,
+      messages: updatedMessages
+    };
+
+    if (window.storage && window.storage.set) {
+      await window.storage.set(conversationKey, JSON.stringify(conversationData));
+    } else {
+      localStorage.setItem(conversationKey, JSON.stringify(conversationData));
+    }
+
+  } catch (err) {
+    console.error('[STUDENT] Failed to send message:', err);
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+  }
+};
 
   const handleTyping = () => {
     if (socketRef.current && selectedTutor) {
