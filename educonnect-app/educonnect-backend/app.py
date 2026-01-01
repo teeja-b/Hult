@@ -913,7 +913,7 @@ def register_with_verification():
 """
  @app.route('/api/auth/verify-email', methods=['GET'])
 def verify_email():
-    """Verify email address"""
+    
     try:
         token = request.args.get('token')
         
@@ -953,7 +953,7 @@ def verify_email():
 
 @app.route('/api/auth/resend-verification', methods=['POST'])
 def resend_verification():
-    """Resend verification email"""
+    
     try:
         data = request.json
         email = data.get('email')
