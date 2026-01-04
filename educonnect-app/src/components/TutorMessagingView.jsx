@@ -672,12 +672,30 @@ const TutorMessagingView = ({
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
                 )}
               </div>
-              <div>
+              <div className="flex-1">
                 <h2 className="font-semibold">{selectedConversation?.studentName || selectedConversation?.partnerName || 'Student'}</h2>
                 <p className="text-xs text-blue-100">
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
+              <button 
+                onClick={() => {
+                  console.log('=== ALL MESSAGES DEBUG ===');
+                  messages.forEach((msg, i) => {
+                    console.log(`Message ${i}:`, {
+                      id: msg.id,
+                      text: msg.text,
+                      file_url: msg.file_url,
+                      file_type: msg.file_type,
+                      file_name: msg.file_name,
+                      timestamp: msg.timestamp
+                    });
+                  });
+                }}
+                className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30"
+              >
+                Debug
+              </button>
             </div>
           </div>
 
