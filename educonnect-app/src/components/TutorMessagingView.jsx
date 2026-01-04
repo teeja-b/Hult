@@ -100,8 +100,17 @@ const TutorMessagingView = ({
     return data.file_url;
   };
 
- const sendMessage = async () => {
-  if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
+ // Replace the sendMessage function in TutorMessagingView.jsx (around line 150)
+
+const sendMessage = async () => {
+  if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
+
+  const studentId = selectedConversation.studentId || selectedConversation.partnerId;
+  
+  if (!studentId) {
+    console.error('[TUTOR] ERROR: Cannot send message - no student ID!');
+    return;
+  }
 
   const tempId = Date.now();
   let fileUrl = null;
@@ -113,17 +122,7 @@ const TutorMessagingView = ({
     try {
       console.log('📤 Uploading file...', attachmentFile.name);
       
-      // Show uploading indicator
-      setMessages(prev => [...prev, {
-        id: tempId,
-        sender_id: currentUserId,
-        text: '📤 Uploading file...',
-        timestamp: new Date().toISOString(),
-        isOwn: true,
-        status: 'uploading'
-      }]);
-      
-      const conversationKey = `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`;
+      const conversationKey = selectedConversation.id;
       
       const formData = new FormData();
       formData.append('file', attachmentFile);
@@ -153,13 +152,8 @@ const TutorMessagingView = ({
       fileName = attachmentFile.name;
       
       console.log('✅ File uploaded successfully:', fileUrl);
-      
-      // Remove uploading message
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      
     } catch (err) {
       console.error('❌ Upload failed:', err);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
       alert('Failed to upload attachment. Please try again.');
       return;
     }
@@ -168,7 +162,7 @@ const TutorMessagingView = ({
   // Create message object
   const msg = {
     id: tempId,
-    sender_id: currentUserId,
+    sender_id: currentTutorUserId,
     text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
     timestamp: new Date().toISOString(),
     isOwn: true,
@@ -185,10 +179,7 @@ const TutorMessagingView = ({
   if (fileInputRef.current) fileInputRef.current.value = '';
 
   try {
-    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-
-    // 🔥 CRITICAL FIX: Send via Socket.IO which will save to database
+    // Send via Socket.IO which will save to database
     if (socketRef.current && socketRef.current.connected) {
       // Create a promise to wait for message delivery confirmation
       const messageDeliveryPromise = new Promise((resolve, reject) => {
@@ -207,9 +198,9 @@ const TutorMessagingView = ({
 
       // Emit the message
       socketRef.current.emit('send_message', {
-        conversationId: conversationKey,
-        sender_id: currentUserId,
-        receiver_id: selectedTutor.user_id,
+        conversationId: selectedConversation.id,
+        sender_id: currentTutorUserId,
+        receiver_id: studentId,
         text: msg.text,
         timestamp: msg.timestamp,
         messageId: tempId,
@@ -217,27 +208,27 @@ const TutorMessagingView = ({
         file_type: fileType,
         file_name: fileName
       });
-
-      console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
+      
+      console.log(`[TUTOR] Sent message to student ${studentId}`);
 
       // Wait for delivery confirmation
       try {
         const dbMessageId = await messageDeliveryPromise;
-        console.log(`✅ [STUDENT] Message saved to database with ID: ${dbMessageId}`);
+        console.log(`✅ [TUTOR] Message saved to database with ID: ${dbMessageId}`);
         
         // Update message status to 'sent' with database ID
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, id: dbMessageId, status: 'sent' } : m
         ));
       } catch (err) {
-        console.warn('⚠️ [STUDENT] Message delivery timeout, but message may have been sent');
+        console.warn('⚠️ [TUTOR] Message delivery timeout, but message may have been sent');
         // Mark as sent anyway since socket is connected
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, status: 'sent' } : m
         ));
       }
     } else {
-      console.error('❌ [STUDENT] Socket not connected!');
+      console.error('❌ [TUTOR] Socket not connected!');
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { ...m, status: 'failed' } : m
       ));
@@ -245,25 +236,36 @@ const TutorMessagingView = ({
     }
 
     // Save to storage as backup
+    const studentName = selectedConversation.studentName || selectedConversation.partnerName || 'Student';
+    
     const conversationData = {
-      tutorUserId: selectedTutor.user_id,
+      tutorUserId: currentTutorUserId,
       tutorProfileId: tutorProfileId,
-      tutorName: selectedTutor.name,
-      studentId: currentUserId,
-      studentName: 'Student Name',
+      studentId: studentId,
+      studentName: studentName,
+      tutorName: tutorName,
       lastMessage: msg.text,
       lastMessageTime: msg.timestamp,
       messages: updatedMessages
     };
 
     if (window.storage && window.storage.set) {
-      await window.storage.set(conversationKey, JSON.stringify(conversationData));
+      await window.storage.set(selectedConversation.id, JSON.stringify(conversationData));
     } else {
-      localStorage.setItem(conversationKey, JSON.stringify(conversationData));
+      localStorage.setItem(selectedConversation.id, JSON.stringify(conversationData));
     }
 
+    // Update conversations list
+    setConversations(prevConvs =>
+      prevConvs.map(conv =>
+        conv.id === selectedConversation.id
+          ? { ...conv, lastMessage: msg.text, lastMessageTime: msg.timestamp }
+          : conv
+      ).sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0))
+    );
+
   } catch (err) {
-    console.error('[STUDENT] Failed to send message:', err);
+    console.error('[TUTOR] Failed to send message:', err);
     setMessages(prev => prev.map(m => 
       m.id === tempId ? { ...m, status: 'failed' } : m
     ));
