@@ -297,7 +297,14 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     const data = await response.json();
     return data.file_url;
   };
-
+const convertBlobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
   const sendMessage = async () => {
     if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
 
@@ -307,20 +314,32 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     let fileName = null;
 
     if (attachmentFile) {
-      try {
-        const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-        const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-        fileUrl = await uploadAttachment(attachmentFile, conversationKey);
-        fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
-                   attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
-        fileName = attachmentFile.name;
-      } catch (err) {
-        console.error('[STUDENT] Upload failed:', err);
-        alert('Failed to upload attachment');
-        return;
-      }
+  try {
+    // Show uploading indicator
+    console.log('📤 Uploading file...', attachmentFile.name);
+    
+    // Determine conversation key based on user type
+    const conversationKey = selectedTutor 
+      ? `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`
+      : selectedConversation.id;
+    
+    fileUrl = await uploadAttachment(attachmentFile, conversationKey);
+    
+    if (!fileUrl || fileUrl.startsWith('blob:')) {
+      throw new Error('Upload returned invalid URL');
     }
-
+    
+    fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+               attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+    fileName = attachmentFile.name;
+    
+    console.log('✅ File uploaded successfully:', fileUrl);
+  } catch (err) {
+    console.error('❌ Upload failed:', err);
+    alert('Failed to upload attachment. Please try again.');
+    return;
+  }
+}
     const msg = {
       id: tempId,
       sender_id: currentUserId,

@@ -99,7 +99,14 @@ const TutorMessagingView = ({
     const data = await response.json();
     return data.file_url;
   };
-
+const convertBlobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
   const sendMessage = async () => {
     if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
 
@@ -115,19 +122,33 @@ const TutorMessagingView = ({
     let fileType = null;
     let fileName = null;
 
-    if (attachmentFile) {
-      try {
-        fileUrl = await uploadAttachment(attachmentFile, selectedConversation.id);
-        fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
-                   attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
-        fileName = attachmentFile.name;
-        console.log('[TUTOR] Attachment uploaded:', fileUrl);
-      } catch (err) {
-        console.error('[TUTOR] Upload failed:', err);
-        alert('Failed to upload attachment');
-        return;
-      }
+   if (attachmentFile) {
+  try {
+    // Show uploading indicator
+    console.log('📤 Uploading file...', attachmentFile.name);
+    
+    // Determine conversation key based on user type
+    const conversationKey = selectedTutor 
+      ? `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`
+      : selectedConversation.id;
+    
+    fileUrl = await uploadAttachment(attachmentFile, conversationKey);
+    
+    if (!fileUrl || fileUrl.startsWith('blob:')) {
+      throw new Error('Upload returned invalid URL');
     }
+    
+    fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+               attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+    fileName = attachmentFile.name;
+    
+    console.log('✅ File uploaded successfully:', fileUrl);
+  } catch (err) {
+    console.error('❌ Upload failed:', err);
+    alert('Failed to upload attachment. Please try again.');
+    return;
+  }
+}
 
     const msg = {
       id: tempId,
