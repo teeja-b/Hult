@@ -1511,7 +1511,7 @@ def get_tutor_stats():
 # ============================================================================
 @app.route('/api/conversations/<int:conversation_id>/messages', methods=['GET'])
 def get_conversation_messages_from_db(conversation_id):
-    """Get message history from database"""
+    """Get message history from database - FIXED VERSION"""
     try:
         print(f"\n[MESSAGES] Fetching messages for conversation {conversation_id}")
         
@@ -1519,6 +1519,7 @@ def get_conversation_messages_from_db(conversation_id):
         conversation = Conversation.query.get(conversation_id)
         
         if not conversation:
+            print(f"[MESSAGES] Conversation {conversation_id} not found")
             return jsonify({'error': 'Conversation not found'}), 404
         
         # Get all messages for this conversation, ordered by timestamp
@@ -1530,13 +1531,23 @@ def get_conversation_messages_from_db(conversation_id):
         
         messages_list = []
         for msg in messages:
-            messages_list.append({
+            message_data = {
                 'id': msg.id,
                 'sender_id': msg.sender_id,
-                'text': msg.text,
-                'timestamp': msg.timestamp.isoformat(),
+                'text': msg.text or '',
+                'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
                 'conversation_id': msg.conversation_id
-            })
+            }
+            
+            # Add file fields if they exist
+            if hasattr(msg, 'file_url') and msg.file_url:
+                message_data['file_url'] = msg.file_url
+            if hasattr(msg, 'file_type') and msg.file_type:
+                message_data['file_type'] = msg.file_type
+            if hasattr(msg, 'file_name') and msg.file_name:
+                message_data['file_name'] = msg.file_name
+            
+            messages_list.append(message_data)
         
         return jsonify({
             'messages': messages_list,
@@ -1547,7 +1558,10 @@ def get_conversation_messages_from_db(conversation_id):
         print(f"[ERROR] Failed to get messages: {str(e)}")
         import traceback
         print(traceback.format_exc())
-        return jsonify({'error': 'Failed to retrieve messages'}), 500
+        return jsonify({
+            'error': 'Failed to retrieve messages',
+            'details': str(e)
+        }), 500
 
 
 @app.route('/api/tutors/<int:tutor_id>/conversations', methods=['GET', 'OPTIONS'])
