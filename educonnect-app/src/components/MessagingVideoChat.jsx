@@ -553,12 +553,32 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
                 </p>
               </div>
             </div>
-            <button 
-              onClick={() => setShowMessages(false)}
-              className="hover:bg-blue-700 p-1 rounded transition-colors"
-            >
-              <X size={24} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  console.log('=== ALL MESSAGES DEBUG ===');
+                  messages.forEach((msg, i) => {
+                    console.log(`Message ${i}:`, {
+                      id: msg.id,
+                      text: msg.text,
+                      file_url: msg.file_url,
+                      file_type: msg.file_type,
+                      file_name: msg.file_name,
+                      timestamp: msg.timestamp
+                    });
+                  });
+                }}
+                className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30"
+              >
+                Debug
+              </button>
+              <button 
+                onClick={() => setShowMessages(false)}
+                className="hover:bg-blue-700 p-1 rounded transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
           </div>
 
           {/* Messages Container */}
