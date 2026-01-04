@@ -102,6 +102,8 @@ const TutorMessagingView = ({
 
  // Replace the sendMessage function in TutorMessagingView.jsx (around line 150)
 
+// Replace the sendMessage function in TutorMessagingView.jsx (around line 150)
+
 const sendMessage = async () => {
   if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
 
