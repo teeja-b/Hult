@@ -297,6 +297,9 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     text = db.Column(db.String(1000))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    file_url = db.Column(db.String(500))      # 🔥 ADD THIS
+    file_type = db.Column(db.String(50))      # 🔥 ADD THIS (image/voice/file)
+    file_name = db.Column(db.String(255))  
 
 # Optional: Booking model
 class Booking(db.Model):
@@ -562,6 +565,10 @@ def handle_send_message(data):
         text = data.get('text')
         timestamp = data.get('timestamp')
         message_id = data.get('messageId')
+
+        file_url = data.get('file_url')
+        file_type = data.get('file_type')
+        file_name = data.get('file_name')
         
         print(f"📤 [SOCKET] Message from {sender_id} to {receiver_id}")
         print(f"📤 [SOCKET] Conversation ID: {conversation_id}")
@@ -595,6 +602,9 @@ def handle_send_message(data):
             sender_id=sender_id,
             text=text,
             timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            file_url=file_url,      # 🔥 ADD THIS
+            file_type=file_type,    # 🔥 ADD THIS
+            file_name=file_name  
         )
         db.session.add(message)
         db.session.commit()
@@ -610,6 +620,9 @@ def handle_send_message(data):
             'text': text,
             'timestamp': timestamp,
             'status': 'delivered'
+            'file_url': file_url,      # 🔥 ADD THIS
+            'file_type': file_type,    # 🔥 ADD THIS
+            'file_name': file_name 
         }
         
         # 🔥 FIX: Broadcast to BOTH possible conversation ID formats
