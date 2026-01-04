@@ -509,6 +509,9 @@ const TutorMessagingView = ({
             isOwn: String(m.sender_id) === String(currentTutorUserId)
           }));
           console.log('[TUTOR] Loaded messages from database:', processedMessages.length);
+          if (processedMessages.length > 0) {
+            console.log('[TUTOR] Last message data:', processedMessages[processedMessages.length - 1]);
+          }
           setMessages(processedMessages);
           setLoading(false);
           return;
