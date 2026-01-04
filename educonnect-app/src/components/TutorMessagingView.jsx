@@ -32,26 +32,9 @@ const [isRecording, setIsRecording] = useState(false);
 const [mediaRecorder, setMediaRecorder] = useState(null);
 const [audioChunks, setAudioChunks] = useState([]);
 const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Initialize Socket.IO
-  useEffect(() => {
-    console.log('🔌 [TUTOR] Connecting to Socket.IO server...');
-    
-    socketRef.current = io(API_URL, {
-      auth: { userId: currentTutorUserId },
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5
-    });
-
-    const handleFileSelect = (e) => {
+const handleFileSelect = (e) => {
   const file = e.target.files[0];
   if (file) {
-    // Check file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       alert('File too large. Maximum size is 10MB');
       return;
@@ -116,8 +99,6 @@ const uploadAttachment = async (file, conversationId) => {
   return data.file_url;
 };
 
-// Replace the existing sendMessage function with this updated version:
-
 const sendMessage = async () => {
   if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
 
@@ -133,7 +114,6 @@ const sendMessage = async () => {
   let fileType = null;
   let fileName = null;
 
-  // Upload attachment if present
   if (attachmentFile) {
     try {
       fileUrl = await uploadAttachment(attachmentFile, selectedConversation.id);
@@ -216,6 +196,42 @@ const sendMessage = async () => {
     setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
   }
 };
+
+const handleTyping = () => {
+  if (socketRef.current && selectedConversation) {
+    socketRef.current.emit('typing', {
+      conversationId: selectedConversation.id,
+      userId: currentTutorUserId
+    });
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socketRef.current.emit('stop_typing', {
+        conversationId: selectedConversation.id,
+        userId: currentTutorUserId
+      });
+    }, 2000);
+  }
+};
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Initialize Socket.IO
+  useEffect(() => {
+    console.log('🔌 [TUTOR] Connecting to Socket.IO server...');
+    
+    socketRef.current = io(API_URL, {
+      auth: { userId: currentTutorUserId },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+
 
     const socket = socketRef.current;
 
@@ -520,25 +536,6 @@ const sendMessage = async () => {
 
 
 
-  const handleTyping = () => {
-    if (socketRef.current && selectedConversation) {
-      socketRef.current.emit('typing', {
-        conversationId: selectedConversation.id,
-        userId: currentTutorUserId
-      });
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit('stop_typing', {
-          conversationId: selectedConversation.id,
-          userId: currentTutorUserId
-        });
-      }, 2000);
-    }
-  };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown';
