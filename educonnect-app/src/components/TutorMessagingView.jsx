@@ -678,7 +678,7 @@ const handleTyping = () => {
         <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
           {attachmentFile.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
           <span className="text-sm flex-1 truncate">{attachmentFile.name}</span>
-          <button onClick={removeAttachment} className="text-red-600 hover:text-red-800">
+          <button onClick={removeAttachment} className="flex-shrink-0 text-red-600 hover:text-red-800">
             <X size={16} />
           </button>
         </div>
@@ -695,7 +695,7 @@ const handleTyping = () => {
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+          className="flex-shrink-0 p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
         >
           <Paperclip size={20} />
         </button>
@@ -703,7 +703,7 @@ const handleTyping = () => {
         {/* Voice recording button */}
         <button
           onClick={isRecording ? stopRecording : startRecording}
-          className={`p-2 rounded-full transition ${
+          className={`flex-shrink-0 p-2 rounded-full transition ${
             isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
