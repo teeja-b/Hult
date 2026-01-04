@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import io from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
@@ -99,14 +99,7 @@ const TutorMessagingView = ({
     const data = await response.json();
     return data.file_url;
   };
-const convertBlobToBase64 = (blob) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
+
   const sendMessage = async () => {
     if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
 
@@ -122,33 +115,30 @@ const convertBlobToBase64 = (blob) => {
     let fileType = null;
     let fileName = null;
 
-   if (attachmentFile) {
-  try {
-    // Show uploading indicator
-    console.log('📤 Uploading file...', attachmentFile.name);
-    
-    // Determine conversation key based on user type
-    const conversationKey = selectedTutor 
-      ? `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`
-      : selectedConversation.id;
-    
-    fileUrl = await uploadAttachment(attachmentFile, conversationKey);
-    
-    if (!fileUrl || fileUrl.startsWith('blob:')) {
-      throw new Error('Upload returned invalid URL');
+    if (attachmentFile) {
+      try {
+        console.log('📤 Uploading file...', attachmentFile.name);
+        
+        // FIXED: Use selectedConversation instead of selectedTutor
+        const conversationKey = selectedConversation.id;
+        
+        fileUrl = await uploadAttachment(attachmentFile, conversationKey);
+        
+        if (!fileUrl || fileUrl.startsWith('blob:')) {
+          throw new Error('Upload returned invalid URL');
+        }
+        
+        fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+                   attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+        fileName = attachmentFile.name;
+        
+        console.log('✅ File uploaded successfully:', fileUrl);
+      } catch (err) {
+        console.error('❌ Upload failed:', err);
+        alert('Failed to upload attachment. Please try again.');
+        return;
+      }
     }
-    
-    fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
-               attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
-    fileName = attachmentFile.name;
-    
-    console.log('✅ File uploaded successfully:', fileUrl);
-  } catch (err) {
-    console.error('❌ Upload failed:', err);
-    alert('Failed to upload attachment. Please try again.');
-    return;
-  }
-}
 
     const msg = {
       id: tempId,
@@ -236,6 +226,23 @@ const convertBlobToBase64 = (blob) => {
           userId: currentTutorUserId
         });
       }, 2000);
+    }
+  };
+
+  const getMessageStatus = (msg) => {
+    if (!msg.isOwn) return null;
+    
+    switch (msg.status) {
+      case 'sending':
+        return <Clock size={14} className="text-gray-400" />;
+      case 'sent':
+        return <Check size={14} className="text-gray-400" />;
+      case 'delivered':
+        return <CheckCheck size={14} className="text-blue-400" />;
+      case 'failed':
+        return <span className="text-red-400 text-xs">Failed</span>;
+      default:
+        return <CheckCheck size={14} className="text-gray-400" />;
     }
   };
 
@@ -344,7 +351,7 @@ const convertBlobToBase64 = (blob) => {
         socket.disconnect();
       }
     };
-  }, [currentTutorUserId]);
+  }, [currentTutorUserId, selectedConversation]);
 
   // Load conversations
   useEffect(() => {
@@ -570,7 +577,6 @@ const convertBlobToBase64 = (blob) => {
   );
 
   const showingChat = selectedConversation !== null;
-  const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unreadCount || 0), 0);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -687,65 +693,56 @@ const convertBlobToBase64 = (blob) => {
                 </div>
               ) : (
                 <div className="flex flex-col space-y-3 max-w-4xl mx-auto">
-               // Replace the message rendering section in BOTH MessagingVideoChat.jsx and TutorMessagingView.jsx
-
-{messages.map((msg) => {
-  // Debug log
-  if (msg.text?.includes('Voice message')) {
-    console.log('Voice msg:', msg.file_url, msg.file_type);
-  }
-  
-  return (
-    <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
-        msg.isOwn 
-          ? 'bg-blue-600 text-white rounded-br-sm' 
-          : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
-      }`}>
-        {/* File Display */}
-        {msg.file_url && (
-          <div className="mb-2">
-            {msg.file_type === 'image' ? (
-              <img 
-                src={msg.file_url} 
-                alt="attachment" 
-                className="rounded max-w-full h-auto max-h-64 cursor-pointer"
-                onClick={() => window.open(msg.file_url, '_blank')}
-              />
-            ) : msg.file_type === 'voice' ? (
-              <audio controls className="w-full" style={{ maxWidth: '250px' }}>
-                <source src={msg.file_url} type="audio/webm" />
-              </audio>
-            ) : (
-              <a 
-                href={msg.file_url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}
-              >
-                <FileText size={16} />
-                <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
-              </a>
-            )}
-          </div>
-        )}
-        
-        {/* Text - hide if it's just the emoji */}
-        {msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') && (
-          <p className="break-words">{msg.text}</p>
-        )}
-        
-        {/* Timestamp */}
-        <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-          <span className="text-xs">
-            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-          {getMessageStatus(msg)}
-        </div>
-      </div>
-    </div>
-  );
-})}
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
+                        msg.isOwn 
+                          ? 'bg-blue-600 text-white rounded-br-sm' 
+                          : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
+                      }`}>
+                        {/* File Display */}
+                        {msg.file_url && (
+                          <div className="mb-2">
+                            {msg.file_type === 'image' ? (
+                              <img 
+                                src={msg.file_url} 
+                                alt="attachment" 
+                                className="rounded max-w-full h-auto max-h-64 cursor-pointer"
+                                onClick={() => window.open(msg.file_url, '_blank')}
+                              />
+                            ) : msg.file_type === 'voice' ? (
+                              <audio controls className="w-full" style={{ maxWidth: '250px' }}>
+                                <source src={msg.file_url} type="audio/webm" />
+                              </audio>
+                            ) : (
+                              <a 
+                                href={msg.file_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}
+                              >
+                                <FileText size={16} />
+                                <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Text - hide if it's just the emoji */}
+                        {msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') && (
+                          <p className="break-words">{msg.text}</p>
+                        )}
+                        
+                        {/* Timestamp */}
+                        <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                          <span className="text-xs">
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {getMessageStatus(msg)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
 
                   {isTyping && (
                     <div className="flex justify-start">
