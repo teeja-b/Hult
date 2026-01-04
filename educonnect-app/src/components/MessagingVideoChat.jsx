@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, CheckCheck, Check } from 'lucide-react';
 import io from 'socket.io-client';
-import { Paperclip, Mic, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { Paperclip, Mic, FileText, Image as ImageIcon } from 'lucide-react';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
