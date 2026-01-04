@@ -601,7 +601,7 @@ def handle_send_message(data):
             conversation_id=conversation.id,
             sender_id=sender_id,
             text=text,
-            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
             file_url=file_url,      # 🔥 ADD THIS
             file_type=file_type,    # 🔥 ADD THIS
             file_name=file_name  
@@ -619,7 +619,7 @@ def handle_send_message(data):
             'receiver_id': receiver_id,
             'text': text,
             'timestamp': timestamp,
-            'status': 'delivered'
+            'status': 'delivered',
             'file_url': file_url,      # 🔥 ADD THIS
             'file_type': file_type,    # 🔥 ADD THIS
             'file_name': file_name 
