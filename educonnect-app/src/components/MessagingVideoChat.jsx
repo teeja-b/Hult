@@ -490,97 +490,150 @@ const sendMessage = async () => {
       </div>
 
       {/* Messages Panel */}
-      {showMessages && selectedTutor && (
-        <div className="fixed right-0 top-0 bottom-0 w-full md:w-96 bg-white z-50 flex flex-col shadow-2xl">
-          {/* Header */}
-          <div className="p-4 bg-blue-600 text-white flex justify-between items-center shadow-md">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{selectedTutor.avatar}</span>
-              <div>
-                <h2 className="font-semibold">{selectedTutor.name}</h2>
-                <p className="text-xs text-blue-100">
-                  {onlineUsers.has(selectedTutor.user_id) ? '● Online' : 'Offline'}
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowMessages(false)}
-              className="hover:bg-blue-700 p-1 rounded transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
+{showMessages && selectedTutor && (
+  <div className="fixed right-0 top-0 bottom-0 w-full md:w-96 bg-white z-50 flex flex-col shadow-2xl">
+    {/* Header */}
+    <div className="p-4 bg-blue-600 text-white flex justify-between items-center shadow-md">
+      <div className="flex items-center gap-2">
+        <span className="text-2xl">{selectedTutor.avatar}</span>
+        <div>
+          <h2 className="font-semibold">{selectedTutor.name}</h2>
+          <p className="text-xs text-blue-100">
+            {onlineUsers.has(selectedTutor.user_id) ? '● Online' : 'Offline'}
+          </p>
+        </div>
+      </div>
+      <button 
+        onClick={() => setShowMessages(false)}
+        className="hover:bg-blue-700 p-1 rounded transition-colors"
+      >
+        <X size={24} />
+      </button>
+    </div>
 
-          {/* Messages Container */}
-          <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-            {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Loading messages...</p>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 text-center">No messages yet. Start the conversation!</p>
-              </div>
-            ) : (
-              <div className="flex flex-col space-y-3">
-                {messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
-                      msg.isOwn 
-                        ? 'bg-blue-600 text-white rounded-br-sm' 
-                        : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
-                    }`}>
-                      <p className="break-words">{msg.text}</p>
-                      <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                        <span className="text-xs">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {getMessageStatus(msg)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-200 px-4 py-2 rounded-2xl rounded-bl-sm">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                      </div>
-                    </div>
+    {/* Messages Container */}
+    <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+      {loading ? (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-gray-500">Loading messages...</p>
+        </div>
+      ) : messages.length === 0 ? (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-gray-500 text-center">No messages yet. Start the conversation!</p>
+        </div>
+      ) : (
+        <div className="flex flex-col space-y-3">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
+                msg.isOwn 
+                  ? 'bg-blue-600 text-white rounded-br-sm' 
+                  : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
+              }`}>
+                {msg.file_url && (
+                  <div className="mb-2">
+                    {msg.file_type === 'image' ? (
+                      <img src={msg.file_url} alt="attachment" className="rounded max-w-full h-auto" />
+                    ) : msg.file_type === 'voice' ? (
+                      <audio controls className="w-full">
+                        <source src={msg.file_url} type="audio/webm" />
+                      </audio>
+                    ) : (
+                      <a href={msg.file_url} target="_blank" rel="noopener noreferrer" 
+                         className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}>
+                        <FileText size={16} />
+                        <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
+                      </a>
+                    )}
                   </div>
                 )}
-                <div ref={messagesEndRef} />
+                
+                <p className="break-words">{msg.text}</p>
+                <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                  <span className="text-xs">
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {getMessageStatus(msg)}
+                </div>
               </div>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <div className="p-3 border-t border-gray-200 bg-white">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Type a message..."
-                className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={newMessage}
-                onChange={e => {
-                  setNewMessage(e.target.value);
-                  handleTyping();
-                }}
-                onKeyDown={e => e.key === 'Enter' && sendMessage()}
-              />
-              <button 
-                onClick={sendMessage} 
-                className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                disabled={!newMessage.trim() || connectionStatus !== 'connected'}
-              >
-                <Send size={16} />
-              </button>
             </div>
-          </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-gray-200 px-4 py-2 rounded-2xl rounded-bl-sm">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
       )}
+    </div>
+
+    {/* Input Area */}
+    <div className="p-3 border-t border-gray-200 bg-white">
+      {attachmentFile && (
+        <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
+          {attachmentFile.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
+          <span className="text-sm flex-1 truncate">{attachmentFile.name}</span>
+          <button onClick={removeAttachment} className="text-red-600 hover:text-red-800">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      
+      <div className="flex gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileSelect}
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+        >
+          <Paperclip size={20} />
+        </button>
+        
+        <button
+          onClick={isRecording ? stopRecording : startRecording}
+          className={`p-2 rounded-full transition ${
+            isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Mic size={20} />
+        </button>
+        
+        <input
+          type="text"
+          placeholder={isRecording ? 'Recording...' : "Type a message..."}
+          className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          value={newMessage}
+          onChange={e => {
+            setNewMessage(e.target.value);
+            handleTyping();
+          }}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          disabled={isRecording}
+        />
+        <button 
+          onClick={sendMessage} 
+          className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          disabled={(!newMessage.trim() && !attachmentFile) || connectionStatus !== 'connected'}
+        >
+          <Send size={16} />
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };
