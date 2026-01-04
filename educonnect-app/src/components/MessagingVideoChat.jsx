@@ -597,14 +597,14 @@ const sendMessage = async () => {
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+          className="flex-shrink-0 p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
         >
           <Paperclip size={20} />
         </button>
         
         <button
           onClick={isRecording ? stopRecording : startRecording}
-          className={`p-2 rounded-full transition ${
+          className={`flex-shrink-0 p-2 rounded-full transition ${
             isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
