@@ -702,7 +702,7 @@ const TutorMessagingView = ({
                       }`}>
                         {/* File Display */}
                         {msg.file_url && (
-                          <div className="mb-2">
+                          <div className={msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') ? 'mb-2' : ''}>
                             {msg.file_type === 'image' ? (
                               <img 
                                 src={msg.file_url} 
@@ -711,15 +711,19 @@ const TutorMessagingView = ({
                                 onClick={() => window.open(msg.file_url, '_blank')}
                               />
                             ) : msg.file_type === 'voice' ? (
-                              <audio controls className="w-full" style={{ maxWidth: '250px' }}>
-                                <source src={msg.file_url} type="audio/webm" />
-                              </audio>
+                              <div>
+                                <audio controls className="w-full mb-1" style={{ maxWidth: '250px' }}>
+                                  <source src={msg.file_url} type="audio/webm" />
+                                  <source src={msg.file_url} type="audio/mp4" />
+                                  Your browser does not support the audio element.
+                                </audio>
+                              </div>
                             ) : (
                               <a 
                                 href={msg.file_url} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
-                                className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}
+                                className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100 hover:text-white' : 'text-blue-600 hover:text-blue-800'}`}
                               >
                                 <FileText size={16} />
                                 <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
@@ -728,13 +732,13 @@ const TutorMessagingView = ({
                           </div>
                         )}
                         
-                        {/* Text - hide if it's just the emoji */}
-                        {msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') && (
+                        {/* Text - show if not a file-only message */}
+                        {msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') && !msg.text.startsWith('📤') && (
                           <p className="break-words">{msg.text}</p>
                         )}
                         
                         {/* Timestamp */}
-                        <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <div className={`flex items-center justify-between gap-2 ${(msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎')) || !msg.file_url ? 'mt-1' : ''} ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
                           <span className="text-xs">
                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
