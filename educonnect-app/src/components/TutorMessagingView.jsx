@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search } from 'lucide-react';
+import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon } from 'lucide-react';
 import io from 'socket.io-client';
-import { Paperclip, Mic, X, FileText, Image as ImageIcon } from 'lucide-react';
+
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorMessagingView = ({ 
@@ -27,195 +27,197 @@ const TutorMessagingView = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-const [attachmentFile, setAttachmentFile] = useState(null);
-const [isRecording, setIsRecording] = useState(false);
-const [mediaRecorder, setMediaRecorder] = useState(null);
-const [audioChunks, setAudioChunks] = useState([]);
-const fileInputRef = useRef(null);
-const handleFileSelect = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File too large. Maximum size is 10MB');
-      return;
-    }
-    setAttachmentFile(file);
-  }
-};
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  const fileInputRef = useRef(null);
 
-const removeAttachment = () => {
-  setAttachmentFile(null);
-  if (fileInputRef.current) fileInputRef.current.value = '';
-};
-
-const startRecording = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    const chunks = [];
-
-    recorder.ondataavailable = (e) => chunks.push(e.data);
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File too large. Maximum size is 10MB');
+        return;
+      }
       setAttachmentFile(file);
-      stream.getTracks().forEach(track => track.stop());
-    };
-
-    recorder.start();
-    setMediaRecorder(recorder);
-    setIsRecording(true);
-    setAudioChunks(chunks);
-  } catch (err) {
-    console.error('Microphone access denied:', err);
-    alert('Please allow microphone access to record voice messages');
-  }
-};
-
-const stopRecording = () => {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    setIsRecording(false);
-    setMediaRecorder(null);
-  }
-};
-
-const uploadAttachment = async (file, conversationId) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('conversation_id', conversationId);
-  
-  const token = localStorage.getItem('token');
-  
-  const response = await fetch(`${API_URL}/api/messages/upload`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` },
-    body: formData
-  });
-  
-  if (!response.ok) throw new Error('Upload failed');
-  
-  const data = await response.json();
-  return data.file_url;
-};
-
-const sendMessage = async () => {
-  if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
-
-  const studentId = selectedConversation.studentId || selectedConversation.partnerId;
-  
-  if (!studentId) {
-    console.error('[TUTOR] ERROR: Cannot send message - no student ID!');
-    return;
-  }
-
-  const tempId = Date.now();
-  let fileUrl = null;
-  let fileType = null;
-  let fileName = null;
-
-  if (attachmentFile) {
-    try {
-      fileUrl = await uploadAttachment(attachmentFile, selectedConversation.id);
-      fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
-                 attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
-      fileName = attachmentFile.name;
-      console.log('[TUTOR] Attachment uploaded:', fileUrl);
-    } catch (err) {
-      console.error('[TUTOR] Upload failed:', err);
-      alert('Failed to upload attachment');
-      return;
     }
-  }
-
-  const msg = {
-    id: tempId,
-    sender_id: currentTutorUserId,
-    text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
-    timestamp: new Date().toISOString(),
-    isOwn: true,
-    status: 'sending',
-    file_url: fileUrl,
-    file_type: fileType,
-    file_name: fileName
   };
 
-  const updatedMessages = [...messages, msg];
-  setMessages(updatedMessages);
-  setNewMessage('');
-  setAttachmentFile(null);
-  if (fileInputRef.current) fileInputRef.current.value = '';
+  const removeAttachment = () => {
+    setAttachmentFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
-  try {
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('send_message', {
-        conversationId: selectedConversation.id,
-        sender_id: currentTutorUserId,
-        receiver_id: studentId,
-        text: msg.text,
-        timestamp: msg.timestamp,
-        messageId: tempId,
-        file_url: fileUrl,
-        file_type: fileType,
-        file_name: fileName
-      });
-      
-      console.log(`[TUTOR] Sent message to student ${studentId}`);
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+        setAttachmentFile(file);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setAudioChunks(chunks);
+    } catch (err) {
+      console.error('Microphone access denied:', err);
+      alert('Please allow microphone access to record voice messages');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
+  const uploadAttachment = async (file, conversationId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('conversation_id', conversationId);
+    
+    const token = localStorage.getItem('token');
+    
+    const response = await fetch(`${API_URL}/api/messages/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    
+    if (!response.ok) throw new Error('Upload failed');
+    
+    const data = await response.json();
+    return data.file_url;
+  };
+
+  const sendMessage = async () => {
+    if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
+
+    const studentId = selectedConversation.studentId || selectedConversation.partnerId;
+    
+    if (!studentId) {
+      console.error('[TUTOR] ERROR: Cannot send message - no student ID!');
+      return;
     }
 
-    const studentName = selectedConversation.studentName || selectedConversation.partnerName || 'Student';
-    
-    const conversationData = {
-      tutorUserId: currentTutorUserId,
-      tutorProfileId: tutorProfileId,
-      studentId: studentId,
-      studentName: studentName,
-      tutorName: tutorName,
-      lastMessage: msg.text,
-      lastMessageTime: msg.timestamp,
-      messages: updatedMessages
+    const tempId = Date.now();
+    let fileUrl = null;
+    let fileType = null;
+    let fileName = null;
+
+    if (attachmentFile) {
+      try {
+        fileUrl = await uploadAttachment(attachmentFile, selectedConversation.id);
+        fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+                   attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+        fileName = attachmentFile.name;
+        console.log('[TUTOR] Attachment uploaded:', fileUrl);
+      } catch (err) {
+        console.error('[TUTOR] Upload failed:', err);
+        alert('Failed to upload attachment');
+        return;
+      }
+    }
+
+    const msg = {
+      id: tempId,
+      sender_id: currentTutorUserId,
+      text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
+      timestamp: new Date().toISOString(),
+      isOwn: true,
+      status: 'sending',
+      file_url: fileUrl,
+      file_type: fileType,
+      file_name: fileName
     };
 
-    if (window.storage && window.storage.set) {
-      await window.storage.set(selectedConversation.id, JSON.stringify(conversationData));
-    } else {
-      localStorage.setItem(selectedConversation.id, JSON.stringify(conversationData));
+    const updatedMessages = [...messages, msg];
+    setMessages(updatedMessages);
+    setNewMessage('');
+    setAttachmentFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    try {
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('send_message', {
+          conversationId: selectedConversation.id,
+          sender_id: currentTutorUserId,
+          receiver_id: studentId,
+          text: msg.text,
+          timestamp: msg.timestamp,
+          messageId: tempId,
+          file_url: fileUrl,
+          file_type: fileType,
+          file_name: fileName
+        });
+        
+        console.log(`[TUTOR] Sent message to student ${studentId}`);
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
+      }
+
+      const studentName = selectedConversation.studentName || selectedConversation.partnerName || 'Student';
+      
+      const conversationData = {
+        tutorUserId: currentTutorUserId,
+        tutorProfileId: tutorProfileId,
+        studentId: studentId,
+        studentName: studentName,
+        tutorName: tutorName,
+        lastMessage: msg.text,
+        lastMessageTime: msg.timestamp,
+        messages: updatedMessages
+      };
+
+      if (window.storage && window.storage.set) {
+        await window.storage.set(selectedConversation.id, JSON.stringify(conversationData));
+      } else {
+        localStorage.setItem(selectedConversation.id, JSON.stringify(conversationData));
+      }
+
+      setConversations(prevConvs =>
+        prevConvs.map(conv =>
+          conv.id === selectedConversation.id
+            ? { ...conv, lastMessage: msg.text, lastMessageTime: msg.timestamp }
+            : conv
+        ).sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0))
+      );
+
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
+  };
 
-    setConversations(prevConvs =>
-      prevConvs.map(conv =>
-        conv.id === selectedConversation.id
-          ? { ...conv, lastMessage: msg.text, lastMessageTime: msg.timestamp }
-          : conv
-      ).sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0))
-    );
-
-  } catch (err) {
-    console.error('Failed to send message:', err);
-    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
-  }
-};
-
-const handleTyping = () => {
-  if (socketRef.current && selectedConversation) {
-    socketRef.current.emit('typing', {
-      conversationId: selectedConversation.id,
-      userId: currentTutorUserId
-    });
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      socketRef.current.emit('stop_typing', {
+  const handleTyping = () => {
+    if (socketRef.current && selectedConversation) {
+      socketRef.current.emit('typing', {
         conversationId: selectedConversation.id,
         userId: currentTutorUserId
       });
-    }, 2000);
-  }
-};
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        socketRef.current.emit('stop_typing', {
+          conversationId: selectedConversation.id,
+          userId: currentTutorUserId
+        });
+      }, 2000);
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -230,8 +232,6 @@ const handleTyping = () => {
       reconnectionDelay: 1000,
       reconnectionAttempts: 5
     });
-
-
 
     const socket = socketRef.current;
 
@@ -250,7 +250,6 @@ const handleTyping = () => {
       console.log('📩 [TUTOR] Sender:', data.sender_id, 'Receiver:', data.receiver_id);
       console.log('📩 [TUTOR] Current tutor ID:', currentTutorUserId);
       
-      // Update messages if this conversation is open
       if (selectedConversation) {
         const studentId = selectedConversation.studentId || selectedConversation.partnerId;
         const isRelevant = data.sender_id === studentId || 
@@ -261,7 +260,6 @@ const handleTyping = () => {
         
         if (isRelevant) {
           setMessages(prev => {
-            // 🔥 Check for duplicate by ID
             if (prev.some(m => m.id === data.id)) {
               console.log('📩 [TUTOR] ⚠️ Duplicate message detected, skipping');
               return prev;
@@ -277,7 +275,6 @@ const handleTyping = () => {
         console.log('📩 [TUTOR] No conversation selected, updating conversation list only');
       }
 
-      // Always update conversation list (but avoid duplicates)
       setConversations(prev => prev.map(conv => {
         const convStudentId = conv.studentId || conv.partnerId;
         if (convStudentId === data.sender_id || conv.id === data.conversationId) {
@@ -326,7 +323,7 @@ const handleTyping = () => {
         socket.disconnect();
       }
     };
-  }, [currentTutorUserId]); // 🔥 REMOVED selectedConversation from dependencies
+  }, [currentTutorUserId]);
 
   // Load conversations
   useEffect(() => {
@@ -450,7 +447,6 @@ const handleTyping = () => {
     setSelectedConversation(conversation);
     setLoading(true);
 
-    // 🔥 FIX: Get studentId from either field
     const studentId = conversation.studentId || conversation.partnerId;
     
     if (!studentId) {
@@ -459,24 +455,21 @@ const handleTyping = () => {
       return;
     }
 
-    // 🔥 FIX: Join socket room with partnerId
     if (socketRef.current) {
       socketRef.current.emit('join_conversation', {
         conversationId: conversation.id,
         userId: currentTutorUserId,
-        partnerId: studentId  // ✅ Use the extracted studentId
+        partnerId: studentId
       });
       
       console.log(`[TUTOR] Joined conversation ${conversation.id} with student ${studentId}`);
     }
 
-    // Mark as read
     setConversations(prev => prev.map(conv =>
       conv.id === conversation.id ? { ...conv, unreadCount: 0 } : conv
     ));
 
     try {
-      // Try to load from database first
       if (typeof conversation.id === 'number') {
         console.log('[TUTOR] Loading messages from database...');
         const messagesRes = await fetch(`${API_URL}/api/conversations/${conversation.id}/messages`);
@@ -494,7 +487,6 @@ const handleTyping = () => {
         }
       }
 
-      // Fallback to storage
       console.log('[TUTOR] Loading messages from storage...');
       if (window.storage && window.storage.get) {
         try {
@@ -534,9 +526,6 @@ const handleTyping = () => {
     }
   };
 
-
-
-
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown';
     
@@ -575,164 +564,218 @@ const handleTyping = () => {
          '🔴 Connection error'}
       </div>
 
-      {showingChat && (
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSelectedConversation(null)}
-              className="p-2 hover:bg-white/20 rounded-lg transition"
-            >
-              <ArrowLeft size={24} />
-            </button>
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center relative">
-              <User size={20} />
-              {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) && (
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
-              )}
-            </div>
-            <div>
-              <h2 className="font-semibold">{selectedConversation?.studentName || selectedConversation?.partnerName || 'Student'}</h2>
-              <p className="text-xs text-blue-100">
-                {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
-              </p>
-            </div>
+      {!showingChat && (
+        <div className="p-4">
+          <h1 className="text-2xl font-bold mb-4 text-gray-800">Messages</h1>
+          
+          {/* Search Bar */}
+          <div className="mb-4 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-        </div>
-      )}
-{showingChat && (
-  <div className="flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
-    {/* Messages Container */}
-    <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-      {loading ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-gray-500">Loading messages...</p>
-        </div>
-      ) : messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <MessageSquare size={48} className="mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500">No messages yet</p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col space-y-3 max-w-4xl mx-auto">
-          {/* Message Bubbles */}
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
-                msg.isOwn
-                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-br-sm'
-                  : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
-              }`}>
-                {/* File attachment */}
-                {msg.file_url && (
-                  <div className="mb-2">
-                    {msg.file_type === 'image' ? (
-                      <img src={msg.file_url} alt="attachment" className="rounded max-w-full h-auto" />
-                    ) : msg.file_type === 'voice' ? (
-                      <audio controls className="w-full">
-                        <source src={msg.file_url} type="audio/webm" />
-                      </audio>
-                    ) : (
-                      <a href={msg.file_url} target="_blank" rel="noopener noreferrer" 
-                         className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}>
-                        <FileText size={16} />
-                        <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
-                      </a>
+
+          {/* Conversations List */}
+          <div className="bg-white rounded-lg shadow">
+            {filteredConversations.length === 0 ? (
+              <div className="p-8 text-center">
+                <MessageSquare size={48} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500">No conversations yet</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Students will appear here when they message you
+                </p>
+              </div>
+            ) : (
+              filteredConversations.map(conv => (
+                <div 
+                  key={conv.id}
+                  onClick={() => openConversation(conv)}
+                  className="flex items-center gap-3 p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition"
+                >
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center relative">
+                    <User size={24} className="text-blue-600" />
+                    {onlineUsers.has(conv.studentId || conv.partnerId) && (
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                     )}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-semibold text-gray-800 truncate">
+                        {conv.studentName || conv.partnerName || 'Student'}
+                      </h3>
+                      <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                        {formatTime(conv.lastMessageTime)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 truncate">{conv.lastMessage}</p>
+                  </div>
+                  {conv.unreadCount > 0 && (
+                    <div className="bg-blue-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+                      {conv.unreadCount}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {showingChat && (
+        <>
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedConversation(null)}
+                className="p-2 hover:bg-white/20 rounded-lg transition"
+              >
+                <ArrowLeft size={24} />
+              </button>
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center relative">
+                <User size={20} />
+                {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) && (
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
                 )}
+              </div>
+              <div>
+                <h2 className="font-semibold">{selectedConversation?.studentName || selectedConversation?.partnerName || 'Student'}</h2>
+                <p className="text-xs text-blue-100">
+                  {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              {loading ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500">Loading messages...</p>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <MessageSquare size={48} className="mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500">No messages yet</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col space-y-3 max-w-4xl mx-auto">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
+                        msg.isOwn
+                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-br-sm'
+                          : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
+                      }`}>
+                        {msg.file_url && (
+                          <div className="mb-2">
+                            {msg.file_type === 'image' ? (
+                              <img src={msg.file_url} alt="attachment" className="rounded max-w-full h-auto" />
+                            ) : msg.file_type === 'voice' ? (
+                              <audio controls className="w-full">
+                                <source src={msg.file_url} type="audio/webm" />
+                              </audio>
+                            ) : (
+                              <a href={msg.file_url} target="_blank" rel="noopener noreferrer" 
+                                 className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}>
+                                <FileText size={16} />
+                                <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        
+                        <p className="break-words">{msg.text}</p>
+                        <div className={`flex items-center justify-between gap-2 mt-1 text-xs ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {msg.isOwn && msg.status === 'delivered' && <CheckCheck size={14} />}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-200 px-4 py-2 rounded-2xl rounded-bl-sm">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white border-t border-gray-200 p-3">
+              {attachmentFile && (
+                <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
+                  {attachmentFile.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
+                  <span className="text-sm flex-1 truncate">{attachmentFile.name}</span>
+                  <button onClick={removeAttachment} className="flex-shrink-0 text-red-600 hover:text-red-800">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+              
+              <div className="flex gap-2 max-w-4xl mx-auto items-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  accept="image/*,.pdf,.doc,.docx,.txt"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-shrink-0 p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
+                >
+                  <Paperclip size={20} />
+                </button>
                 
-                <p className="break-words">{msg.text}</p>
-                <div className={`flex items-center justify-between gap-2 mt-1 text-xs ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                  <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  {msg.isOwn && msg.status === 'delivered' && <CheckCheck size={14} />}
-                </div>
+                <button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`flex-shrink-0 p-2 rounded-full transition ${
+                    isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Mic size={20} />
+                </button>
+                
+                <input
+                  type="text"
+                  placeholder={isRecording ? 'Recording...' : 'Type your message...'}
+                  className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={newMessage}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                  disabled={isRecording}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={(!newMessage.trim() && !attachmentFile) || connectionStatus !== 'connected'}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <Send size={18} />
+                </button>
               </div>
             </div>
-          ))}
-
-          {/* Typing Indicator */}
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-gray-200 px-4 py-2 rounded-2xl rounded-bl-sm">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Scroll anchor */}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        </>
       )}
-    </div>
-
-    {/* Input Area - OUTSIDE the messages container */}
-    <div className="bg-white border-t border-gray-200 p-3">
-      {/* Attachment preview */}
-      {attachmentFile && (
-        <div className="mb-2 flex items-center gap-2 bg-gray-100 p-2 rounded">
-          {attachmentFile.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
-          <span className="text-sm flex-1 truncate">{attachmentFile.name}</span>
-          <button onClick={removeAttachment} className="flex-shrink-0 text-red-600 hover:text-red-800">
-            <X size={16} />
-          </button>
-        </div>
-      )}
-      
-      <div className="flex gap-2 max-w-4xl mx-auto items-center">
-        {/* File attachment button */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={handleFileSelect}
-          accept="image/*,.pdf,.doc,.docx,.txt"
-          className="hidden"
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex-shrink-0 p-2 text-gray-600 hover:bg-gray-100 rounded-full transition"
-        >
-          <Paperclip size={20} />
-        </button>
-        
-        {/* Voice recording button */}
-        <button
-          onClick={isRecording ? stopRecording : startRecording}
-          className={`flex-shrink-0 p-2 rounded-full transition ${
-            isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <Mic size={20} />
-        </button>
-        
-        <input
-          type="text"
-          placeholder={isRecording ? 'Recording...' : 'Type your message...'}
-          className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          value={newMessage}
-          onChange={(e) => {
-            setNewMessage(e.target.value);
-            handleTyping();
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          disabled={isRecording}
-        />
-        <button
-          onClick={sendMessage}
-          disabled={(!newMessage.trim() && !attachmentFile) || connectionStatus !== 'connected'}
-          className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-full hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          <Send size={18} />
-        </button>
-      </div>
-    </div>
-  </div>
-)}
     </div>
   );
 };
