@@ -282,139 +282,175 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     }
   };
 
-  const sendMessage = async () => {
-    if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
+ const sendMessage = async () => {
+  if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
 
-    const tempId = Date.now();
-    let fileUrl = null;
-    let fileType = null;
-    let fileName = null;
+  const tempId = Date.now();
+  let fileUrl = null;
+  let fileType = null;
+  let fileName = null;
 
-    // Handle file upload FIRST if there's a file
-    if (attachmentFile) {
-      try {
-        console.log('📤 Uploading file...', attachmentFile.name);
-        
-        // Show uploading indicator
-        setMessages(prev => [...prev, {
-          id: tempId,
-          sender_id: currentUserId,
-          text: '📤 Uploading file...',
-          timestamp: new Date().toISOString(),
-          isOwn: true,
-          status: 'uploading'
-        }]);
-        
-        // Determine conversation key - FIXED: removed undefined selectedConversation
-        const conversationKey = `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`;
-        
-        // Upload file
-        const formData = new FormData();
-        formData.append('file', attachmentFile);
-        formData.append('conversation_id', conversationKey);
-        
-        const token = localStorage.getItem('token');
-        
-        const uploadResponse = await fetch(`${API_URL}/api/messages/upload`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        
-        if (!uploadResponse.ok) {
-          throw new Error('Upload failed');
-        }
-        
-        const uploadData = await uploadResponse.json();
-        fileUrl = uploadData.file_url;
-        
-        // Validate URL
-        if (!fileUrl || fileUrl.startsWith('blob:')) {
-          throw new Error('Upload returned invalid URL');
-        }
-        
-        // Determine file type
-        fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
-                   attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
-        fileName = attachmentFile.name;
-        
-        console.log('✅ File uploaded successfully:', fileUrl);
-        
-        // Remove uploading message
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-        
-      } catch (err) {
-        console.error('❌ Upload failed:', err);
-        // Remove uploading message
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-        alert('Failed to upload attachment. Please try again.');
-        return;
+  // Handle file upload FIRST if there's a file
+  if (attachmentFile) {
+    try {
+      console.log('📤 Uploading file...', attachmentFile.name);
+      
+      // Show uploading indicator
+      setMessages(prev => [...prev, {
+        id: tempId,
+        sender_id: currentUserId,
+        text: '📤 Uploading file...',
+        timestamp: new Date().toISOString(),
+        isOwn: true,
+        status: 'uploading'
+      }]);
+      
+      const conversationKey = `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`;
+      
+      const formData = new FormData();
+      formData.append('file', attachmentFile);
+      formData.append('conversation_id', conversationKey);
+      
+      const token = localStorage.getItem('token');
+      
+      const uploadResponse = await fetch(`${API_URL}/api/messages/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed');
       }
+      
+      const uploadData = await uploadResponse.json();
+      fileUrl = uploadData.file_url;
+      
+      if (!fileUrl || fileUrl.startsWith('blob:')) {
+        throw new Error('Upload returned invalid URL');
+      }
+      
+      fileType = attachmentFile.type.startsWith('image/') ? 'image' : 
+                 attachmentFile.type.startsWith('audio/') ? 'voice' : 'file';
+      fileName = attachmentFile.name;
+      
+      console.log('✅ File uploaded successfully:', fileUrl);
+      
+      // Remove uploading message
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      
+    } catch (err) {
+      console.error('❌ Upload failed:', err);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      alert('Failed to upload attachment. Please try again.');
+      return;
+    }
+  }
+
+  // Create message object
+  const msg = {
+    id: tempId,
+    sender_id: currentUserId,
+    text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
+    timestamp: new Date().toISOString(),
+    isOwn: true,
+    status: 'sending',
+    file_url: fileUrl,
+    file_type: fileType,
+    file_name: fileName
+  };
+
+  const updatedMessages = [...messages, msg];
+  setMessages(updatedMessages);
+  setNewMessage('');
+  setAttachmentFile(null);
+  if (fileInputRef.current) fileInputRef.current.value = '';
+
+  try {
+    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
+    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+
+    // 🔥 CRITICAL FIX: Send via Socket.IO which will save to database
+    if (socketRef.current && socketRef.current.connected) {
+      // Create a promise to wait for message delivery confirmation
+      const messageDeliveryPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Message delivery timeout'));
+        }, 10000); // 10 second timeout
+
+        // Listen for delivery confirmation
+        socketRef.current.once('message_delivered', (data) => {
+          clearTimeout(timeout);
+          if (data.messageId === tempId) {
+            resolve(data.dbMessageId);
+          }
+        });
+      });
+
+      // Emit the message
+      socketRef.current.emit('send_message', {
+        conversationId: conversationKey,
+        sender_id: currentUserId,
+        receiver_id: selectedTutor.user_id,
+        text: msg.text,
+        timestamp: msg.timestamp,
+        messageId: tempId,
+        file_url: fileUrl,
+        file_type: fileType,
+        file_name: fileName
+      });
+
+      console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
+
+      // Wait for delivery confirmation
+      try {
+        const dbMessageId = await messageDeliveryPromise;
+        console.log(`✅ [STUDENT] Message saved to database with ID: ${dbMessageId}`);
+        
+        // Update message status to 'sent' with database ID
+        setMessages(prev => prev.map(m => 
+          m.id === tempId ? { ...m, id: dbMessageId, status: 'sent' } : m
+        ));
+      } catch (err) {
+        console.warn('⚠️ [STUDENT] Message delivery timeout, but message may have been sent');
+        // Mark as sent anyway since socket is connected
+        setMessages(prev => prev.map(m => 
+          m.id === tempId ? { ...m, status: 'sent' } : m
+        ));
+      }
+    } else {
+      console.error('❌ [STUDENT] Socket not connected!');
+      setMessages(prev => prev.map(m => 
+        m.id === tempId ? { ...m, status: 'failed' } : m
+      ));
+      return;
     }
 
-    // Now send the actual message with the file URL
-    const msg = {
-      id: tempId,
-      sender_id: currentUserId,
-      text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
-      timestamp: new Date().toISOString(),
-      isOwn: true,
-      status: 'sending',
-      file_url: fileUrl,
-      file_type: fileType,
-      file_name: fileName
+    // Save to storage as backup
+    const conversationData = {
+      tutorUserId: selectedTutor.user_id,
+      tutorProfileId: tutorProfileId,
+      tutorName: selectedTutor.name,
+      studentId: currentUserId,
+      studentName: 'Student Name',
+      lastMessage: msg.text,
+      lastMessageTime: msg.timestamp,
+      messages: updatedMessages
     };
 
-    const updatedMessages = [...messages, msg];
-    setMessages(updatedMessages);
-    setNewMessage('');
-    setAttachmentFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    try {
-      const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-
-      if (socketRef.current && socketRef.current.connected) {
-        socketRef.current.emit('send_message', {
-          conversationId: conversationKey,
-          sender_id: currentUserId,
-          receiver_id: selectedTutor.user_id,
-          text: msg.text,
-          timestamp: msg.timestamp,
-          messageId: tempId,
-          file_url: fileUrl,
-          file_type: fileType,
-          file_name: fileName
-        });
-
-        console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
-      }
-
-      // Save to storage
-      const conversationData = {
-        tutorUserId: selectedTutor.user_id,
-        tutorProfileId: tutorProfileId,
-        tutorName: selectedTutor.name,
-        studentId: currentUserId,
-        studentName: 'Student Name',
-        lastMessage: msg.text,
-        lastMessageTime: msg.timestamp,
-        messages: updatedMessages
-      };
-
-      if (window.storage && window.storage.set) {
-        await window.storage.set(conversationKey, JSON.stringify(conversationData));
-      } else {
-        localStorage.setItem(conversationKey, JSON.stringify(conversationData));
-      }
-
-    } catch (err) {
-      console.error('[STUDENT] Failed to send message:', err);
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+    if (window.storage && window.storage.set) {
+      await window.storage.set(conversationKey, JSON.stringify(conversationData));
+    } else {
+      localStorage.setItem(conversationKey, JSON.stringify(conversationData));
     }
-  };
+
+  } catch (err) {
+    console.error('[STUDENT] Failed to send message:', err);
+    setMessages(prev => prev.map(m => 
+      m.id === tempId ? { ...m, status: 'failed' } : m
+    ));
+  }
+};
 
   const handleTyping = () => {
     if (socketRef.current && selectedTutor) {
