@@ -183,6 +183,9 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
                 isOwn: String(m.sender_id) === String(currentUserId)
               }));
               console.log('[STUDENT] Loaded messages from database:', processedMessages.length);
+              if (processedMessages.length > 0) {
+                console.log('[STUDENT] Last message data:', processedMessages[processedMessages.length - 1]);
+              }
               setMessages(processedMessages);
               setLoading(false);
               return;
