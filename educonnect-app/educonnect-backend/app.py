@@ -989,6 +989,30 @@ def resend_verification():
 
 # Add this new endpoint around line 1500 (after other message endpoints)
 
+# Add this near the top of your app.py, after app initialization
+
+# Configure static file serving for attachments
+@app.route('/uploads/<path:filename>', methods=['GET'])
+def serve_uploaded_file(filename):
+    """Serve uploaded files directly"""
+    try:
+        # Construct the full path
+        upload_folder = app.config['UPLOAD_FOLDER']
+        file_path = os.path.join(upload_folder, filename)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            print(f"❌ File not found: {file_path}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Serve the file
+        return send_file(file_path)
+    except Exception as e:
+        print(f"❌ Error serving file: {e}")
+        return jsonify({'error': 'Failed to serve file'}), 500
+
+
+# Update the upload endpoint (around line 1500)
 @app.route('/api/messages/upload', methods=['POST'])
 @jwt_required()
 def upload_message_attachment():
@@ -1011,33 +1035,31 @@ def upload_message_attachment():
         if file_size > 10 * 1024 * 1024:
             return jsonify({'error': 'File too large (max 10MB)'}), 400
         
-        # Log file type for debugging
-        print(f"[UPLOAD] File type: {file.content_type}")
-        print(f"[UPLOAD] File name: {file.filename}")
-        
         # Secure filename
         filename = secure_filename(file.filename)
-        unique_filename = f"{conversation_id}_{datetime.utcnow().timestamp()}_{filename}"
+        timestamp = datetime.utcnow().timestamp()
+        unique_filename = f"{conversation_id}_{timestamp}_{filename}"
         
         # Create attachments directory
         attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
         os.makedirs(attachments_dir, exist_ok=True)
         
-        # Save file
-        file_path = os.path.join(attachments_dir, unique_filename)
-        file.save(file_path)
+        # Save file with RELATIVE path inside attachments folder
+        file_path = os.path.join('attachments', unique_filename)
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], file_path)
         
-        print(f"[UPLOAD] ✅ File saved to: {file_path}")
+        file.save(full_path)
         
-        # 🔥 FIX: Return FULL URL instead of relative path
-        # Get base URL from request
+        print(f"[UPLOAD] ✅ File saved to: {full_path}")
+        
+        # 🔥 FIX: Return URL that uses /uploads/ endpoint
         base_url = request.host_url.rstrip('/')
-        file_url = f"{base_url}/api/attachments/{unique_filename}"
+        file_url = f"{base_url}/uploads/{file_path}"
         
         print(f"[UPLOAD] File URL: {file_url}")
         
         return jsonify({
-            'file_url': file_url,  # Full URL now
+            'file_url': file_url,
             'file_name': filename,
             'file_size': file_size
         }), 200
@@ -1048,14 +1070,24 @@ def upload_message_attachment():
         traceback.print_exc()
         return jsonify({'error': 'Upload failed'}), 500
 
+
+# Update the serve_attachment endpoint (replace existing one)
 @app.route('/api/attachments/<filename>', methods=['GET'])
 def serve_attachment(filename):
-    """Serve uploaded attachment"""
+    """Serve uploaded attachment (alternative endpoint)"""
     try:
         attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
-        return send_file(os.path.join(attachments_dir, filename))
+        file_path = os.path.join(attachments_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        return send_file(file_path)
     except Exception as e:
+        print(f"❌ Error serving attachment: {e}")
         return jsonify({'error': 'File not found'}), 404
+
+
 @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
 def login():
     """Fixed login endpoint"""
