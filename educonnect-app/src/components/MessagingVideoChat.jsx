@@ -316,6 +316,13 @@ const convertBlobToBase64 = (blob) => {
     if (attachmentFile) {
   try {
     // Show uploading indicator
+     fileUrl = await uploadAttachment(attachmentFile, conversationKey);
+    console.log('🎤 UPLOADED FILE URL:', fileUrl); // Check this!
+    
+    // Verify it's a full URL
+    if (!fileUrl.startsWith('http')) {
+      console.error('❌ ERROR: Got relative URL instead of full URL!');
+      alert('Upload failed: Invalid URL received');
     console.log('📤 Uploading file...', attachmentFile.name);
     
     // Determine conversation key based on user type
