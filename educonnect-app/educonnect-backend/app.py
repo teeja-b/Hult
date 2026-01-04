@@ -1011,6 +1011,10 @@ def upload_message_attachment():
         if file_size > 10 * 1024 * 1024:
             return jsonify({'error': 'File too large (max 10MB)'}), 400
         
+        # Log file type for debugging
+        print(f"[UPLOAD] File type: {file.content_type}")
+        print(f"[UPLOAD] File name: {file.filename}")
+        
         # Secure filename
         filename = secure_filename(file.filename)
         unique_filename = f"{conversation_id}_{datetime.utcnow().timestamp()}_{filename}"
@@ -1023,19 +1027,26 @@ def upload_message_attachment():
         file_path = os.path.join(attachments_dir, unique_filename)
         file.save(file_path)
         
-        # Return URL (adjust based on your hosting)
-        file_url = f"/api/attachments/{unique_filename}"
+        print(f"[UPLOAD] ✅ File saved to: {file_path}")
+        
+        # 🔥 FIX: Return FULL URL instead of relative path
+        # Get base URL from request
+        base_url = request.host_url.rstrip('/')
+        file_url = f"{base_url}/api/attachments/{unique_filename}"
+        
+        print(f"[UPLOAD] File URL: {file_url}")
         
         return jsonify({
-            'file_url': file_url,
+            'file_url': file_url,  # Full URL now
             'file_name': filename,
             'file_size': file_size
         }), 200
         
     except Exception as e:
         print(f"[UPLOAD ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Upload failed'}), 500
-
 
 @app.route('/api/attachments/<filename>', methods=['GET'])
 def serve_attachment(filename):
