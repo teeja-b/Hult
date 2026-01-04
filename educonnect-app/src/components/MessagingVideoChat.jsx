@@ -598,62 +598,65 @@ const convertBlobToBase64 = (blob) => {
               </div>
             ) : (
               <div className="flex flex-col space-y-3">
-                {messages.map((msg) => (
-                  <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
-                      msg.isOwn 
-                        ? 'bg-blue-600 text-white rounded-br-sm' 
-                        : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
-                    }`}>
-                     {msg.file_url && (
-  <div className="mb-2">
-    {msg.file_type === 'image' ? (
-      <img 
-        src={msg.file_url} 
-        alt="attachment" 
-        className="rounded max-w-full h-auto cursor-pointer"
-        onClick={() => window.open(msg.file_url, '_blank')}
-        onError={(e) => {
-          console.error('❌ Image failed to load:', msg.file_url);
-          e.target.style.display = 'none';
-          e.target.parentElement.innerHTML = '<p class="text-red-500 text-sm">Failed to load image</p>';
-        }}
-      />
-    ) : msg.file_type === 'voice' ? (
-      <audio 
-        controls 
-        className="w-full"
-        onError={(e) => {
-          console.error('❌ Audio failed to load:', msg.file_url);
-        }}
-      >
-        <source src={msg.file_url} type="audio/webm" />
-        <source src={msg.file_url} type="audio/mp3" />
-        Your browser does not support audio playback.
-      </audio>
-    ) : (
-      <a 
-        href={msg.file_url} 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'} hover:underline`}
-      >
-        <FileText size={16} />
-        <span className="text-sm">{msg.file_name || 'Download file'}</span>
-      </a>
-    )}
-  </div>
-)}         
-                      <p className="break-words">{msg.text}</p>
-                      <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                        <span className="text-xs">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {getMessageStatus(msg)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              // Replace the message rendering section in BOTH MessagingVideoChat.jsx and TutorMessagingView.jsx
+
+{messages.map((msg) => {
+  // Debug log
+  if (msg.text?.includes('Voice message')) {
+    console.log('Voice msg:', msg.file_url, msg.file_type);
+  }
+  
+  return (
+    <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-xs px-4 py-2 rounded-2xl shadow-sm ${
+        msg.isOwn 
+          ? 'bg-blue-600 text-white rounded-br-sm' 
+          : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
+      }`}>
+        {/* File Display */}
+        {msg.file_url && (
+          <div className="mb-2">
+            {msg.file_type === 'image' ? (
+              <img 
+                src={msg.file_url} 
+                alt="attachment" 
+                className="rounded max-w-full h-auto max-h-64 cursor-pointer"
+                onClick={() => window.open(msg.file_url, '_blank')}
+              />
+            ) : msg.file_type === 'voice' ? (
+              <audio controls className="w-full" style={{ maxWidth: '250px' }}>
+                <source src={msg.file_url} type="audio/webm" />
+              </audio>
+            ) : (
+              <a 
+                href={msg.file_url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className={`flex items-center gap-2 ${msg.isOwn ? 'text-blue-100' : 'text-blue-600'}`}
+              >
+                <FileText size={16} />
+                <span className="text-sm underline">{msg.file_name || 'Download file'}</span>
+              </a>
+            )}
+          </div>
+        )}
+        
+        {/* Text - hide if it's just the emoji */}
+        {msg.text && !msg.text.startsWith('🎤') && !msg.text.startsWith('📎') && (
+          <p className="break-words">{msg.text}</p>
+        )}
+        
+        {/* Timestamp */}
+        <div className={`flex items-center justify-between gap-2 mt-1 ${msg.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+          <span className="text-xs">
+            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {getMessageStatus(msg)}
+        </div>
+      </div>
+    </div>
+  );
+})}
                 
                 {isTyping && (
                   <div className="flex justify-start">
