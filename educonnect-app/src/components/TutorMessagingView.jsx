@@ -198,6 +198,13 @@ const sendMessage = async () => {
         });
       });
 
+      console.log('📤 About to emit to socket:', {
+  fileUrl: fileUrl,
+  fileType: fileType,
+  fileName: fileName,
+  text: msg.text
+});
+
       // Emit the message
       socketRef.current.emit('send_message', {
         conversationId: selectedConversation.id,

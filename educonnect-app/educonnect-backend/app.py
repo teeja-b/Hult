@@ -1051,23 +1051,21 @@ def upload_message_attachment():
         # Secure filename
         filename = secure_filename(file.filename)
         timestamp = datetime.utcnow().timestamp()
-        unique_filename = f"{conversation_id}_{timestamp}_{filename}"
+        unique_filename = f"{int(timestamp * 1000)}_{filename}"
         
         # Create attachments directory
         attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
         os.makedirs(attachments_dir, exist_ok=True)
         
         # Save file with RELATIVE path inside attachments folder
-        file_path = os.path.join('attachments', unique_filename)
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], file_path)
-        
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments', unique_filename)
         file.save(full_path)
         
         print(f"[UPLOAD] ✅ File saved to: {full_path}")
         
         # 🔥 FIX: Return URL that uses /uploads/ endpoint
         base_url = request.host_url.rstrip('/')
-        file_url = f"{base_url}/uploads/{file_path}"
+        file_url = f"{base_url}/uploads/attachments/{unique_filename}"
         
         print(f"[UPLOAD] File URL: {file_url}")
         
