@@ -773,7 +773,7 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
               />
               <button 
                 onClick={sendMessage} 
-                className="flex-shrink-0 bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+               className="flex-shrink-0 bg-blue-600 text-white px-3 sm:px-6 py-2 rounded-full hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 sm:gap-2 min-w-[44px]"
                 disabled={(!newMessage.trim() && !attachmentFile) || connectionStatus !== 'connected'}
               >
                 <Send size={16} />

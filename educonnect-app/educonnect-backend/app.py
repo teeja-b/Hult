@@ -38,6 +38,14 @@ from ml_matcher import RLTutorMatchingSystem
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 load_dotenv()
+import cloudinary
+import cloudinary.uploader
+
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+)
 # Reduce memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
@@ -1026,10 +1034,11 @@ def serve_uploaded_file(filename):
 
 
 # Update the upload endpoint (around line 1500)
+
 @app.route('/api/messages/upload', methods=['POST'])
 @jwt_required()
 def upload_message_attachment():
-    """Upload file attachment for messages"""
+    """Upload file attachment to Cloudinary"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
@@ -1048,39 +1057,41 @@ def upload_message_attachment():
         if file_size > 10 * 1024 * 1024:
             return jsonify({'error': 'File too large (max 10MB)'}), 400
         
-        # Secure filename
-        filename = secure_filename(file.filename)
-        timestamp = datetime.utcnow().timestamp()
-        unique_filename = f"{int(timestamp * 1000)}_{filename}"
+        print(f"[UPLOAD] 📤 Uploading to Cloudinary: {file.filename}")
         
-        # Create attachments directory
-        attachments_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments')
-        os.makedirs(attachments_dir, exist_ok=True)
+        # Determine resource type
+        is_video = file.mimetype.startswith('video/')
+        is_audio = file.mimetype.startswith('audio/')
+        resource_type = 'video' if (is_video or is_audio) else 'image'
         
-        # Save file with RELATIVE path inside attachments folder
-        full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'attachments', unique_filename)
-        file.save(full_path)
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type=resource_type,
+            folder='chat-attachments',
+            public_id=f"{conversation_id}_{datetime.utcnow().timestamp()}_{secure_filename(file.filename)}"
+        )
         
-        print(f"[UPLOAD] ✅ File saved to: {full_path}")
+        file_url = upload_result['secure_url']
         
-        # 🔥 FIX: Return URL that uses /uploads/ endpoint
-        base_url = request.host_url.rstrip('/')
-        file_url = f"{base_url}/uploads/attachments/{unique_filename}"
+        print(f"[UPLOAD] ✅ Uploaded to Cloudinary: {file_url}")
         
-        print(f"[UPLOAD] File URL: {file_url}")
+        # Determine file type
+        file_type = 'image' if file.mimetype.startswith('image/') else \
+                   'voice' if file.mimetype.startswith('audio/') else 'file'
         
         return jsonify({
             'file_url': file_url,
-            'file_name': filename,
-            'file_size': file_size
+            'file_name': file.filename,
+            'file_size': file_size,
+            'file_type': file_type
         }), 200
         
     except Exception as e:
-        print(f"[UPLOAD ERROR] {str(e)}")
+        print(f"[UPLOAD ERROR] ❌ {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': 'Upload failed'}), 500
-
+        return jsonify({'error': 'Upload failed', 'details': str(e)}), 500
 
 # Update the serve_attachment endpoint (replace existing one)
 @app.route('/api/attachments/<filename>', methods=['GET'])
