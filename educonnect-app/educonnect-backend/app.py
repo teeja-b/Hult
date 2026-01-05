@@ -1513,14 +1513,12 @@ def get_conversation_messages_from_db(conversation_id):
     try:
         print(f"\n[MESSAGES] Fetching messages for conversation {conversation_id}")
         
-        # Get conversation
         conversation = Conversation.query.get(conversation_id)
         
         if not conversation:
             print(f"[MESSAGES] Conversation {conversation_id} not found")
             return jsonify({'error': 'Conversation not found'}), 404
         
-        # Get all messages for this conversation, ordered by timestamp
         messages = Message.query.filter_by(
             conversation_id=conversation_id
         ).order_by(Message.timestamp.asc()).all()
@@ -1534,16 +1532,14 @@ def get_conversation_messages_from_db(conversation_id):
                 'sender_id': msg.sender_id,
                 'text': msg.text or '',
                 'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
-                'conversation_id': msg.conversation_id
+                'conversation_id': msg.conversation_id,
+                'file_url': msg.file_url,      # ✅ ALWAYS include
+                'file_type': msg.file_type,    # ✅ ALWAYS include
+                'file_name': msg.file_name     # ✅ ALWAYS include
             }
             
-            # Add file fields if they exist
-            if hasattr(msg, 'file_url') and msg.file_url:
-                message_data['file_url'] = msg.file_url
-            if hasattr(msg, 'file_type') and msg.file_type:
-                message_data['file_type'] = msg.file_type
-            if hasattr(msg, 'file_name') and msg.file_name:
-                message_data['file_name'] = msg.file_name
+            if msg.file_url:
+                print(f"[MESSAGES] Message {msg.id} has file: {msg.file_type} - {msg.file_name}")
             
             messages_list.append(message_data)
         
@@ -1555,7 +1551,7 @@ def get_conversation_messages_from_db(conversation_id):
     except Exception as e:
         print(f"[ERROR] Failed to get messages: {str(e)}")
         import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({
             'error': 'Failed to retrieve messages',
             'details': str(e)
