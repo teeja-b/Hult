@@ -322,7 +322,7 @@ class Booking(db.Model):
     notes = db.Column(db.String(500))
 
 
-def generate_verification_token(email):
+"""def generate_verification_token(email):
     """Generate email verification token"""
     return serializer.dumps(email, salt=app.config['SECURITY_PASSWORD_SALT'])
 
@@ -399,7 +399,7 @@ def send_verification_email(user_email, verification_url):
         traceback.print_exc()
         return False
 
-
+"""
 def send_password_reset_email(user_email, reset_url):
     """Send password reset email"""
     try:
