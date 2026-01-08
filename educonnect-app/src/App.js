@@ -1087,10 +1087,7 @@ const HomeView = () => {
           <p className="text-blue-100 text-sm mb-4">
             AI-powered education tailored to your needs, accessible from anywhere
           </p>
-          <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 inline-block">
-            <p className="text-xs mb-1">Your Personalized Pricing:</p>
-            <p className={`text-2xl font-bold ${getPricingColor()}`}>{getPricing()}</p>
-          </div>
+
         </div>
       </div>
 
