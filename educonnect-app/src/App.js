@@ -353,6 +353,17 @@ const NavBar = ({
       {menuOpen && (
         <div className="border-t border-white/20 bg-white/10 backdrop-blur-md">
           <div className="p-2 space-y-1">
+            {/* Home button — ONLY shows when NOT authenticated */}
+{!isAuthenticated && (
+  <button 
+    onClick={() => { setCurrentView('home'); setMenuOpen(false); }} 
+    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+  >
+    <BookOpen size={20} />
+    <span className="font-medium">Home</span>
+  </button>
+)}
+
             {/* Main Navigation */}
             <button 
               onClick={() => { setCurrentView('home'); setMenuOpen(false); }} 
@@ -1111,17 +1122,6 @@ const HomeView = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-green-500">
-            <div className="flex items-start gap-3">
-              <div className="bg-green-100 p-2 rounded-lg">
-                <Video className="text-green-600" size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 mb-1">Live Video Sessions</h3>
-                <p className="text-sm text-gray-600">Connect face-to-face with expert tutors from around the world</p>
-              </div>
-            </div>
-          </div>
 
           <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-orange-500">
             <div className="flex items-start gap-3">
@@ -1187,16 +1187,8 @@ const HomeView = () => {
           <p className="text-green-100 text-sm mb-4">
             Share your knowledge with students worldwide and earn while you educate
           </p>
-          <div className="flex gap-2 justify-center">
-            <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3">
-              <p className="text-xs mb-1">Global Reach</p>
-              <p className="text-xl font-bold">100+ Countries</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3">
-              <p className="text-xs mb-1">Active Students</p>
-              <p className="text-xl font-bold">{courses.length || 0}K+</p>
-            </div>
-          </div>
+    
+          
         </div>
       </div>
 
@@ -1235,7 +1227,7 @@ const HomeView = () => {
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 mb-1">Built-in Messaging</h3>
-                <p className="text-sm text-gray-600">Chat and video call with students directly through our platform</p>
+              
               </div>
             </div>
           </div>
