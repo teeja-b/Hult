@@ -1287,7 +1287,7 @@ const HomeView = () => {
         <h3 className="text-xl font-bold text-gray-800 mb-2">
           Welcome back, {userType === 'student' ? 'Learner' : 'Educator'}!
         </h3>
-        <p className="text-gray-600">Your access: <strong className={getPricingColor()}>{getPricing()}</strong></p>
+        
       </div>
 
       <div className="grid grid-cols-2 gap-3">
