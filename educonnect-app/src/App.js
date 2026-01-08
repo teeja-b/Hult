@@ -354,15 +354,7 @@ const NavBar = ({
         <div className="border-t border-white/20 bg-white/10 backdrop-blur-md">
           <div className="p-2 space-y-1">
             {/* Home button — ONLY shows when NOT authenticated */}
-{!isAuthenticated && (
-  <button 
-    onClick={() => { setCurrentView('home'); setMenuOpen(false); }} 
-    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-  >
-    <BookOpen size={20} />
-    <span className="font-medium">Home</span>
-  </button>
-)}
+                
 
             {/* Main Navigation */}
             <button 
@@ -420,15 +412,18 @@ const NavBar = ({
                   <Heart size={20} />
                   <span className="font-medium">Support Us</span>
                 </button>
-                {/* Certificates - Available for both students and tutors */}
+                
+
             <button 
-              onClick={() => { setCurrentView('certificates'); setMenuOpen(false); }} 
-              className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-            >
-              <Award size={20} />
-              <span className="font-medium">Certificates</span>
-            </button>
-          
+  onClick={() => {
+    setShowPasswordReset(true);
+    setMenuOpen(false);
+  }}
+  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+>
+  <Lock size={20} />
+  <span className="font-medium">Change Password</span>
+</button>
 
             {/* Divider */}
             {isAuthenticated && <div className="border-t border-white/20 my-2"></div>}
@@ -451,16 +446,7 @@ const NavBar = ({
               </button>
             )}
 
-<button 
-  onClick={() => {
-    setShowPasswordReset(true);
-    setMenuOpen(false);
-  }}
-  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
->
-  <Lock size={20} />
-  <span className="font-medium">Change Password</span>
-</button>
+
 
             {/* Tutor-specific - MANAGE COURSES BUTTON */}
             {isAuthenticated && userType === 'tutor' && (
@@ -476,6 +462,17 @@ const NavBar = ({
                 <span className="font-medium">📚 Manage Courses</span>
               </button>
             )}
+
+            <button 
+  onClick={() => {
+    setShowPasswordReset(true);
+    setMenuOpen(false);
+  }}
+  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+>
+  <Lock size={20} />
+  <span className="font-medium">Change Password</span>
+</button>
 
             {/* Logout for mobile */}
             {isAuthenticated && (
