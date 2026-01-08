@@ -307,12 +307,6 @@ const NavBar = ({
                 onClick={() => setShowLogin(true)} 
                 className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/30 transition"
               >
-                 {userType === 'tutor' && localStorage.getItem('profileComplete') === 'false' && (
-                <div className="hidden sm:flex items-center gap-2 bg-yellow-100 px-3 py-2 rounded-lg border border-yellow-300">
-                  <AlertCircle size={16} className="text-yellow-600" />
-                  <span className="text-xs font-medium text-yellow-800">Profile Incomplete</span>
-                </div>
-              )}
                 Login
               </button>
               <button 
@@ -335,7 +329,12 @@ const NavBar = ({
                 <LogOut size={16} />
                 Logout
               </button>
-             
+              {userType === 'tutor' && localStorage.getItem('profileComplete') === 'false' && (
+                <div className="hidden sm:flex items-center gap-2 bg-yellow-100 px-3 py-2 rounded-lg border border-yellow-300">
+                  <AlertCircle size={16} className="text-yellow-600" />
+                  <span className="text-xs font-medium text-yellow-800">Profile Incomplete</span>
+                </div>
+              )}
             </>
           )}
           
@@ -353,10 +352,8 @@ const NavBar = ({
       {menuOpen && (
         <div className="border-t border-white/20 bg-white/10 backdrop-blur-md">
           <div className="p-2 space-y-1">
-            {/* Home button — ONLY shows when NOT authenticated */}
-                
-
-            {/* Main Navigation */}
+            
+            {/* HOME - Always visible */}
             <button 
               onClick={() => { setCurrentView('home'); setMenuOpen(false); }} 
               className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
@@ -364,9 +361,9 @@ const NavBar = ({
               <BookOpen size={20} />
               <span className="font-medium">Home</span>
             </button>
-            
-            {/* Student-only navigation items */}
-            {userType === 'student' && (
+
+            {/* STUDENT MENU ITEMS - Only show when authenticated as student */}
+            {isAuthenticated && userType === 'student' && (
               <>
                 <button 
                   onClick={() => { setCurrentView('courses'); setMenuOpen(false); }} 
@@ -376,15 +373,13 @@ const NavBar = ({
                   <span className="font-medium">Courses</span>
                 </button>
                 
-                {isAuthenticated && (
-                  <button 
-                    onClick={() => { setCurrentView('my-courses'); setMenuOpen(false); }} 
-                    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3 bg-white/10"
-                  >
-                    <BookOpen size={20} />
-                    <span className="font-medium">📚 My Courses</span>
-                  </button>
-                )}
+                <button 
+                  onClick={() => { setCurrentView('my-courses'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3 bg-white/10"
+                >
+                  <BookOpen size={20} />
+                  <span className="font-medium">📚 My Courses</span>
+                </button>
                 
                 <button 
                   onClick={() => { setCurrentView('tutors'); setMenuOpen(false); }} 
@@ -401,54 +396,10 @@ const NavBar = ({
                   <Download size={20} />
                   <span className="font-medium">Offline Library</span>
                 </button>
-                
-          
               </>
             )}
-                  <button 
-                  onClick={() => { setCurrentView('donate'); setMenuOpen(false); }} 
-                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-                >
-                  <Heart size={20} />
-                  <span className="font-medium">Support Us</span>
-                </button>
-                
 
-            <button 
-  onClick={() => {
-    setShowPasswordReset(true);
-    setMenuOpen(false);
-  }}
-  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
->
-  <Lock size={20} />
-  <span className="font-medium">Change Password</span>
-</button>
-
-            {/* Divider */}
-            {isAuthenticated && <div className="border-t border-white/20 my-2"></div>}
-
-            {/* User Profile */}
-            {isAuthenticated && (
-              <button 
-                onClick={() => { 
-                  if (userType === 'student') {
-                    setShowStudentProfile(true);
-                  } else if (userType === 'tutor') {
-                    setShowTutorProfile(true);
-                  }
-                  setMenuOpen(false); 
-                }} 
-                className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-              >
-                <Users size={20} />
-                <span className="font-medium">My Profile</span>
-              </button>
-            )}
-
-
-
-            {/* Tutor-specific - MANAGE COURSES BUTTON */}
+            {/* TUTOR MENU ITEMS - Only show when authenticated as tutor */}
             {isAuthenticated && userType === 'tutor' && (
               <button 
                 onClick={() => { 
@@ -463,20 +414,56 @@ const NavBar = ({
               </button>
             )}
 
-            <button 
-  onClick={() => {
-    setShowPasswordReset(true);
-    setMenuOpen(false);
-  }}
-  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
->
-  <Lock size={20} />
-  <span className="font-medium">Change Password</span>
-</button>
-
-            {/* Logout for mobile */}
+            {/* COMMON AUTHENTICATED USER ITEMS */}
             {isAuthenticated && (
               <>
+                <button 
+                  onClick={() => { setCurrentView('donate'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Heart size={20} />
+                  <span className="font-medium">Support Us</span>
+                </button>
+
+                <button 
+                  onClick={() => { setCurrentView('certificates'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Award size={20} />
+                  <span className="font-medium">Certificates</span>
+                </button>
+
+                {/* Divider */}
+                <div className="border-t border-white/20 my-2"></div>
+
+                {/* User Profile */}
+                <button 
+                  onClick={() => { 
+                    if (userType === 'student') {
+                      setShowStudentProfile(true);
+                    } else if (userType === 'tutor') {
+                      setShowTutorProfile(true);
+                    }
+                    setMenuOpen(false); 
+                  }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Users size={20} />
+                  <span className="font-medium">My Profile</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setShowPasswordReset(true);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Lock size={20} />
+                  <span className="font-medium">Change Password</span>
+                </button>
+
+                {/* Logout for mobile */}
                 <div className="border-t border-white/20 my-2 sm:hidden"></div>
                 <button 
                   onClick={handleLogout}
@@ -1284,7 +1271,7 @@ const HomeView = () => {
         <h3 className="text-xl font-bold text-gray-800 mb-2">
           Welcome back, {userType === 'student' ? 'Learner' : 'Educator'}!
         </h3>
-        
+        <p className="text-gray-600">Your access: <strong className={getPricingColor()}>{getPricing()}</strong></p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
