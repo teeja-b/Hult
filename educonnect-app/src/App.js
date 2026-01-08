@@ -1061,6 +1061,7 @@ useEffect(() => {
 const [showSurvey, setShowSurvey] = useState(false);
 
 
+
 const HomeView = () => {
   return (
     <div className="p-4">
@@ -1437,12 +1438,9 @@ const HomeView = () => {
               </div>
             </div>
           )}
-        </>
-      )}
     </div>
   );
 };
-
 const CoursesView = () => {
   const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(true);
