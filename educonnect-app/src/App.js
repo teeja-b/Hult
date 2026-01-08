@@ -1063,384 +1063,410 @@ const [showSurvey, setShowSurvey] = useState(false);
 
 
 const HomeView = () => {
+  // Student Landing Page
+  const StudentLandingPage = () => (
+    <div className="pb-6">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 text-white p-6 rounded-xl mb-4 shadow-lg">
+        <div className="text-center">
+          <div className="bg-white/20 backdrop-blur-sm w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <GraduationCap size={32} />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Learn Without Limits</h1>
+          <p className="text-blue-100 text-sm mb-4">
+            AI-powered education tailored to your needs, accessible from anywhere
+          </p>
+          <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 inline-block">
+            <p className="text-xs mb-1">Your Personalized Pricing:</p>
+            <p className={`text-2xl font-bold ${getPricingColor()}`}>{getPricing()}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Benefits */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-3 text-center">Why Students Love EduConnect</h2>
+        <div className="space-y-3">
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-blue-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <MessageSquare className="text-blue-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">AI-Powered Matching</h3>
+                <p className="text-sm text-gray-600">Get matched with tutors who perfectly fit your learning style and goals</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-purple-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <Download className="text-purple-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Learn Offline</h3>
+                <p className="text-sm text-gray-600">Download courses and access them anytime, even without internet</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-green-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <Video className="text-green-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Live Video Sessions</h3>
+                <p className="text-sm text-gray-600">Connect face-to-face with expert tutors from around the world</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-orange-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <Award className="text-orange-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Earn Certificates</h3>
+                <p className="text-sm text-gray-600">Complete courses and receive verified certificates for your achievements</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-pink-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-pink-100 p-2 rounded-lg">
+                <Globe className="text-pink-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Global Access</h3>
+                <p className="text-sm text-gray-600">Fair pricing based on your location - quality education for everyone</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="space-y-3">
+        <button 
+          onClick={() => setShowRegister(true)}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl shadow-lg hover:shadow-xl transition font-bold text-lg flex items-center justify-center gap-2"
+        >
+          <GraduationCap size={24} />
+          Start Learning Now
+        </button>
+        <button 
+          onClick={() => setShowLogin(true)}
+          className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 rounded-xl hover:bg-gray-50 transition font-semibold"
+        >
+          Already have an account? Log In
+        </button>
+        <button 
+          onClick={() => setUserType(null)}
+          className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition"
+        >
+          ← Back to home
+        </button>
+      </div>
+    </div>
+  );
+
+  // Tutor Landing Page
+  const TutorLandingPage = () => (
+    <div className="pb-6">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-green-600 via-teal-600 to-blue-600 text-white p-6 rounded-xl mb-4 shadow-lg">
+        <div className="text-center">
+          <div className="bg-white/20 backdrop-blur-sm w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users size={32} />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Teach & Inspire</h1>
+          <p className="text-green-100 text-sm mb-4">
+            Share your knowledge with students worldwide and earn while you educate
+          </p>
+          <div className="flex gap-2 justify-center">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3">
+              <p className="text-xs mb-1">Global Reach</p>
+              <p className="text-xl font-bold">100+ Countries</p>
+            </div>
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3">
+              <p className="text-xs mb-1">Active Students</p>
+              <p className="text-xl font-bold">{courses.length || 0}K+</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Benefits */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-3 text-center">Why Tutors Choose EduConnect</h2>
+        <div className="space-y-3">
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-green-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <BarChart3 className="text-green-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">AI Student Matching</h3>
+                <p className="text-sm text-gray-600">Get matched with students who need your expertise most</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-blue-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <BookOpen className="text-blue-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Easy Course Creation</h3>
+                <p className="text-sm text-gray-600">Upload videos, documents, and create comprehensive courses effortlessly</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-purple-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <MessageSquare className="text-purple-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Built-in Messaging</h3>
+                <p className="text-sm text-gray-600">Chat and video call with students directly through our platform</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-orange-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <DollarSign className="text-orange-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Flexible Earnings</h3>
+                <p className="text-sm text-gray-600">Set your own rates and work on your schedule</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-pink-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-pink-100 p-2 rounded-lg">
+                <Globe className="text-pink-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Make an Impact</h3>
+                <p className="text-sm text-gray-600">Help students in developing countries access quality education</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="space-y-3">
+        <button 
+          onClick={() => setShowRegister(true)}
+          className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-4 rounded-xl shadow-lg hover:shadow-xl transition font-bold text-lg flex items-center justify-center gap-2"
+        >
+          <Users size={24} />
+          Become a Tutor
+        </button>
+        <button 
+          onClick={() => setShowLogin(true)}
+          className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 rounded-xl hover:bg-gray-50 transition font-semibold"
+        >
+          Already a tutor? Log In
+        </button>
+        <button 
+          onClick={() => setUserType(null)}
+          className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition"
+        >
+          ← Back to home
+        </button>
+      </div>
+    </div>
+  );
+
+  // Logged-in Dashboard
+  const LoggedInDashboard = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg">
+        <h3 className="text-xl font-bold text-gray-800 mb-2">
+          Welcome back, {userType === 'student' ? 'Learner' : 'Educator'}!
+        </h3>
+        <p className="text-gray-600">Your access: <strong className={getPricingColor()}>{getPricing()}</strong></p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {userType === 'student' ? (
+          <>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+              <BookOpen className="text-blue-500 mb-2" />
+              <h4 className="font-semibold text-sm">Courses</h4>
+              <p className="text-2xl font-bold text-gray-800">{courses.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+              <Users className="text-green-500 mb-2" />
+              <h4 className="font-semibold text-sm">Tutors</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+              <Download className="text-purple-500 mb-2" />
+              <h4 className="font-semibold text-sm">Offline</h4>
+              <p className="text-2xl font-bold text-gray-800">{offlineCourses.length}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+              <BookOpen className="text-blue-500 mb-2" />
+              <h4 className="font-semibold text-sm">My Courses</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalCourses}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+              <Users className="text-green-500 mb-2" />
+              <h4 className="font-semibold text-sm">Students</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalStudents}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+              <MessageSquare className="text-purple-500 mb-2" />
+              <h4 className="font-semibold text-sm">Messages</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalMessages}</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {userType === 'student' && (
+        <div className="space-y-3">
+          {/* Survey Button */}
+          <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              📝 Learning Profile Survey
+            </h4>
+            <p className="text-sm text-gray-600 mb-3">
+              Complete this survey to unlock AI-powered tutor matching!
+            </p>
+            <button 
+              onClick={() => setShowSurvey(true)}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded hover:shadow-lg transition"
+            >
+              Complete Survey
+            </button>
+          </div>
+
+          {/* AI Matching */}
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <MessageSquare size={20} />
+              AI Learning Assistant
+            </h4>
+            <p className="text-sm text-gray-600 mb-3">
+              Get personalized course recommendations based on your learning style and goals.
+            </p>
+            <button 
+              onClick={handleAIMatching}
+              disabled={aiMatching}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:bg-gray-400"
+            >
+              {aiMatching ? 'Analyzing Your Profile...' : 'Find My Perfect Match'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Initial Welcome Screen (no userType selected)
+  const WelcomeScreen = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white p-6 rounded-xl text-center">
+        <GraduationCap size={48} className="mx-auto mb-3" />
+        <h2 className="text-3xl font-bold mb-2">Welcome to EduConnect</h2>
+        <p className="text-blue-100">AI-powered personalized learning for everyone, everywhere.</p>
+      </div>
+
+      <div className="space-y-3">
+        <button 
+          onClick={() => setUserType('student')}
+          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-3"
+        >
+          <BookOpen size={28} />
+          <div className="text-left">
+            <div className="font-bold text-lg">I'm a Student</div>
+            <div className="text-sm text-blue-100">Discover courses & tutors</div>
+          </div>
+        </button>
+        <button 
+          onClick={() => setUserType('tutor')}
+          className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-3"
+        >
+          <Users size={28} />
+          <div className="text-left">
+            <div className="font-bold text-lg">I'm a Tutor</div>
+            <div className="text-sm text-green-100">Share your expertise</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-4">
-{showRegister && (
-  <EnhancedRegisterModal 
-    onClose={() => setShowRegister(false)}
-    onSuccess={(data) => {
-      setIsAuthenticated(true);
-      setUserType(data.user.user_type);
-      setShowRegister(false);
-    }}
-  />
-)}
+      {showRegister && (
+        <EnhancedRegisterModal 
+          onClose={() => setShowRegister(false)}
+          onSuccess={(data) => {
+            setIsAuthenticated(true);
+            setUserType(data.user.user_type);
+            setShowRegister(false);
+          }}
+        />
+      )}
 
-{showLogin && (
-  <EnhancedLoginModal 
-    onClose={() => setShowLogin(false)}
-    onSuccess={(data) => {
-      setIsAuthenticated(true);
-      setUserType(data.user.user_type);
-      setShowLogin(false);
-    }}
-  />
-)}
-{showSurvey && (
-  <StudentSurvey
-    onClose={() => setShowSurvey(false)}
-    onComplete={() => {
-      console.log('📋 Survey completed successfully');
-      setShowSurvey(false);
-      alert('✅ Survey completed! You can now use AI matching to find your perfect tutor.');
-    }}
-  />
-)}
+      {showLogin && (
+        <EnhancedLoginModal 
+          onClose={() => setShowLogin(false)}
+          onSuccess={(data) => {
+            setIsAuthenticated(true);
+            setUserType(data.user.user_type);
+            setShowLogin(false);
+          }}
+        />
+      )}
 
-      {!userType ? (
-            <div className="space-y-4">
-              {/* Hero Section */}
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg mb-4">
-                <h1 className="text-3xl font-bold mb-2">Welcome to EduConnect</h1>
-                <p className="text-blue-100">AI-powered personalized learning for everyone, everywhere.</p>
-              </div>
+      {showSurvey && (
+        <StudentSurvey
+          onClose={() => setShowSurvey(false)}
+          onComplete={() => {
+            console.log('📋 Survey completed successfully');
+            setShowSurvey(false);
+            alert('✅ Survey completed! You can now use AI matching to find your perfect tutor.');
+          }}
+        />
+      )}
 
-              {/* Platform Stats */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-white p-3 rounded-lg shadow text-center">
-                  <BookOpen className="mx-auto mb-1 text-blue-600" size={24} />
-                  <p className="text-2xl font-bold text-gray-800">{courses.length}</p>
-                  <p className="text-xs text-gray-600">Courses</p>
-                </div>
-                <div className="bg-white p-3 rounded-lg shadow text-center">
-                  <Users className="mx-auto mb-1 text-green-600" size={24} />
-                  <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
-                  <p className="text-xs text-gray-600">Tutors</p>
-                </div>
-                <div className="bg-white p-3 rounded-lg shadow text-center">
-                  <Globe className="mx-auto mb-1 text-purple-600" size={24} />
-                  <p className="text-2xl font-bold text-gray-800">50+</p>
-                  <p className="text-xs text-gray-600">Countries</p>
-                </div>
-              </div>
-
-              {/* Choose Your Path */}
-              <h2 className="text-xl font-bold text-gray-800 mb-3">Choose Your Path</h2>
-              
-              <div className="space-y-3">
-                <button 
-                  onClick={() => setUserType('student')}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white p-5 rounded-lg shadow-lg hover:shadow-xl transition text-left"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <BookOpen size={32} />
-                    <span className="bg-white/20 text-xs px-2 py-1 rounded">Popular</span>
-                  </div>
-                  <h3 className="text-xl font-bold mb-1">I'm a Student</h3>
-                  <p className="text-sm text-blue-100">Learn from expert tutors with AI-matched courses</p>
-                </button>
-
-                <button 
-                  onClick={() => setUserType('tutor')}
-                  className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white p-5 rounded-lg shadow-lg hover:shadow-xl transition text-left"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <Users size={32} />
-                    <span className="bg-white/20 text-xs px-2 py-1 rounded">Earn</span>
-                  </div>
-                  <h3 className="text-xl font-bold mb-1">I'm a Tutor</h3>
-                  <p className="text-sm text-green-100">Share your knowledge and earn income</p>
-                </button>
-              </div>
-
-              {/* Key Features */}
-              <div className="bg-white rounded-lg shadow-md p-4 mt-4">
-                <h3 className="font-bold text-gray-800 mb-3">Why EduConnect?</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-blue-100 p-2 rounded">
-                      <MessageSquare className="text-blue-600" size={20} />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-sm">AI-Powered Matching</h4>
-                      <p className="text-xs text-gray-600">Smart algorithms connect you with perfect tutors</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="bg-purple-100 p-2 rounded">
-                      <Download className="text-purple-600" size={20} />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-sm">Offline Learning</h4>
-                      <p className="text-xs text-gray-600">Download courses for learning anywhere</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="bg-green-100 p-2 rounded">
-                      <Award className="text-green-600" size={20} />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-sm">Verified Certificates</h4>
-                      <p className="text-xs text-gray-600">Earn recognized certificates on completion</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {isAuthenticated ? (
+        <LoggedInDashboard />
+      ) : (
+        <>
+          {!userType ? (
+            <WelcomeScreen />
           ) : userType === 'student' ? (
-            // STUDENT HOME SCREEN
-            <div className="space-y-4">
-              <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Welcome, Learner! 🎓
-                </h3>
-                <p className="text-gray-600">Start your learning journey today</p>
-              </div>
-
-              {/* Student Dashboard Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-                  <BookOpen className="text-blue-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Available Courses</h4>
-                  <p className="text-2xl font-bold text-gray-800">{courses.length}</p>
-                  <p className="text-xs text-gray-500 mt-1">Ready to explore</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-                  <Users className="text-green-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Expert Tutors</h4>
-                  <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
-                  <p className="text-xs text-gray-500 mt-1">Verified educators</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-                  <Download className="text-purple-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Offline Ready</h4>
-                  <p className="text-2xl font-bold text-gray-800">{offlineCourses.length}</p>
-                  <p className="text-xs text-gray-500 mt-1">Downloaded courses</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
-                  <Globe className="text-orange-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Global Reach</h4>
-                  <p className="text-2xl font-bold text-gray-800">50+</p>
-                  <p className="text-xs text-gray-500 mt-1">Countries served</p>
-                </div>
-              </div>
-
-              {/* Quick Actions for Students */}
-              <div className="space-y-3">
-                {/* Survey Prompt */}
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border-2 border-purple-200">
-                  <div className="flex items-start gap-3 mb-2">
-                    <div className="bg-purple-600 p-2 rounded-full">
-                      <MessageSquare className="text-white" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-gray-800">Take Learning Profile Survey</h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Complete a quick survey to unlock AI-powered tutor matching and personalized course recommendations
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setShowSurvey(true)}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2.5 rounded-lg hover:shadow-lg transition font-semibold"
-                  >
-                    Start Survey (2 min)
-                  </button>
-                </div>
-
-                {/* AI Matching */}
-                <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border-2 border-blue-200">
-                  <div className="flex items-start gap-3 mb-2">
-                    <div className="bg-blue-600 p-2 rounded-full">
-                      <Award className="text-white" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-gray-800">Find Your Perfect Match</h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Our AI analyzes your learning style, goals, and preferences to match you with ideal tutors
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={handleAIMatching}
-                    disabled={aiMatching}
-                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-2.5 rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50"
-                  >
-                    {aiMatching ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Finding Matches...
-                      </span>
-                    ) : (
-                      'Find My Perfect Tutor'
-                    )}
-                  </button>
-                </div>
-
-                {/* Browse Courses */}
-                <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
-                  <div className="flex items-center gap-3 mb-2">
-                    <BookOpen className="text-green-600" size={24} />
-                    <div>
-                      <h4 className="font-bold text-gray-800">Explore Courses</h4>
-                      <p className="text-xs text-gray-600">Browse {courses.length} courses across all subjects</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setCurrentView('courses')}
-                    className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
-                  >
-                    Browse All Courses
-                  </button>
-                </div>
-              </div>
-
-              {/* Learning Tips */}
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-lg p-4">
-                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <span>💡</span> Pro Tips for Success
-                </h4>
-                <ul className="space-y-2 text-sm text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Complete your learning profile for better tutor matches</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Download courses for offline learning on-the-go</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Message tutors before booking to find the perfect fit</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <StudentLandingPage />
           ) : (
-            // TUTOR HOME SCREEN
-            <div className="space-y-4">
-              <div className="bg-gradient-to-r from-green-100 to-teal-100 p-4 rounded-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Welcome, Educator! 👨‍🏫
-                </h3>
-                <p className="text-gray-600">Empower students and grow your teaching career</p>
-              </div>
-
-              {/* Tutor Dashboard Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-                  <BookOpen className="text-blue-500 mb-2" />
-                  <h4 className="font-semibold text-sm">My Courses</h4>
-                  <p className="text-2xl font-bold text-gray-800">{tutorStats.totalCourses}</p>
-                  <p className="text-xs text-gray-500 mt-1">Active courses</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-                  <Users className="text-green-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Total Students</h4>
-                  <p className="text-2xl font-bold text-gray-800">{tutorStats.totalStudents}</p>
-                  <p className="text-xs text-gray-500 mt-1">Enrolled learners</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-                  <MessageSquare className="text-purple-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Messages</h4>
-                  <p className="text-2xl font-bold text-gray-800">{tutorStats.totalMessages}</p>
-                  <p className="text-xs text-gray-500 mt-1">Conversations</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
-                  <Award className="text-orange-500 mb-2" />
-                  <h4 className="font-semibold text-sm">Impact</h4>
-                  <p className="text-2xl font-bold text-gray-800">{tutorStats.totalSessions || 0}</p>
-                  <p className="text-xs text-gray-500 mt-1">Total sessions</p>
-                </div>
-              </div>
-
-              {/* Quick Actions for Tutors */}
-              <div className="space-y-3">
-                {/* Create Course */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border-2 border-blue-200">
-                  <div className="flex items-start gap-3 mb-2">
-                    <div className="bg-blue-600 p-2 rounded-full">
-                      <BookOpen className="text-white" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-gray-800">Create Your First Course</h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Share your knowledge and reach students worldwide
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setShowCourseManager(true)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-2.5 rounded-lg hover:shadow-lg transition font-semibold"
-                  >
-                    Create New Course
-                  </button>
-                </div>
-
-                {/* Manage Courses */}
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border-2 border-purple-200">
-                  <div className="flex items-start gap-3 mb-2">
-                    <div className="bg-purple-600 p-2 rounded-full">
-                      <BarChart3 className="text-white" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-gray-800">Manage Your Courses</h4>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Update content, track progress, and engage with students
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setShowCourseManager(true)}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2.5 rounded-lg hover:shadow-lg transition font-semibold"
-                  >
-                    Manage Courses
-                  </button>
-                </div>
-
-                {/* Messages */}
-                <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
-                  <div className="flex items-center gap-3 mb-2">
-                    <MessageSquare className="text-green-600" size={24} />
-                    <div>
-                      <h4 className="font-bold text-gray-800">Student Messages</h4>
-                      <p className="text-xs text-gray-600">Respond to student inquiries</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setCurrentView('chat')}
-                    className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
-                  >
-                    View Messages
-                  </button>
-                </div>
-              </div>
-
-              {/* Teaching Tips */}
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200 rounded-lg p-4">
-                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <span>🎓</span> Teaching Excellence Tips
-                </h4>
-                <ul className="space-y-2 text-sm text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Complete your profile to attract more students</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Upload engaging materials to enhance learning</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={16} />
-                    <span>Respond quickly to messages for better ratings</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+            <TutorLandingPage />
           )}
+        </>
+      )}
     </div>
   );
 };
+
 const CoursesView = () => {
   const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(true);
