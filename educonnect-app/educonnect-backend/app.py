@@ -40,6 +40,10 @@ from sqlalchemy.engine import Engine
 load_dotenv()
 import cloudinary
 import cloudinary.uploader
+import hashlib
+import urllib.parse
+import requests
+from xml.etree import ElementTree as ET
 
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
@@ -51,7 +55,8 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 
 rl_system = RLTutorMatchingSystem()
-
+BBB_URL = os.getenv('BBB_URL', 'https://your-bbb-server.com/bigbluebutton/')
+BBB_SECRET = os.getenv('BBB_SECRET', 'your-bbb-secret')
 MODEL_PATH = 'rl_model.pkl'
 if os.path.exists(MODEL_PATH):
     rl_system.load_model(MODEL_PATH)
@@ -322,7 +327,163 @@ class Booking(db.Model):
     notes = db.Column(db.String(500))
 
 
+def bbb_api_call(api_call, params):
+    """Make API call to BigBlueButton server"""
+    # Create query string
+    query_string = urllib.parse.urlencode(params)
+    
+    # Create checksum
+    checksum_string = api_call + query_string + BBB_SECRET
+    checksum = hashlib.sha1(checksum_string.encode()).hexdigest()
+    
+    # Build full URL
+    url = f"{BBB_URL}api/{api_call}?{query_string}&checksum={checksum}"
+    
+    return url
 
+@app.route('/api/video/create-meeting', methods=['POST'])
+def create_bbb_meeting():
+    """Create BigBlueButton meeting"""
+    try:
+        data = request.get_json()
+        
+        tutor_id = data.get('tutorId')
+        student_id = data.get('studentId')
+        tutor_name = data.get('tutorName', 'Tutor')
+        student_name = data.get('studentName', 'Student')
+        meeting_name = data.get('meetingName', f'Session with {student_name}')
+        
+        # Generate unique meeting ID
+        meeting_id = f"meeting_{tutor_id}_{student_id}_{int(datetime.utcnow().timestamp())}"
+        
+        # Create meeting parameters
+        create_params = {
+            'name': meeting_name,
+            'meetingID': meeting_id,
+            'attendeePW': 'student123',
+            'moderatorPW': 'tutor456',
+            'welcome': f'Welcome to your tutoring session!',
+            'record': 'false',
+            'autoStartRecording': 'false',
+            'allowStartStopRecording': 'true',
+            'maxParticipants': '2'
+        }
+        
+        # Make create meeting API call
+        create_url = bbb_api_call('create', create_params)
+        response = requests.get(create_url)
+        
+        # Parse XML response
+        root = ET.fromstring(response.content)
+        return_code = root.find('returncode').text
+        
+        if return_code != 'SUCCESS':
+            return jsonify({'error': 'Failed to create meeting'}), 500
+        
+        # Generate join URLs
+        tutor_join_params = {
+            'fullName': tutor_name,
+            'meetingID': meeting_id,
+            'password': 'tutor456',
+            'redirect': 'true'
+        }
+        
+        student_join_params = {
+            'fullName': student_name,
+            'meetingID': meeting_id,
+            'password': 'student123',
+            'redirect': 'true'
+        }
+        
+        tutor_join_url = bbb_api_call('join', tutor_join_params)
+        student_join_url = bbb_api_call('join', student_join_params)
+        
+        print(f"✅ [BBB] Created meeting {meeting_id}")
+        
+        return jsonify({
+            'success': True,
+            'meetingId': meeting_id,
+            'tutorJoinUrl': tutor_join_url,
+            'studentJoinUrl': student_join_url
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [BBB ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create meeting', 'details': str(e)}), 500
+
+
+@app.route('/api/video/end-meeting', methods=['POST'])
+def end_bbb_meeting():
+    """End BigBlueButton meeting"""
+    try:
+        data = request.get_json()
+        meeting_id = data.get('meetingId')
+        
+        if not meeting_id:
+            return jsonify({'error': 'Meeting ID required'}), 400
+        
+        # End meeting parameters
+        end_params = {
+            'meetingID': meeting_id,
+            'password': 'tutor456'  # Moderator password
+        }
+        
+        # Make end meeting API call
+        end_url = bbb_api_call('end', end_params)
+        response = requests.get(end_url)
+        
+        # Parse XML response
+        root = ET.fromstring(response.content)
+        return_code = root.find('returncode').text
+        
+        if return_code != 'SUCCESS':
+            return jsonify({'error': 'Failed to end meeting'}), 500
+        
+        print(f"✅ [BBB] Ended meeting {meeting_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Meeting ended successfully'
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [BBB ERROR] {str(e)}")
+        return jsonify({'error': 'Failed to end meeting'}), 500
+
+
+@app.route('/api/video/meeting-info/<meeting_id>', methods=['GET'])
+def get_meeting_info(meeting_id):
+    """Get BigBlueButton meeting information"""
+    try:
+        # Get meeting info parameters
+        info_params = {
+            'meetingID': meeting_id
+        }
+        
+        # Make get meeting info API call
+        info_url = bbb_api_call('getMeetingInfo', info_params)
+        response = requests.get(info_url)
+        
+        # Parse XML response
+        root = ET.fromstring(response.content)
+        return_code = root.find('returncode').text
+        
+        if return_code != 'SUCCESS':
+            return jsonify({'running': False}), 200
+        
+        running = root.find('running').text == 'true'
+        participant_count = int(root.find('participantCount').text)
+        
+        return jsonify({
+            'running': running,
+            'participantCount': participant_count
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [BBB ERROR] {str(e)}")
+        return jsonify({'running': False}), 200
 def send_password_reset_email(user_email, reset_url):
     """Send password reset email"""
     try:
