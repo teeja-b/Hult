@@ -370,9 +370,10 @@ def create_jitsi_meeting():
         }
         
         # Pass displayName explicitly to build_config_fragment
-        caller_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(caller_config, caller_config['userInfo']['displayName'])}"
-        receiver_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(receiver_config, receiver_config['userInfo']['displayName'])}"
-        
+        caller_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(caller_config)}"
+        receiver_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(receiver_config)}"
+
+      
         print(f"✅ [VIDEO] Created Jitsi meeting: {meeting_id}")
         print(f"[VIDEO] Room: {room_name}")
         print(f"[VIDEO] Caller URL: {caller_url}")
