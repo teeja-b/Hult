@@ -327,6 +327,98 @@ class Booking(db.Model):
 
 
 
+@app.route('/api/video/create-meeting', methods=['POST'])
+@jwt_required()
+def create_jitsi_meeting():
+    """Create a Jitsi meeting room - NO JWT AUTH for meet.jit.si"""
+    try:
+        data = request.get_json()
+        
+        caller_id = data.get('callerId')
+        caller_role = data.get('callerRole')  # 'student' or 'tutor'
+        receiver_id = data.get('receiverId')
+        caller_name = data.get('callerName', 'User')
+        receiver_name = data.get('receiverName', 'User')
+        meeting_name = data.get('meetingName', 'EduConnect Session')
+        
+        # Generate unique meeting ID
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-{meeting_id}"
+        
+        # Jitsi Meet server URL
+        jitsi_domain = os.getenv('JITSI_DOMAIN', 'meet.jit.si')
+        
+        # Build config fragment for URL hash
+        caller_config = {
+            'prejoinPageEnabled': False,
+            'startWithAudioMuted': False,
+            'startWithVideoMuted': False,
+            'subject': meeting_name,
+            'userInfo': {
+                'displayName': caller_name
+            }
+        }
+        
+        receiver_config = {
+            'prejoinPageEnabled': False,
+            'startWithAudioMuted': False,
+            'startWithVideoMuted': False,
+            'subject': meeting_name,
+            'userInfo': {
+                'displayName': receiver_name
+            }
+        }
+        
+        # Pass displayName explicitly to build_config_fragment
+        caller_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(caller_config, caller_config['userInfo']['displayName'])}"
+        receiver_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(receiver_config, receiver_config['userInfo']['displayName'])}"
+        
+        print(f"✅ [VIDEO] Created Jitsi meeting: {meeting_id}")
+        print(f"[VIDEO] Room: {room_name}")
+        print(f"[VIDEO] Caller URL: {caller_url}")
+        print(f"[VIDEO] Receiver URL: {receiver_url}")
+        
+        return jsonify({
+            'success': True,
+            'meeting_id': meeting_id,
+            'room_name': room_name,
+            'tutorJoinUrl': caller_url if caller_role == 'tutor' else receiver_url,
+            'studentJoinUrl': receiver_url if caller_role == 'tutor' else caller_url,
+            'jitsi_domain': jitsi_domain
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Failed to create meeting: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create meeting'}), 500
+
+
+@app.route('/api/video/end-meeting', methods=['POST'])
+@jwt_required()
+def end_jitsi_meeting():
+    """End a Jitsi meeting"""
+    try:
+        data = request.get_json()
+        meeting_id = data.get('meetingId')
+        
+        # Update meeting status in database (if stored)
+        # meeting = Meeting.query.filter_by(meeting_id=meeting_id).first()
+        # if meeting:
+        #     meeting.status = 'ended'
+        #     meeting.ended_at = datetime.utcnow()
+        #     db.session.commit()
+        
+        print(f"✅ [VIDEO] Ended meeting: {meeting_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Meeting ended'
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Failed to end meeting: {e}")
+        return jsonify({'error': 'Failed to end meeting'}), 500
 
 
 def generate_jitsi_jwt(room_name, user_name, user_email, moderator=False):
@@ -365,20 +457,15 @@ def generate_jitsi_jwt(room_name, user_name, user_email, moderator=False):
     return token
 
 
-def build_config_fragment(config, display_name):
+def build_config_fragment(config):
     """Build URL fragment for Jitsi configuration"""
     import json
     import urllib.parse
     
-    config_with_name = {
-        **config,
-        'userInfo': {
-            'displayName': display_name
-        }
-    }
-    
-    config_str = json.dumps(config_with_name)
-    return urllib.parse.quote(f"config.{config_str}")
+    config_str = json.dumps(config)
+    return f"config.{urllib.parse.quote(config_str)}" see if these are correct 
+
+
 
 
 # Socket.IO events for video call signaling
