@@ -74,8 +74,10 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
 
       // Extract room name from URL
       const url = new URL(meetingUrl);
-      const roomName = url.pathname.substring(1);
+      const roomName = url.pathname.substring(1).split('?')[0]; // Remove leading slash and query params
       const domain = url.hostname;
+
+      console.log('🎥 Initializing Jitsi:', { roomName, domain, displayName });
 
       const options = {
         roomName: roomName,
@@ -108,6 +110,8 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
           displayName: displayName
         }
       };
+
+      console.log('🎥 Creating Jitsi API with options:', options);
 
       const api = new window.JitsiMeetExternalAPI(domain, options);
       jitsiApiRef.current = api;
