@@ -6,7 +6,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
-  const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
+  
   const [currentMeetingId, setCurrentMeetingId] = useState('');
   const [isCreatingCall, setIsCreatingCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -17,6 +17,10 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
   const jitsiContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
   const socketRef = useRef(null);
+
+  const meetingName = `EduConnect-${selectedTutor.name}-${Date.now()}`;
+  const meetingUrl = `https://meet.jit.si/${meetingName}`;
+
 
   useEffect(() => {
     // Initialize Socket.IO
@@ -68,81 +72,11 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
     });
   };
 
-  const initJitsi = async (meetingUrl, displayName) => {
-    try {
-      await loadJitsiScript();
-
-      // Extract room name from URL
-      const url = new URL(meetingUrl);
-      const roomName = url.pathname.substring(1).split('?')[0]; // Remove leading slash and query params
-      const domain = url.hostname;
-
-      console.log('🎥 Initializing Jitsi:', { roomName, domain, displayName });
-
-      const options = {
-        roomName: roomName,
-        width: '100%',
-        height: '100%',
-        parentNode: jitsiContainerRef.current,
-        configOverwrite: {
-          startWithAudioMuted: false,
-          startWithVideoMuted: false,
-          prejoinPageEnabled: false,
-          disableDeepLinking: true,
-          enableWelcomePage: false,
-          enableClosePage: false,
-          hideConferenceSubject: false,
-          hideConferenceTimer: false,
-        },
-        interfaceConfigOverwrite: {
-          TOOLBAR_BUTTONS: [
-            'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-            'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
-            'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
-            'videoquality', 'filmstrip', 'feedback', 'stats', 'shortcuts',
-            'tileview', 'videobackgroundblur', 'download', 'help', 'mute-everyone',
-          ],
-          SHOW_JITSI_WATERMARK: false,
-          SHOW_WATERMARK_FOR_GUESTS: false,
-          DISABLE_VIDEO_BACKGROUND: false,
-        },
-        userInfo: {
-          displayName: displayName
-        }
-      };
-
-      console.log('🎥 Creating Jitsi API with options:', options);
-
-      const api = new window.JitsiMeetExternalAPI(domain, options);
-      jitsiApiRef.current = api;
-
-      // Event listeners
-      api.addEventListener('videoConferenceJoined', () => {
-        console.log('✅ Joined video conference');
-      });
-
-      api.addEventListener('readyToClose', () => {
-        console.log('🔴 Conference closed');
-        endVideoCall();
-      });
-
-      api.addEventListener('participantLeft', (participant) => {
-        console.log('👋 Participant left:', participant);
-      });
-
-      api.addEventListener('audioMuteStatusChanged', ({ muted }) => {
-        setIsMuted(muted);
-      });
-
-      api.addEventListener('videoMuteStatusChanged', ({ muted }) => {
-        setIsVideoOff(muted);
-      });
-
-    } catch (error) {
-      console.error('❌ Failed to initialize Jitsi:', error);
-      alert('Failed to initialize video call. Please try again.');
-    }
-  };
+ // In your JitsiVideoCall component, replace initJitsi with:
+const initJitsi = async (meetingUrl) => {
+  // Just set the URL - the iframe will handle everything
+  setCurrentMeetingUrl(meetingUrl);
+};
 
   const startVideoCall = async () => {
     if (!selectedTutor) return;
