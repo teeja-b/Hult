@@ -330,7 +330,7 @@ class Booking(db.Model):
 @app.route('/api/video/create-meeting', methods=['POST'])
 @jwt_required()
 def create_jitsi_meeting():
-    """Create a Jitsi meeting room - NO JWT AUTH for meet.jit.si"""
+   
     try:
         data = request.get_json()
         
@@ -463,7 +463,7 @@ def build_config_fragment(config):
     import urllib.parse
     
     config_str = json.dumps(config)
-    return f"config.{urllib.parse.quote(config_str)}" see if these are correct 
+    return f"config.{urllib.parse.quote(config_str)}"
 
 
 
