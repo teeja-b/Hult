@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Video, PhoneOff, Mic, MicOff, VideoOff, Phone, X } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -6,27 +6,22 @@ const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
-  
+  const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
   const [currentMeetingId, setCurrentMeetingId] = useState('');
   const [isCreatingCall, setIsCreatingCall] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
   const [callRinging, setCallRinging] = useState(false);
+
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  
-  const jitsiContainerRef = useRef(null);
-  const jitsiApiRef = useRef(null);
-  const socketRef = useRef(null);
 
-  const meetingName = `EduConnect-${selectedTutor.name}-${Date.now()}`;
-  const meetingUrl = `https://meet.jit.si/${meetingName}`;
+  const socketRef = React.useRef(null);
 
-
+  // Initialize Socket.IO
   useEffect(() => {
-    // Initialize Socket.IO
     socketRef.current = io(API_URL, {
       auth: { userId: currentUserId },
-      reconnection: true
+      reconnection: true,
     });
 
     const socket = socketRef.current;
@@ -49,47 +44,29 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor }) => {
     });
 
     return () => {
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-      }
       socket?.disconnect();
     };
   }, [currentUserId, currentMeetingId]);
 
-  const loadJitsiScript = () => {
-    return new Promise((resolve, reject) => {
-      if (window.JitsiMeetExternalAPI) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://meet.jit.si/external_api.js';
-      script.async = true;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.body.appendChild(script);
-    });
+  // Generate unique meeting URL
+  const generateMeetingUrl = () => {
+    const uniqueName = `EduConnect-${selectedTutor.name}-${Date.now()}`;
+    return `https://meet.jit.si/${uniqueName}`;
   };
-
- // In your JitsiVideoCall component, replace initJitsi with:
-const initJitsi = async (meetingUrl) => {
-  // Just set the URL - the iframe will handle everything
-  setCurrentMeetingUrl(meetingUrl);
-};
 
   const startVideoCall = async () => {
     if (!selectedTutor) return;
-    
     setIsCreatingCall(true);
-    
+
     try {
+      const meetingUrl = generateMeetingUrl();
       const token = localStorage.getItem('token');
+
       const response = await fetch(`${API_URL}/api/video/create-meeting`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           callerId: currentUserId,
@@ -97,23 +74,17 @@ const initJitsi = async (meetingUrl) => {
           receiverId: selectedTutor.user_id,
           callerName: 'Student',
           receiverName: selectedTutor.name,
-          meetingName: `Session with ${selectedTutor.name}`
-        })
+          meetingName: meetingUrl,
+        }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to create meeting');
-      
       const data = await response.json();
-      
-      setCurrentMeetingUrl(data.studentJoinUrl);
+
+      setCurrentMeetingUrl(meetingUrl); // set unique URL
       setCurrentMeetingId(data.meeting_id);
       setIsVideoCallOpen(true);
-      
-      // Initialize Jitsi
-      setTimeout(() => {
-        initJitsi(data.studentJoinUrl, 'Student');
-      }, 100);
-      
+
       // Notify tutor via socket
       if (socketRef.current?.connected) {
         socketRef.current.emit('initiate_video_call', {
@@ -121,10 +92,9 @@ const initJitsi = async (meetingUrl) => {
           callerId: currentUserId,
           receiverId: selectedTutor.user_id,
           callerName: 'Student',
-          joinUrl: data.tutorJoinUrl
+          joinUrl: meetingUrl,
         });
       }
-      
     } catch (error) {
       console.error('Failed to start video call:', error);
       alert('Failed to start video call. Please try again.');
@@ -135,90 +105,51 @@ const initJitsi = async (meetingUrl) => {
 
   const acceptCall = () => {
     if (!incomingCall) return;
-    
     setCurrentMeetingUrl(incomingCall.joinUrl);
     setCurrentMeetingId(incomingCall.meetingId);
     setIsVideoCallOpen(true);
     setCallRinging(false);
-    
-    // Initialize Jitsi
-    setTimeout(() => {
-      initJitsi(incomingCall.joinUrl, 'Student');
-    }, 100);
-    
+
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
         meetingId: incomingCall.meetingId,
-        acceptedBy: currentUserId
+        acceptedBy: currentUserId,
       });
     }
-    
     setIncomingCall(null);
   };
 
   const declineCall = () => {
     if (!incomingCall) return;
-    
+
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_declined', {
         meetingId: incomingCall.meetingId,
-        declinedBy: currentUserId
+        declinedBy: currentUserId,
       });
     }
-    
+
     setCallRinging(false);
     setIncomingCall(null);
   };
 
-  const endVideoCall = async () => {
-    if (!currentMeetingId) return;
-    
-    try {
-      // Dispose Jitsi
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-        jitsiApiRef.current = null;
-      }
-      
-      const token = localStorage.getItem('token');
-      await fetch(`${API_URL}/api/video/end-meeting`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ meetingId: currentMeetingId })
+  const endVideoCall = () => {
+    setIsVideoCallOpen(false);
+    setCurrentMeetingUrl('');
+    setCurrentMeetingId('');
+    setIsMuted(false);
+    setIsVideoOff(false);
+
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('end_video_call', {
+        meetingId: currentMeetingId,
+        endedBy: currentUserId,
       });
-      
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('end_video_call', {
-          meetingId: currentMeetingId,
-          endedBy: currentUserId
-        });
-      }
-      
-    } catch (error) {
-      console.error('Failed to end video call:', error);
-    } finally {
-      setIsVideoCallOpen(false);
-      setCurrentMeetingUrl('');
-      setCurrentMeetingId('');
-      setIsMuted(false);
-      setIsVideoOff(false);
     }
   };
 
-  const toggleMute = () => {
-    if (jitsiApiRef.current) {
-      jitsiApiRef.current.executeCommand('toggleAudio');
-    }
-  };
-
-  const toggleVideo = () => {
-    if (jitsiApiRef.current) {
-      jitsiApiRef.current.executeCommand('toggleVideo');
-    }
-  };
+  const toggleMute = () => setIsMuted(!isMuted);
+  const toggleVideo = () => setIsVideoOff(!isVideoOff);
 
   return (
     <>
@@ -242,12 +173,8 @@ const initJitsi = async (meetingUrl) => {
               <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                 <Video className="text-blue-600" size={48} />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Incoming Video Call
-              </h2>
-              <p className="text-gray-600">
-                {incomingCall.callerName} is calling...
-              </p>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Incoming Video Call</h2>
+              <p className="text-gray-600">{incomingCall.callerName} is calling...</p>
             </div>
 
             <div className="flex gap-4 justify-center">
@@ -255,25 +182,22 @@ const initJitsi = async (meetingUrl) => {
                 onClick={declineCall}
                 className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
               >
-                <PhoneOff size={20} />
-                Decline
+                <PhoneOff size={20} /> Decline
               </button>
               <button
                 onClick={acceptCall}
                 className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition animate-bounce"
               >
-                <Phone size={20} />
-                Accept
+                <Phone size={20} /> Accept
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Video Call Modal */}
+      {/* Video Call Controls Modal */}
       {isVideoCallOpen && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          {/* Header */}
           <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Video className="text-green-500" size={24} />
@@ -281,43 +205,31 @@ const initJitsi = async (meetingUrl) => {
                 Video Call with {selectedTutor?.name || 'Tutor'}
               </h2>
             </div>
-            <button
-              onClick={endVideoCall}
-              className="p-2 hover:bg-gray-800 rounded-full transition"
-            >
+            <button onClick={endVideoCall} className="p-2 hover:bg-gray-800 rounded-full transition">
               <X size={24} />
             </button>
           </div>
 
-          {/* Jitsi Container */}
-          <div className="flex-1 bg-black" ref={jitsiContainerRef} />
-
-          {/* Controls */}
           <div className="bg-gray-900 p-4 flex items-center justify-center gap-4">
             <button
               onClick={toggleMute}
-              className={`p-4 rounded-full transition ${
-                isMuted ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'
-              }`}
+              className={`p-4 rounded-full transition ${isMuted ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}
             >
               {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
             </button>
-            
+
             <button
               onClick={toggleVideo}
-              className={`p-4 rounded-full transition ${
-                isVideoOff ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'
-              }`}
+              className={`p-4 rounded-full transition ${isVideoOff ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}
             >
               {isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
             </button>
-            
+
             <button
               onClick={endVideoCall}
               className="flex items-center gap-2 bg-red-600 text-white px-6 py-4 rounded-full hover:bg-red-700 transition"
             >
-              <PhoneOff size={24} />
-              End Call
+              <PhoneOff size={24} /> End Call
             </button>
           </div>
         </div>
