@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import io from 'socket.io-client';
 import { Video, PhoneOff } from 'lucide-react';
-
+import JitsiVideoCall from './JitsiVideoCall';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorMessagingView = ({ 
@@ -23,14 +23,14 @@ const TutorMessagingView = ({
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
-const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
-const [currentMeetingId, setCurrentMeetingId] = useState('');
-const [isCreatingCall, setIsCreatingCall] = useState(false);
 
+ const selectedTutorForJitsi = selectedConversation ? {
+
+  user_id: selectedConversation.studentId || selectedConversation.partnerId,
+  name: selectedConversation.studentName || selectedConversation.partnerName || 'Student'
+} : null;
 // Incoming call states
-const [incomingCall, setIncomingCall] = useState(null);
-const [callRinging, setCallRinging] = useState(false);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -342,26 +342,7 @@ const sendMessage = async () => {
     });
 
     const socket = socketRef.current;
-socket.on('incoming_video_call', (callData) => {
-  console.log('📞 [TUTOR] Incoming video call:', callData);
-  setIncomingCall(callData);
-  setCallRinging(true);
-});
 
-socket.on('call_ended', ({ meetingId }) => {
-  if (currentMeetingId === meetingId) {
-    endVideoCall();
-  }
-});
-
-socket.on('call_declined', () => {
-  setIsCreatingCall(false);
-  alert('Call was declined');
-});
-
-socket.on('call_accepted', () => {
-  console.log('✅ [TUTOR] Call accepted by student');
-});
     socket.on('connect', () => {
       console.log('✅ [TUTOR] Socket connected:', socket.id);
       setConnectionStatus('connected');
@@ -679,204 +660,7 @@ socket.on('call_accepted', () => {
   );
 
   const showingChat = selectedConversation !== null;
-  const startVideoCall = async () => {
-  if (!selectedConversation) return;
-  
-  const studentId = selectedConversation.studentId || selectedConversation.partnerId;
-  if (!studentId) return;
-  
-  setIsCreatingCall(true);
-  
-  try {
-    const response = await fetch(`${API_URL}/api/video/create-meeting`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        callerId: currentTutorUserId,
-        callerRole: 'tutor',
-        receiverId: studentId,
-        callerName: tutorName,
-        receiverName: selectedConversation.studentName || selectedConversation.partnerName || 'Student',
-        meetingName: `Session with ${selectedConversation.studentName || 'Student'}`
-      })
-    });
-    
-    if (!response.ok) throw new Error('Failed to create meeting');
-    
-    const data = await response.json();
-    
-    setCurrentMeetingUrl(data.tutorJoinUrl);
-    setCurrentMeetingId(data.meetingId);
-    setIsVideoCallOpen(true);
-    
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('initiate_video_call', {
-        meetingId: data.meetingId,
-        callerId: currentTutorUserId,
-        receiverId: studentId,
-        callerName: tutorName,
-        joinUrl: data.studentJoinUrl
-      });
-    }
-    
-  } catch (error) {
-    console.error('[TUTOR] Failed to start video call:', error);
-    alert('Failed to start video call. Please try again.');
-  } finally {
-    setIsCreatingCall(false);
-  }
-};
 
-const acceptCall = () => {
-  if (!incomingCall) return;
-  
-  setCurrentMeetingUrl(incomingCall.joinUrl);
-  setCurrentMeetingId(incomingCall.meetingId);
-  setIsVideoCallOpen(true);
-  setCallRinging(false);
-  setIncomingCall(null);
-  
-  if (socketRef.current?.connected) {
-    socketRef.current.emit('call_accepted', {
-      meetingId: incomingCall.meetingId,
-      acceptedBy: currentTutorUserId
-    });
-  }
-};
-
-const declineCall = () => {
-  if (!incomingCall) return;
-  
-  if (socketRef.current?.connected) {
-    socketRef.current.emit('call_declined', {
-      meetingId: incomingCall.meetingId,
-      declinedBy: currentTutorUserId
-    });
-  }
-  
-  setCallRinging(false);
-  setIncomingCall(null);
-};
-
-const endVideoCall = async () => {
-  if (!currentMeetingId) return;
-  
-  try {
-    await fetch(`${API_URL}/api/video/end-meeting`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meetingId: currentMeetingId })
-    });
-    
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('end_video_call', {
-        meetingId: currentMeetingId,
-        endedBy: currentTutorUserId
-      });
-    }
-    
-  } catch (error) {
-    console.error('[TUTOR] Failed to end video call:', error);
-  } finally {
-    setIsVideoCallOpen(false);
-    setCurrentMeetingUrl('');
-    setCurrentMeetingId('');
-  }
-};
-
-const IncomingCallModal = () => {
-  if (!callRinging || !incomingCall) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full text-center">
-        <div className="mb-6">
-          <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Video className="text-blue-600" size={48} />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Incoming Video Call
-          </h2>
-          <p className="text-gray-600">
-            {incomingCall.callerName} is calling...
-          </p>
-        </div>
-
-        <div className="flex gap-4 justify-center">
-          <button
-            onClick={declineCall}
-            className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
-          >
-            <PhoneOff size={20} />
-            Decline
-          </button>
-          <button
-            onClick={acceptCall}
-            className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition animate-bounce"
-          >
-            <Video size={20} />
-            Accept
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const VideoCallModal = () => {
-  if (!isVideoCallOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-full max-w-6xl h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Video className="text-blue-600" size={24} />
-            <h2 className="text-xl font-semibold">
-              Video Call with {selectedConversation?.studentName || selectedConversation?.partnerName || 'Student'}
-            </h2>
-          </div>
-          <button
-            onClick={endVideoCall}
-            className="p-2 hover:bg-gray-100 rounded-full transition"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="flex-1 bg-gray-900">
-          {currentMeetingUrl ? (
-            <iframe
-              src={currentMeetingUrl}
-              className="w-full h-full"
-              allow="camera; microphone; fullscreen; display-capture; autoplay"
-              title="Video Call"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-white">
-              <div className="text-center">
-                <Video size={64} className="mx-auto mb-4 opacity-50" />
-                <p>Loading video call...</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={endVideoCall}
-              className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
-            >
-              <PhoneOff size={20} />
-              End Call
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -975,14 +759,13 @@ const VideoCallModal = () => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
-      <button
-  onClick={startVideoCall}
-  disabled={isCreatingCall}
-  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
->
-  <Video size={20} />
-  {isCreatingCall ? 'Starting...' : 'Call'}
-</button>
+                 <JitsiVideoCall 
+          currentUserId={currentTutorUserId}
+          selectedTutor={selectedTutorForJitsi}
+          userRole="tutor"
+          userName={tutorName}
+        />
+ 
             </div>
           </div>
 
@@ -1149,8 +932,7 @@ const VideoCallModal = () => {
           </div>
         </>
       )}
-      <IncomingCallModal />
-<VideoCallModal />
+
     </div>
   );
 };

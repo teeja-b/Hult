@@ -41,9 +41,9 @@ load_dotenv()
 import cloudinary
 import cloudinary.uploader
 import hashlib
-import urllib.parse
-import requests
-from xml.etree import ElementTree as ET
+import time
+import uuid
+
 
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
@@ -55,8 +55,7 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 
 rl_system = RLTutorMatchingSystem()
-BBB_URL = os.getenv('BBB_URL', 'https://your-bbb-server.com/bigbluebutton/')
-BBB_SECRET = os.getenv('BBB_SECRET', 'your-bbb-secret')
+
 MODEL_PATH = 'rl_model.pkl'
 if os.path.exists(MODEL_PATH):
     rl_system.load_model(MODEL_PATH)
@@ -326,164 +325,246 @@ class Booking(db.Model):
     status = db.Column(db.String(20))
     notes = db.Column(db.String(500))
 
-
-def bbb_api_call(api_call, params):
-    """Make API call to BigBlueButton server"""
-    # Create query string
-    query_string = urllib.parse.urlencode(params)
-    
-    # Create checksum
-    checksum_string = api_call + query_string + BBB_SECRET
-    checksum = hashlib.sha1(checksum_string.encode()).hexdigest()
-    
-    # Build full URL
-    url = f"{BBB_URL}api/{api_call}?{query_string}&checksum={checksum}"
-    
-    return url
-
 @app.route('/api/video/create-meeting', methods=['POST'])
-def create_bbb_meeting():
-    """Create BigBlueButton meeting"""
+@jwt_required()
+def create_jitsi_meeting():
+    """Create a Jitsi meeting room"""
     try:
         data = request.get_json()
         
-        tutor_id = data.get('tutorId')
-        student_id = data.get('studentId')
-        tutor_name = data.get('tutorName', 'Tutor')
-        student_name = data.get('studentName', 'Student')
-        meeting_name = data.get('meetingName', f'Session with {student_name}')
+        caller_id = data.get('callerId')
+        caller_role = data.get('callerRole')  # 'student' or 'tutor'
+        receiver_id = data.get('receiverId')
+        caller_name = data.get('callerName', 'User')
+        receiver_name = data.get('receiverName', 'User')
+        meeting_name = data.get('meetingName', 'EduConnect Session')
         
         # Generate unique meeting ID
-        meeting_id = f"meeting_{tutor_id}_{student_id}_{int(datetime.utcnow().timestamp())}"
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-{meeting_id}"
         
-        # Create meeting parameters
-        create_params = {
-            'name': meeting_name,
-            'meetingID': meeting_id,
-            'attendeePW': 'student123',
-            'moderatorPW': 'tutor456',
-            'welcome': f'Welcome to your tutoring session!',
-            'record': 'false',
-            'autoStartRecording': 'false',
-            'allowStartStopRecording': 'true',
-            'maxParticipants': '2'
+        # Jitsi Meet server URL (you can use meet.jit.si or your own server)
+        jitsi_domain = "meet.jit.si"
+        
+        # Create meeting URLs with configuration
+        base_config = {
+            'prejoinPageEnabled': False,  # Skip pre-join page
+            'startWithAudioMuted': False,
+            'startWithVideoMuted': False,
+            'requireDisplayName': True,
+            'enableWelcomePage': False,
+            'enableClosePage': False,
+            'subject': meeting_name
         }
         
-        # Make create meeting API call
-        create_url = bbb_api_call('create', create_params)
-        response = requests.get(create_url)
+        # Create URLs for caller and receiver
+        caller_jwt_token = generate_jitsi_jwt(
+            room_name=room_name,
+            user_name=caller_name,
+            user_email=f"{caller_id}@educonnect.app",
+            moderator=(caller_role == 'tutor')  # Tutors are moderators
+        )
         
-        # Parse XML response
-        root = ET.fromstring(response.content)
-        return_code = root.find('returncode').text
+        receiver_jwt_token = generate_jitsi_jwt(
+            room_name=room_name,
+            user_name=receiver_name,
+            user_email=f"{receiver_id}@educonnect.app",
+            moderator=(caller_role == 'student')  # If student calls, they're moderator
+        )
         
-        if return_code != 'SUCCESS':
-            return jsonify({'error': 'Failed to create meeting'}), 500
+        # Build Jitsi URLs
+        caller_url = f"https://{jitsi_domain}/{room_name}?jwt={caller_jwt_token}#{build_config_fragment(base_config, caller_name)}"
+        receiver_url = f"https://{jitsi_domain}/{room_name}?jwt={receiver_jwt_token}#{build_config_fragment(base_config, receiver_name)}"
         
-        # Generate join URLs
-        tutor_join_params = {
-            'fullName': tutor_name,
-            'meetingID': meeting_id,
-            'password': 'tutor456',
-            'redirect': 'true'
+        # Store meeting in database (optional)
+        meeting_data = {
+            'meeting_id': meeting_id,
+            'room_name': room_name,
+            'caller_id': caller_id,
+            'receiver_id': receiver_id,
+            'caller_role': caller_role,
+            'created_at': datetime.utcnow().isoformat(),
+            'status': 'active'
         }
         
-        student_join_params = {
-            'fullName': student_name,
-            'meetingID': meeting_id,
-            'password': 'student123',
-            'redirect': 'true'
-        }
+        # You can store this in a Meeting table if needed
         
-        tutor_join_url = bbb_api_call('join', tutor_join_params)
-        student_join_url = bbb_api_call('join', student_join_params)
-        
-        print(f"✅ [BBB] Created meeting {meeting_id}")
+        print(f"✅ [VIDEO] Created Jitsi meeting: {meeting_id}")
         
         return jsonify({
             'success': True,
-            'meetingId': meeting_id,
-            'tutorJoinUrl': tutor_join_url,
-            'studentJoinUrl': student_join_url
+            'meeting_id': meeting_id,
+            'room_name': room_name,
+            'tutorJoinUrl': caller_url if caller_role == 'tutor' else receiver_url,
+            'studentJoinUrl': receiver_url if caller_role == 'tutor' else caller_url,
+            'jitsi_domain': jitsi_domain
         }), 200
         
     except Exception as e:
-        print(f"❌ [BBB ERROR] {str(e)}")
+        print(f"❌ [VIDEO] Failed to create meeting: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': 'Failed to create meeting', 'details': str(e)}), 500
+        return jsonify({'error': 'Failed to create meeting'}), 500
 
 
 @app.route('/api/video/end-meeting', methods=['POST'])
-def end_bbb_meeting():
-    """End BigBlueButton meeting"""
+@jwt_required()
+def end_jitsi_meeting():
+    """End a Jitsi meeting"""
     try:
         data = request.get_json()
         meeting_id = data.get('meetingId')
         
-        if not meeting_id:
-            return jsonify({'error': 'Meeting ID required'}), 400
+        # Update meeting status in database (if stored)
+        # meeting = Meeting.query.filter_by(meeting_id=meeting_id).first()
+        # if meeting:
+        #     meeting.status = 'ended'
+        #     meeting.ended_at = datetime.utcnow()
+        #     db.session.commit()
         
-        # End meeting parameters
-        end_params = {
-            'meetingID': meeting_id,
-            'password': 'tutor456'  # Moderator password
-        }
-        
-        # Make end meeting API call
-        end_url = bbb_api_call('end', end_params)
-        response = requests.get(end_url)
-        
-        # Parse XML response
-        root = ET.fromstring(response.content)
-        return_code = root.find('returncode').text
-        
-        if return_code != 'SUCCESS':
-            return jsonify({'error': 'Failed to end meeting'}), 500
-        
-        print(f"✅ [BBB] Ended meeting {meeting_id}")
+        print(f"✅ [VIDEO] Ended meeting: {meeting_id}")
         
         return jsonify({
             'success': True,
-            'message': 'Meeting ended successfully'
+            'message': 'Meeting ended'
         }), 200
         
     except Exception as e:
-        print(f"❌ [BBB ERROR] {str(e)}")
+        print(f"❌ [VIDEO] Failed to end meeting: {e}")
         return jsonify({'error': 'Failed to end meeting'}), 500
 
 
-@app.route('/api/video/meeting-info/<meeting_id>', methods=['GET'])
-def get_meeting_info(meeting_id):
-    """Get BigBlueButton meeting information"""
-    try:
-        # Get meeting info parameters
-        info_params = {
-            'meetingID': meeting_id
+def generate_jitsi_jwt(room_name, user_name, user_email, moderator=False):
+    """
+    Generate JWT token for Jitsi authentication
+    Note: For production, you should use a proper JWT library and your own Jitsi server
+    """
+    import jwt as pyjwt
+    from datetime import datetime, timedelta
+    
+    # Your Jitsi app credentials (get these from your Jitsi server config)
+    # For meet.jit.si, JWT is optional. For self-hosted, you need to configure this.
+    APP_ID = os.getenv('JITSI_APP_ID', 'educonnect')
+    APP_SECRET = os.getenv('JITSI_APP_SECRET', 'your-secret-key')
+    
+    # JWT payload
+    payload = {
+        'context': {
+            'user': {
+                'name': user_name,
+                'email': user_email,
+                'moderator': moderator
+            }
+        },
+        'aud': APP_ID,
+        'iss': APP_ID,
+        'sub': 'meet.jit.si',  # or your Jitsi domain
+        'room': room_name,
+        'exp': datetime.utcnow() + timedelta(hours=2),  # Token expires in 2 hours
+        'nbf': datetime.utcnow() - timedelta(minutes=5)
+    }
+    
+    # Generate JWT
+    token = pyjwt.encode(payload, APP_SECRET, algorithm='HS256')
+    
+    return token
+
+
+def build_config_fragment(config, display_name):
+    """Build URL fragment for Jitsi configuration"""
+    import json
+    import urllib.parse
+    
+    config_with_name = {
+        **config,
+        'userInfo': {
+            'displayName': display_name
         }
+    }
+    
+    config_str = json.dumps(config_with_name)
+    return urllib.parse.quote(f"config.{config_str}")
+
+
+# Socket.IO events for video call signaling
+@socketio.on('initiate_video_call')
+def handle_initiate_video_call(data):
+    """Handle video call initiation"""
+    try:
+        meeting_id = data.get('meetingId')
+        caller_id = data.get('callerId')
+        receiver_id = data.get('receiverId')
+        caller_name = data.get('callerName')
+        join_url = data.get('joinUrl')
         
-        # Make get meeting info API call
-        info_url = bbb_api_call('getMeetingInfo', info_params)
-        response = requests.get(info_url)
+        print(f"📞 [VIDEO] Call initiated: {caller_id} -> {receiver_id}")
         
-        # Parse XML response
-        root = ET.fromstring(response.content)
-        return_code = root.find('returncode').text
-        
-        if return_code != 'SUCCESS':
-            return jsonify({'running': False}), 200
-        
-        running = root.find('running').text == 'true'
-        participant_count = int(root.find('participantCount').text)
-        
-        return jsonify({
-            'running': running,
-            'participantCount': participant_count
-        }), 200
+        # Emit to receiver
+        emit('incoming_video_call', {
+            'meetingId': meeting_id,
+            'callerId': caller_id,
+            'callerName': caller_name,
+            'joinUrl': join_url
+        }, room=receiver_id, broadcast=True)
         
     except Exception as e:
-        print(f"❌ [BBB ERROR] {str(e)}")
-        return jsonify({'running': False}), 200
+        print(f"❌ [VIDEO] Error initiating call: {e}")
+
+
+@socketio.on('call_accepted')
+def handle_call_accepted(data):
+    """Handle call acceptance"""
+    try:
+        meeting_id = data.get('meetingId')
+        accepted_by = data.get('acceptedBy')
+        
+        print(f"✅ [VIDEO] Call accepted by: {accepted_by}")
+        
+        emit('call_accepted', {
+            'meetingId': meeting_id,
+            'acceptedBy': accepted_by
+        }, broadcast=True)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error accepting call: {e}")
+
+
+@socketio.on('call_declined')
+def handle_call_declined(data):
+    """Handle call decline"""
+    try:
+        meeting_id = data.get('meetingId')
+        declined_by = data.get('declinedBy')
+        
+        print(f"❌ [VIDEO] Call declined by: {declined_by}")
+        
+        emit('call_declined', {
+            'meetingId': meeting_id,
+            'declinedBy': declined_by
+        }, broadcast=True)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error declining call: {e}")
+
+
+@socketio.on('end_video_call')
+def handle_end_video_call(data):
+    """Handle video call ending"""
+    try:
+        meeting_id = data.get('meetingId')
+        ended_by = data.get('endedBy')
+        
+        print(f"🔴 [VIDEO] Call ended by: {ended_by}")
+        
+        emit('call_ended', {
+            'meetingId': meeting_id,
+            'endedBy': ended_by
+        }, broadcast=True)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error ending call: {e}")
+
+
 def send_password_reset_email(user_email, reset_url):
     """Send password reset email"""
     try:
