@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, CheckCheck, Check, User, Search } from 'lucide-react';
+
+import { MessageSquare, X, Send, CheckCheck, Check, User, Search, Paperclip, Mic, FileText, Image as ImageIcon, Video, PhoneOff } from 'lucide-react';
 import io from 'socket.io-client';
-import { Paperclip, Mic, FileText, Image as ImageIcon } from 'lucide-react';
+
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
