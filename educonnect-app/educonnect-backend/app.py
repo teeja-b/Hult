@@ -469,10 +469,13 @@ def build_config_fragment(config):
 
 
 
-# Socket.IO events for video call signaling
+# Add this FIXED version to your app.py
+# This version keeps your existing connect/disconnect handlers
+
+# Replace ONLY the initiate_video_call handler
 @socketio.on('initiate_video_call')
 def handle_initiate_video_call(data):
-    """Handle video call initiation"""
+    """Handle video call initiation - FIXED VERSION (works with existing connect/disconnect)"""
     try:
         meeting_id = data.get('meetingId')
         caller_id = data.get('callerId')
@@ -480,72 +483,193 @@ def handle_initiate_video_call(data):
         caller_name = data.get('callerName')
         join_url = data.get('joinUrl')
         
-        print(f"📞 [VIDEO] Call initiated: {caller_id} -> {receiver_id}")
+        print(f"\n{'='*70}")
+        print(f"📞 [VIDEO] Call initiated")
+        print(f"📞 [VIDEO] Caller: {caller_id} ({caller_name})")
+        print(f"📞 [VIDEO] Receiver: {receiver_id}")
+        print(f"📞 [VIDEO] Meeting ID: {meeting_id}")
+        print(f"📞 [VIDEO] Join URL: {join_url}")
+        print(f"{'='*70}")
         
-        # Emit to receiver
+        # Check if receiver is online using existing active_connections
+        receiver_sid = active_connections.get(receiver_id)
+        
+        if not receiver_sid:
+            print(f"❌ [VIDEO] Receiver {receiver_id} is not online")
+            print(f"📋 [VIDEO] Currently online users: {list(active_connections.keys())}")
+            emit('call_failed', {
+                'error': 'User is offline',
+                'receiverId': receiver_id
+            }, room=request.sid)
+            return
+        
+        print(f"✅ [VIDEO] Receiver is online with sid: {receiver_sid}")
+        
+        # 🔥 FIX: Emit directly to receiver's socket ID
+        # This works with your existing connection setup
         emit('incoming_video_call', {
             'meetingId': meeting_id,
             'callerId': caller_id,
             'callerName': caller_name,
             'joinUrl': join_url
-        }, room=receiver_id, broadcast=True)
+        }, room=receiver_sid)
+        
+        print(f"✅ [VIDEO] Call notification sent directly to sid: {receiver_sid}")
+        
+        # Confirm to caller
+        emit('call_initiated', {
+            'meetingId': meeting_id,
+            'status': 'sent'
+        }, room=request.sid)
         
     except Exception as e:
         print(f"❌ [VIDEO] Error initiating call: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        emit('call_failed', {
+            'error': str(e)
+        }, room=request.sid)
 
 
+# Update call_accepted handler
 @socketio.on('call_accepted')
 def handle_call_accepted(data):
-    """Handle call acceptance"""
+    """Handle call acceptance - FIXED"""
     try:
         meeting_id = data.get('meetingId')
         accepted_by = data.get('acceptedBy')
+        caller_id = data.get('callerId')  # Add this
         
-        print(f"✅ [VIDEO] Call accepted by: {accepted_by}")
+        print(f"✅ [VIDEO] Call {meeting_id} accepted by: {accepted_by}")
         
-        emit('call_accepted', {
-            'meetingId': meeting_id,
-            'acceptedBy': accepted_by
-        }, broadcast=True)
+        # Notify the caller
+        if caller_id:
+            caller_sid = active_connections.get(caller_id)
+            if caller_sid:
+                emit('call_accepted', {
+                    'meetingId': meeting_id,
+                    'acceptedBy': accepted_by
+                }, room=caller_sid)
+                print(f"✅ [VIDEO] Notified caller {caller_id}")
+        else:
+            # Fallback: broadcast to all
+            emit('call_accepted', {
+                'meetingId': meeting_id,
+                'acceptedBy': accepted_by
+            }, broadcast=True)
         
     except Exception as e:
         print(f"❌ [VIDEO] Error accepting call: {e}")
 
 
+# Update call_declined handler
 @socketio.on('call_declined')
 def handle_call_declined(data):
-    """Handle call decline"""
+    """Handle call decline - FIXED"""
     try:
         meeting_id = data.get('meetingId')
         declined_by = data.get('declinedBy')
+        caller_id = data.get('callerId')  # Add this
         
-        print(f"❌ [VIDEO] Call declined by: {declined_by}")
+        print(f"❌ [VIDEO] Call {meeting_id} declined by: {declined_by}")
         
-        emit('call_declined', {
-            'meetingId': meeting_id,
-            'declinedBy': declined_by
-        }, broadcast=True)
+        # Notify the caller
+        if caller_id:
+            caller_sid = active_connections.get(caller_id)
+            if caller_sid:
+                emit('call_declined', {
+                    'meetingId': meeting_id,
+                    'declinedBy': declined_by
+                }, room=caller_sid)
+                print(f"✅ [VIDEO] Notified caller {caller_id} of decline")
+        else:
+            # Fallback: broadcast to all
+            emit('call_declined', {
+                'meetingId': meeting_id,
+                'declinedBy': declined_by
+            }, broadcast=True)
         
     except Exception as e:
         print(f"❌ [VIDEO] Error declining call: {e}")
 
 
+# Update end_video_call handler
 @socketio.on('end_video_call')
 def handle_end_video_call(data):
-    """Handle video call ending"""
+    """Handle video call ending - FIXED"""
     try:
         meeting_id = data.get('meetingId')
         ended_by = data.get('endedBy')
+        other_user_id = data.get('otherUserId')  # Add this
         
-        print(f"🔴 [VIDEO] Call ended by: {ended_by}")
+        print(f"🔴 [VIDEO] Call {meeting_id} ended by: {ended_by}")
         
-        emit('call_ended', {
-            'meetingId': meeting_id,
-            'endedBy': ended_by
-        }, broadcast=True)
+        # Notify the other participant
+        if other_user_id:
+            other_sid = active_connections.get(other_user_id)
+            if other_sid:
+                emit('call_ended', {
+                    'meetingId': meeting_id,
+                    'endedBy': ended_by
+                }, room=other_sid)
+                print(f"✅ [VIDEO] Notified other user {other_user_id}")
+        else:
+            # Fallback: broadcast to all
+            emit('call_ended', {
+                'meetingId': meeting_id,
+                'endedBy': ended_by
+            }, broadcast=True)
         
     except Exception as e:
         print(f"❌ [VIDEO] Error ending call: {e}")
+
+
+# Add debug endpoint to check online users
+@app.route('/api/socket/online-users', methods=['GET'])
+def get_online_users():
+    """Check which users are currently online"""
+    return jsonify({
+        'online_users': list(active_connections.keys()),
+        'total': len(active_connections),
+        'connections': {str(k): v for k, v in active_connections.items()}
+    }), 200
+
+
+# Add debug endpoint to test call notification
+@app.route('/api/debug/test-call-notification/<int:receiver_id>', methods=['POST'])
+@jwt_required()
+def test_call_notification(receiver_id):
+    """Test if we can send notification to a specific user"""
+    try:
+        caller_id = int(get_jwt_identity())
+        
+        receiver_sid = active_connections.get(receiver_id)
+        
+        if not receiver_sid:
+            return jsonify({
+                'success': False,
+                'error': 'Receiver not online',
+                'receiver_id': receiver_id,
+                'online_users': list(active_connections.keys())
+            }), 404
+        
+        # Send test notification directly to sid
+        socketio.emit('test_notification', {
+            'message': 'Test notification from API',
+            'from': caller_id,
+            'timestamp': datetime.utcnow().isoformat()
+        }, room=receiver_sid)
+        
+        return jsonify({
+            'success': True,
+            'receiver_id': receiver_id,
+            'receiver_sid': receiver_sid,
+            'message': 'Test notification sent to receiver sid'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 def send_password_reset_email(user_email, reset_url):
