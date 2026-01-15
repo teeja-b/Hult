@@ -233,119 +233,119 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const initializeDailyCall = async (roomUrl) => {
-    // Prevent duplicate initialization
-    if (isInitializingRef.current) {
-      console.log('⏸️ [DAILY] Already initializing, skipping...');
-      return;
-    }
+  // Prevent duplicate initialization
+  if (isInitializingRef.current) {
+    console.log('⏸️ [DAILY] Already initializing, skipping...');
+    return;
+  }
 
-    if (callFrameRef.current) {
-      console.log('⏸️ [DAILY] Frame already exists, skipping creation');
-      return;
-    }
+  if (callFrameRef.current) {
+    console.log('⏸️ [DAILY] Frame already exists, skipping creation');
+    return;
+  }
 
-    if (!window.DailyIframe) {
-      console.error('❌ [DAILY] Daily.co not available');
-      setCallError('Video library not loaded');
-      return;
-    }
+  if (!window.DailyIframe) {
+    console.error('❌ [DAILY] Daily.co not available');
+    setCallError('Video library not loaded');
+    return;
+  }
 
-    if (!dailyContainerRef.current) {
-      console.error('❌ [DAILY] Container not ready');
-      setCallError('Video container not ready');
-      return;
-    }
+  if (!dailyContainerRef.current) {
+    console.error('❌ [DAILY] Container not ready');
+    setCallError('Video container not ready');
+    return;
+  }
 
-    isInitializingRef.current = true;
-    console.log('🎥 [DAILY] Creating call frame...');
+  isInitializingRef.current = true;
+  console.log('🎥 [DAILY] Creating call frame...');
+  setIsJoining(true);
 
-    // Clear container
-    dailyContainerRef.current.innerHTML = '';
-    setIsJoining(true);
+  try {
+    // DON'T clear the container - just use it directly
+    // dailyContainerRef.current.innerHTML = ''; // REMOVE THIS LINE
 
-    try {
-      // Mobile-optimized settings
-      const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
-        iframeStyle: {
-          width: '100%',
-          height: '100%',
-          border: '0',
-          borderRadius: '0'
-        },
-        showLeaveButton: true,
-        showFullscreenButton: !isMobile, // Disable on mobile for performance
-        showLocalVideo: true,
-        showParticipantsBar: !isMobile // Simplify UI on mobile
-      });
+    // Mobile-optimized settings
+    const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
+      iframeStyle: {
+        width: '100%',
+        height: '100%',
+        border: '0',
+        borderRadius: '0'
+      },
+      showLeaveButton: true,
+      showFullscreenButton: !isMobile,
+      showLocalVideo: true,
+      showParticipantsBar: !isMobile
+    });
 
-      callFrameRef.current = callFrame;
+    callFrameRef.current = callFrame;
 
-      // Set up event listeners with minimal processing
-      callFrame.on('loaded', () => {
-        console.log('✅ [DAILY] Frame loaded');
-      });
+    // Set up event listeners
+    callFrame.on('loaded', () => {
+      console.log('✅ [DAILY] Frame loaded');
+    });
 
-      callFrame.on('joining-meeting', () => {
-        console.log('🔄 [DAILY] Joining meeting...');
-      });
+    callFrame.on('joining-meeting', () => {
+      console.log('🔄 [DAILY] Joining meeting...');
+    });
 
-      callFrame.on('joined-meeting', () => {
-        console.log('✅ [DAILY] Successfully joined meeting!');
-        setIsJoining(false);
-        setCallError(null);
-        isInitializingRef.current = false;
-        updateParticipantCount();
-      });
+    callFrame.on('joined-meeting', () => {
+      console.log('✅ [DAILY] Successfully joined meeting!');
+      setIsJoining(false);
+      setCallError(null);
+      isInitializingRef.current = false;
+      updateParticipantCount();
+    });
 
-      callFrame.on('participant-joined', () => {
-        updateParticipantCount();
-      });
+    callFrame.on('participant-joined', () => {
+      updateParticipantCount();
+    });
 
-      callFrame.on('participant-left', () => {
-        updateParticipantCount();
-      });
+    callFrame.on('participant-left', () => {
+      updateParticipantCount();
+    });
 
-      callFrame.on('left-meeting', () => {
-        console.log('🔴 [DAILY] Left meeting');
-        setIsJoining(false);
-        isInitializingRef.current = false;
-      });
+    callFrame.on('left-meeting', () => {
+      console.log('🔴 [DAILY] Left meeting');
+      setIsJoining(false);
+      isInitializingRef.current = false;
+    });
 
-      callFrame.on('error', (error) => {
-        console.error('❌ [DAILY] Error:', error);
-        isInitializingRef.current = false;
-        
-        if (error.errorMsg === 'account-missing-payment-method') {
-          setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
-        } else {
-          setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
-        }
-        setIsJoining(false);
-      });
-
-      // Join with mobile-optimized settings
-      console.log('🎥 [DAILY] Attempting to join...');
-      await callFrame.join({
-        url: roomUrl,
-        userName: currentUserName || 'User',
-        showLeaveButton: true,
-        showFullscreenButton: !isMobile
-      });
-
-      console.log('✅ [DAILY] Join request sent');
-
-    } catch (error) {
-      console.error('❌ [DAILY] Failed to initialize:', error);
+    callFrame.on('error', (error) => {
+      console.error('❌ [DAILY] Error:', error);
       isInitializingRef.current = false;
       
-      if (error.message && error.message.includes('Duplicate DailyIframe')) {
-        setCallError('Video call already in progress. Please refresh the page if you need to restart.');
+      if (error.errorMsg === 'account-missing-payment-method') {
+        setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
       } else {
-        setCallError(`Failed to join call: ${error.message}`);
+        setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
       }
       setIsJoining(false);
+    });
+
+    // Join with mobile-optimized settings
+    console.log('🎥 [DAILY] Attempting to join...');
+    await callFrame.join({
+      url: roomUrl,
+      userName: currentUserName || 'User',
+      showLeaveButton: true,
+      showFullscreenButton: !isMobile
+    });
+
+    console.log('✅ [DAILY] Join request sent');
+
+  } catch (error) {
+    console.error('❌ [DAILY] Failed to initialize:', error);
+    isInitializingRef.current = false;
+    
+    if (error.message && error.message.includes('Duplicate DailyIframe')) {
+      setCallError('Video call already in progress. Please refresh the page if you need to restart.');
+    } else {
+      setCallError(`Failed to join call: ${error.message}`);
     }
-  };
+    setIsJoining(false);
+  }
+};
 
   // Debounced participant count update
   const updateParticipantCount = useCallback(() => {
