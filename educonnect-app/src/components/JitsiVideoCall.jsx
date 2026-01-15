@@ -230,7 +230,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         if (isMountedRef.current) {
           initializeDailyCall(data.roomUrl);
         }
-      }, 300);
+      }, 100);
 
       // Notify tutor
       if (socketRef.current?.connected) {
@@ -445,7 +445,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       if (isMountedRef.current) {
         initializeDailyCall(incomingCall.joinUrl);
       }
-    }, 300);
+    }, 100);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
