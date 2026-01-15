@@ -953,44 +953,57 @@ def test_video_endpoint():
 @app.route('/api/video/create-meeting', methods=['POST'])
 @jwt_required()
 def create_jitsi_meeting():
-    """Create Jitsi meeting - FIXED VERSION"""
+    """Create Jitsi meeting with JWT authentication"""
     try:
         data = request.get_json()
-        
+
+        # Extract caller and receiver info
         caller_id = data.get('callerId')
         caller_role = data.get('callerRole')
         receiver_id = data.get('receiverId')
         caller_name = data.get('callerName', 'User')
         receiver_name = data.get('receiverName', 'User')
         meeting_name = data.get('meetingName', 'EduConnect Session')
-        
+
         print(f"\n{'='*70}")
         print(f"📞 [VIDEO] Creating meeting")
         print(f"📞 Caller: {caller_name} (ID: {caller_id}, Role: {caller_role})")
         print(f"📞 Receiver: {receiver_name} (ID: {receiver_id})")
         print(f"{'='*70}")
-        
-        # Generate unique meeting ID
+
+        # Generate unique meeting ID and room name
         meeting_id = str(uuid.uuid4())
         room_name = f"educonnect-{meeting_id}"
-        
+
         # Jitsi Meet server URL
         jitsi_domain = os.getenv('JITSI_DOMAIN', 'meet.jit.si')
-        
-        # 🔥 SIMPLE FIX: Use URL parameters instead of hash config
-        # This bypasses the lobby/moderation entirely
-        base_url = f"https://{jitsi_domain}/{room_name}"
-        
-        # Add user display names as query parameters
-        caller_url = f"{base_url}?displayName={urllib.parse.quote(caller_name)}"
-        receiver_url = f"{base_url}?displayName={urllib.parse.quote(receiver_name)}"
-        
+
+        # 🔑 Generate JWT tokens for both participants
+        caller_token = generate_jitsi_jwt(
+            room_name=room_name,
+            user_name=caller_name,
+            user_email=f"{caller_id}@educonnect.com",
+            moderator=True if caller_role == 'tutor' else False
+        )
+
+        receiver_token = generate_jitsi_jwt(
+            room_name=room_name,
+            user_name=receiver_name,
+            user_email=f"{receiver_id}@educonnect.com",
+            moderator=True if caller_role == 'student' else False
+        )
+
+        # Build URLs with JWT and display names
+        caller_url = f"https://{jitsi_domain}/{room_name}?jwt={caller_token}&displayName={urllib.parse.quote(caller_name)}"
+        receiver_url = f"https://{jitsi_domain}/{room_name}?jwt={receiver_token}&displayName={urllib.parse.quote(receiver_name)}"
+
         print(f"✅ [VIDEO] Meeting created: {meeting_id}")
         print(f"📍 Room: {room_name}")
         print(f"🔗 Caller URL: {caller_url}")
         print(f"🔗 Receiver URL: {receiver_url}")
         print(f"{'='*70}\n")
-        
+
+        # Return JSON with URLs
         return jsonify({
             'success': True,
             'meeting_id': meeting_id,
@@ -999,21 +1012,19 @@ def create_jitsi_meeting():
             'studentJoinUrl': receiver_url if caller_role == 'tutor' else caller_url,
             'jitsi_domain': jitsi_domain
         }), 200
-        
+
     except Exception as e:
         print(f"\n❌ [VIDEO] Error creating meeting:")
         print(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
         print(f"{'='*70}\n")
-        
+
         return jsonify({
             'success': False,
             'error': 'Failed to create meeting',
             'details': str(e)
         }), 500
-# Add this debug endpoint to test your video setup
-# Place this BEFORE your create_jitsi_meeting function
 
 
 
