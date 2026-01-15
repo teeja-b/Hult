@@ -16,46 +16,88 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
-  const dailyContainerRef = useRef(null); // ✅ Ref for the video container
+  const dailyContainerRef = useRef(null);
 
-  // Initialize Socket.IO
+  // Initialize Socket.IO with proper authentication
   useEffect(() => {
+    if (!currentUserId) {
+      console.error('❌ [SOCKET] No currentUserId provided');
+      return;
+    }
+
+    console.log(`🔌 [SOCKET] Initializing connection for user ${currentUserId}`);
+    
     const socket = io(API_URL, {
-      auth: { userId: currentUserId },
+      auth: { 
+        userId: currentUserId 
+      },
       reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
       transports: ['websocket', 'polling']
     });
 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ [SOCKET] Connected!');
+      console.log(`✅ [SOCKET] Connected! Socket ID: ${socket.id}, User ID: ${currentUserId}`);
       setConnectionStatus('connected');
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.log(`❌ [SOCKET] Disconnected: ${reason}`);
       setConnectionStatus('disconnected');
     });
 
+    socket.on('connect_error', (error) => {
+      console.error('❌ [SOCKET] Connection error:', error);
+      setConnectionStatus('error');
+    });
+
     socket.on('incoming_video_call', (callData) => {
-      console.log('📞 [VIDEO] Incoming call:', callData);
+      console.log('📞 [VIDEO] Incoming call received:', callData);
       setIncomingCall(callData);
       setCallRinging(true);
+      
+      // Play notification sound if available
+      try {
+        const audio = new Audio('/notification.mp3');
+        audio.play().catch(e => console.log('Could not play sound:', e));
+      } catch (e) {
+        console.log('No notification sound available');
+      }
     });
 
     socket.on('call_ended', ({ meetingId }) => {
-      if (currentMeetingId === meetingId) endVideoCall();
+      console.log(`🔴 [VIDEO] Call ended: ${meetingId}`);
+      if (currentMeetingId === meetingId) {
+        endVideoCall();
+      }
     });
 
     socket.on('call_declined', () => {
+      console.log('❌ [VIDEO] Call was declined');
       setIsCreatingCall(false);
       alert('Call was declined');
     });
 
+    socket.on('call_failed', (data) => {
+      console.error('❌ [VIDEO] Call failed:', data);
+      setIsCreatingCall(false);
+      alert(data.error || 'Call failed');
+    });
+
+    socket.on('test_notification', (data) => {
+      console.log('🧪 [TEST] Received test notification:', data);
+    });
+
     return () => {
-      socket?.disconnect();
+      console.log('🔌 [SOCKET] Cleaning up socket connection');
+      if (socket) {
+        socket.disconnect();
+      }
     };
-  }, [currentUserId, currentMeetingId]);
+  }, [currentUserId]);
 
   // Load Daily.co script
   useEffect(() => {
@@ -65,22 +107,38 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       script.async = true;
       document.body.appendChild(script);
       
-      script.onload = () => console.log('✅ Daily.co loaded');
+      script.onload = () => console.log('✅ [DAILY] Daily.co library loaded');
+      script.onerror = () => console.error('❌ [DAILY] Failed to load Daily.co library');
     }
   }, []);
 
   const startVideoCall = async () => {
-    if (!selectedTutor) return;
+    if (!selectedTutor) {
+      alert('Please select a tutor first');
+      return;
+    }
+
     if (connectionStatus !== 'connected') {
       alert('Socket connection not established. Please wait...');
       return;
     }
 
-    console.log('📞 [VIDEO] Starting Daily.co call...');
+    console.log('\n' + '='.repeat(70));
+    console.log('📞 [VIDEO] Starting video call...');
+    console.log(`📞 [VIDEO] Caller: ${currentUserId} (${currentUserName})`);
+    console.log(`📞 [VIDEO] Receiver: ${selectedTutor.user_id} (${selectedTutor.name})`);
+    console.log('='.repeat(70));
+
     setIsCreatingCall(true);
 
     try {
       const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      console.log('🔐 [VIDEO] Creating Daily.co room...');
 
       const response = await fetch(`${API_URL}/api/video/create-daily-room`, {
         method: 'POST',
@@ -97,10 +155,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create room');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to create room`);
+      }
 
       const data = await response.json();
-      console.log('✅ [VIDEO] Daily room created:', data);
+      console.log('✅ [VIDEO] Daily.co room created:', data);
 
       setCurrentMeetingUrl(data.roomUrl);
       setCurrentMeetingId(data.roomName);
@@ -111,6 +172,8 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
       // Notify tutor via socket
       if (socketRef.current?.connected) {
+        console.log('📡 [VIDEO] Sending call notification via socket...');
+        
         socketRef.current.emit('initiate_video_call', {
           meetingId: data.roomName,
           callerId: currentUserId,
@@ -118,18 +181,34 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           callerName: currentUserName,
           joinUrl: data.roomUrl,
         });
+
+        console.log('✅ [VIDEO] Call notification sent');
+      } else {
+        console.error('❌ [VIDEO] Socket not connected, cannot notify receiver');
+        throw new Error('Socket connection lost');
       }
+
     } catch (error) {
       console.error('❌ [VIDEO] Failed to start call:', error);
       alert(`Failed to start video call: ${error.message}`);
+      setIsVideoCallOpen(false);
     } finally {
       setIsCreatingCall(false);
     }
   };
 
   const initializeDailyCall = (roomUrl) => {
-    if (!window.DailyIframe) return console.error('Daily.co not loaded yet');
-    if (!dailyContainerRef.current) return console.error('Container not mounted yet');
+    if (!window.DailyIframe) {
+      console.error('❌ [DAILY] Daily.co not loaded yet');
+      return;
+    }
+
+    if (!dailyContainerRef.current) {
+      console.error('❌ [DAILY] Container not mounted yet');
+      return;
+    }
+
+    console.log('🎥 [DAILY] Initializing call frame...');
 
     const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
       iframeStyle: { width: '100%', height: '100%', border: '0' },
@@ -139,23 +218,47 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     callFrameRef.current = callFrame;
 
-    callFrame.on('joined-meeting', () => console.log('✅ Joined Daily meeting'));
-    callFrame.on('participant-joined', updateParticipantCount);
-    callFrame.on('participant-left', updateParticipantCount);
-    callFrame.on('left-meeting', endVideoCall);
+    callFrame.on('joined-meeting', () => {
+      console.log('✅ [DAILY] Joined Daily meeting');
+      updateParticipantCount();
+    });
 
+    callFrame.on('participant-joined', (event) => {
+      console.log('👤 [DAILY] Participant joined:', event.participant.user_name);
+      updateParticipantCount();
+    });
+
+    callFrame.on('participant-left', (event) => {
+      console.log('👋 [DAILY] Participant left:', event.participant.user_name);
+      updateParticipantCount();
+    });
+
+    callFrame.on('left-meeting', () => {
+      console.log('🔴 [DAILY] Left meeting');
+      endVideoCall();
+    });
+
+    callFrame.on('error', (error) => {
+      console.error('❌ [DAILY] Error:', error);
+    });
+
+    console.log('🎥 [DAILY] Joining room:', roomUrl);
     callFrame.join({ url: roomUrl, userName: currentUserName });
   };
 
   const updateParticipantCount = () => {
     if (callFrameRef.current) {
       const participants = callFrameRef.current.participants();
-      setParticipantCount(Object.keys(participants).length);
+      const count = Object.keys(participants).length;
+      setParticipantCount(count);
+      console.log(`👥 [DAILY] Participants: ${count}`);
     }
   };
 
   const acceptCall = () => {
     if (!incomingCall) return;
+
+    console.log('✅ [VIDEO] Accepting call:', incomingCall.meetingId);
 
     setCurrentMeetingUrl(incomingCall.joinUrl);
     setCurrentMeetingId(incomingCall.meetingId);
@@ -170,12 +273,16 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         acceptedBy: currentUserId,
         callerId: incomingCall.callerId,
       });
+      console.log('📡 [VIDEO] Sent call_accepted notification');
     }
+
     setIncomingCall(null);
   };
 
   const declineCall = () => {
     if (!incomingCall) return;
+
+    console.log('❌ [VIDEO] Declining call:', incomingCall.meetingId);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_declined', {
@@ -183,6 +290,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         declinedBy: currentUserId,
         callerId: incomingCall.callerId,
       });
+      console.log('📡 [VIDEO] Sent call_declined notification');
     }
 
     setCallRinging(false);
@@ -190,9 +298,15 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const endVideoCall = () => {
+    console.log('🔴 [VIDEO] Ending video call');
+
     if (callFrameRef.current) {
-      callFrameRef.current.leave();
-      callFrameRef.current.destroy();
+      try {
+        callFrameRef.current.leave();
+        callFrameRef.current.destroy();
+      } catch (e) {
+        console.error('Error destroying call frame:', e);
+      }
       callFrameRef.current = null;
     }
 
@@ -210,6 +324,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         endedBy: currentUserId,
         otherUserId,
       });
+      console.log('📡 [VIDEO] Sent end_video_call notification');
     }
   };
 
@@ -225,6 +340,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           <Video size={20} />
           {isCreatingCall ? 'Starting...' : connectionStatus !== 'connected' ? 'Connecting...' : 'Start Video Call'}
         </button>
+      )}
+
+      {/* Connection Status Indicator */}
+      {connectionStatus !== 'connected' && (
+        <div className="text-sm text-gray-500 mt-2">
+          Status: {connectionStatus}
+        </div>
       )}
 
       {/* Incoming Call Modal */}
