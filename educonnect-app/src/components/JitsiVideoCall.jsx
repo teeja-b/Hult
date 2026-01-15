@@ -232,7 +232,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     }
   };
 
-  const initializeDailyCall = async (roomUrl) => {
+const initializeDailyCall = async (roomUrl) => {
   // Prevent duplicate initialization
   if (isInitializingRef.current) {
     console.log('⏸️ [DAILY] Already initializing, skipping...');
@@ -240,8 +240,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   }
 
   if (callFrameRef.current) {
-    console.log('⏸️ [DAILY] Frame already exists, skipping creation');
-    return;
+    console.log('⏸️ [DAILY] Frame already exists, destroying old frame...');
+    try {
+      callFrameRef.current.destroy();
+    } catch (e) {
+      console.log('Error destroying old frame:', e);
+    }
+    callFrameRef.current = null;
   }
 
   if (!window.DailyIframe) {
@@ -260,10 +265,19 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   console.log('🎥 [DAILY] Creating call frame...');
   setIsJoining(true);
 
-  try {
-    // DON'T clear the container - just use it directly
-    // dailyContainerRef.current.innerHTML = ''; // REMOVE THIS LINE
+  // Small delay to ensure DOM is ready
+  await new Promise(resolve => setTimeout(resolve, 100));
 
+  // Double-check container is still available after delay
+  if (!dailyContainerRef.current) {
+    console.error('❌ [DAILY] Container disappeared after delay');
+    setCallError('Video container not ready');
+    isInitializingRef.current = false;
+    setIsJoining(false);
+    return;
+  }
+
+  try {
     // Mobile-optimized settings
     const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
       iframeStyle: {
@@ -340,6 +354,8 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     
     if (error.message && error.message.includes('Duplicate DailyIframe')) {
       setCallError('Video call already in progress. Please refresh the page if you need to restart.');
+    } else if (error.message && error.message.includes('postMessage')) {
+      setCallError('Failed to initialize video. Please try again.');
     } else {
       setCallError(`Failed to join call: ${error.message}`);
     }
@@ -413,39 +429,46 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   }, [incomingCall, currentUserId]);
 
   const endVideoCall = useCallback(() => {
-    console.log('🔴 [VIDEO] Ending call');
+  console.log('🔴 [VIDEO] Ending call');
 
-    if (callFrameRef.current) {
-      try {
-        callFrameRef.current.leave();
-        callFrameRef.current.destroy();
-      } catch (e) {
-        console.error('Error cleaning up:', e);
-      }
-      callFrameRef.current = null;
+  if (callFrameRef.current) {
+    try {
+      callFrameRef.current.leave();
+      callFrameRef.current.destroy();
+      console.log('✅ [VIDEO] Frame destroyed successfully');
+    } catch (e) {
+      console.error('Error cleaning up:', e);
     }
+    callFrameRef.current = null;
+  }
 
-    isInitializingRef.current = false;
+  // Reset initialization flag
+  isInitializingRef.current = false;
 
-    const meetingId = currentMeetingId;
-    const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
+  const meetingId = currentMeetingId;
+  const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
 
-    setIsVideoCallOpen(false);
-    setCurrentMeetingUrl('');
-    setCurrentMeetingId('');
-    setParticipantCount(0);
-    setCallError(null);
-    setIsJoining(false);
+  // Clear the container to ensure clean state for next call
+  if (dailyContainerRef.current) {
+    dailyContainerRef.current.innerHTML = '';
+  }
 
-    if (socketRef.current?.connected && meetingId) {
-      socketRef.current.emit('end_video_call', {
-        meetingId,
-        endedBy: currentUserId,
-        otherUserId,
-      });
-    }
-  }, [currentMeetingId, selectedTutor, incomingCall, currentUserId]);
+  // Reset all state
+  setIsVideoCallOpen(false);
+  setCurrentMeetingUrl('');
+  setCurrentMeetingId('');
+  setParticipantCount(0);
+  setCallError(null);
+  setIsJoining(false);
 
+  if (socketRef.current?.connected && meetingId) {
+    socketRef.current.emit('end_video_call', {
+      meetingId,
+      endedBy: currentUserId,
+      otherUserId,
+    });
+  }
+}, [currentMeetingId, selectedTutor, incomingCall, currentUserId]);
   return (
     <>
       {/* Call Button */}
