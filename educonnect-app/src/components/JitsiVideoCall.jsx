@@ -16,15 +16,25 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   const [callError, setCallError] = useState(null);
   const [isJoining, setIsJoining] = useState(false);
   const [dailyLoaded, setDailyLoaded] = useState(false);
+  const [containerReady, setContainerReady] = useState(false);
 
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
   const dailyContainerRef = useRef(null);
   const isInitializingRef = useRef(false);
   const participantUpdateTimeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   // Detect if mobile
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // Track component mount status
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Check if Daily.co is loaded
   useEffect(() => {
@@ -47,6 +57,16 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       return () => clearInterval(interval);
     }
   }, []);
+
+  // Monitor container readiness
+  useEffect(() => {
+    if (isVideoCallOpen && dailyContainerRef.current) {
+      setContainerReady(true);
+      console.log('✅ [DAILY] Container is ready');
+    } else {
+      setContainerReady(false);
+    }
+  }, [isVideoCallOpen]);
 
   // Memoized socket event handlers
   const handleIncomingCall = useCallback((callData) => {
@@ -205,11 +225,12 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       setCurrentMeetingId(data.roomName);
       setIsVideoCallOpen(true);
 
-      // Wait for container to mount before initializing
+      // Wait longer for container to mount and stabilize
       setTimeout(() => {
-        initializeDailyCall(data.roomUrl);
-      }, 100
-    );
+        if (isMountedRef.current) {
+          initializeDailyCall(data.roomUrl);
+        }
+      }, 300);
 
       // Notify tutor
       if (socketRef.current?.connected) {
@@ -233,136 +254,159 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     }
   };
 
-const initializeDailyCall = async (roomUrl) => {
-  // Prevent duplicate initialization
-  if (isInitializingRef.current) {
-    console.log('⏸️ [DAILY] Already initializing, skipping...');
-    return;
-  }
-
-  if (callFrameRef.current) {
-    console.log('⏸️ [DAILY] Frame already exists, destroying old frame...');
-    try {
-      callFrameRef.current.destroy();
-    } catch (e) {
-      console.log('Error destroying old frame:', e);
+  const initializeDailyCall = async (roomUrl) => {
+    console.log('🎥 [DAILY] initializeDailyCall called');
+    
+    // Check if component is still mounted
+    if (!isMountedRef.current) {
+      console.log('⏸️ [DAILY] Component unmounted, skipping initialization');
+      return;
     }
-    callFrameRef.current = null;
-  }
 
-  if (!window.DailyIframe) {
-    console.error('❌ [DAILY] Daily.co not available');
-    setCallError('Video library not loaded');
-    return;
-  }
+    // Prevent duplicate initialization
+    if (isInitializingRef.current) {
+      console.log('⏸️ [DAILY] Already initializing, skipping...');
+      return;
+    }
 
-  if (!dailyContainerRef.current) {
-    console.error('❌ [DAILY] Container not ready');
-    setCallError('Video container not ready');
-    return;
-  }
+    // Destroy existing frame if any
+    if (callFrameRef.current) {
+      console.log('🗑️ [DAILY] Destroying existing frame...');
+      try {
+        await callFrameRef.current.destroy();
+        callFrameRef.current = null;
+        console.log('✅ [DAILY] Old frame destroyed');
+      } catch (e) {
+        console.log('Warning: Error destroying old frame:', e);
+        callFrameRef.current = null;
+      }
+      // Wait a bit after destroying
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
-  isInitializingRef.current = true;
-  console.log('🎥 [DAILY] Creating call frame...');
-  setIsJoining(true);
+    if (!window.DailyIframe) {
+      console.error('❌ [DAILY] Daily.co not available');
+      setCallError('Video library not loaded');
+      return;
+    }
 
-  // Small delay to ensure DOM is ready
-  await new Promise(resolve => setTimeout(resolve, 100));
+    if (!dailyContainerRef.current) {
+      console.error('❌ [DAILY] Container not ready');
+      setCallError('Video container not ready');
+      return;
+    }
 
-  // Double-check container is still available after delay
-  if (!dailyContainerRef.current) {
-    console.error('❌ [DAILY] Container disappeared after delay');
-    setCallError('Video container not ready');
-    isInitializingRef.current = false;
-    setIsJoining(false);
-    return;
-  }
+    isInitializingRef.current = true;
+    console.log('🎥 [DAILY] Creating call frame...');
+    setIsJoining(true);
 
-  try {
-    // Mobile-optimized settings
-    const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
-      iframeStyle: {
-        width: '100%',
-        height: '100%',
-        border: '0',
-        borderRadius: '0'
-      },
-      showLeaveButton: true,
-      showFullscreenButton: !isMobile,
-      showLocalVideo: true,
-      showParticipantsBar: !isMobile
-    });
+    try {
+      // Verify container is still valid
+      if (!dailyContainerRef.current || !isMountedRef.current) {
+        throw new Error('Container became invalid');
+      }
 
-    callFrameRef.current = callFrame;
+      console.log('📦 [DAILY] Container element:', dailyContainerRef.current);
+      console.log('📦 [DAILY] Container parent:', dailyContainerRef.current.parentElement);
 
-    // Set up event listeners
-    callFrame.on('loaded', () => {
-      console.log('✅ [DAILY] Frame loaded');
-    });
+      // Mobile-optimized settings
+      const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
+        iframeStyle: {
+          width: '100%',
+          height: '100%',
+          border: '0',
+          borderRadius: '0'
+        },
+        showLeaveButton: true,
+        showFullscreenButton: !isMobile,
+        showLocalVideo: true,
+        showParticipantsBar: !isMobile
+      });
 
-    callFrame.on('joining-meeting', () => {
-      console.log('🔄 [DAILY] Joining meeting...');
-    });
+      console.log('✅ [DAILY] Frame created successfully');
+      callFrameRef.current = callFrame;
 
-    callFrame.on('joined-meeting', () => {
-      console.log('✅ [DAILY] Successfully joined meeting!');
-      setIsJoining(false);
-      setCallError(null);
-      isInitializingRef.current = false;
-      updateParticipantCount();
-    });
+      // Set up event listeners
+      callFrame.on('loaded', () => {
+        console.log('✅ [DAILY] Frame loaded');
+      });
 
-    callFrame.on('participant-joined', () => {
-      updateParticipantCount();
-    });
+      callFrame.on('joining-meeting', () => {
+        console.log('🔄 [DAILY] Joining meeting...');
+      });
 
-    callFrame.on('participant-left', () => {
-      updateParticipantCount();
-    });
+      callFrame.on('joined-meeting', () => {
+        console.log('✅ [DAILY] Successfully joined meeting!');
+        if (isMountedRef.current) {
+          setIsJoining(false);
+          setCallError(null);
+          isInitializingRef.current = false;
+          updateParticipantCount();
+        }
+      });
 
-    callFrame.on('left-meeting', () => {
-      console.log('🔴 [DAILY] Left meeting');
-      setIsJoining(false);
-      isInitializingRef.current = false;
-    });
+      callFrame.on('participant-joined', () => {
+        updateParticipantCount();
+      });
 
-    callFrame.on('error', (error) => {
-      console.error('❌ [DAILY] Error:', error);
+      callFrame.on('participant-left', () => {
+        updateParticipantCount();
+      });
+
+      callFrame.on('left-meeting', () => {
+        console.log('🔴 [DAILY] Left meeting');
+        if (isMountedRef.current) {
+          setIsJoining(false);
+          isInitializingRef.current = false;
+        }
+      });
+
+      callFrame.on('error', (error) => {
+        console.error('❌ [DAILY] Error:', error);
+        isInitializingRef.current = false;
+        
+        if (isMountedRef.current) {
+          if (error.errorMsg === 'account-missing-payment-method') {
+            setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
+          } else {
+            setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
+          }
+          setIsJoining(false);
+        }
+      });
+
+      // Join with mobile-optimized settings
+      console.log('🎥 [DAILY] Attempting to join room:', roomUrl);
+      await callFrame.join({
+        url: roomUrl,
+        userName: currentUserName || 'User',
+        showLeaveButton: true,
+        showFullscreenButton: !isMobile
+      });
+
+      console.log('✅ [DAILY] Join request sent successfully');
+
+    } catch (error) {
+      console.error('❌ [DAILY] Failed to initialize:', error);
+      console.error('❌ [DAILY] Error stack:', error.stack);
       isInitializingRef.current = false;
       
-      if (error.errorMsg === 'account-missing-payment-method') {
-        setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
-      } else {
-        setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
+      if (isMountedRef.current) {
+        let errorMessage = 'Failed to join call';
+        
+        if (error.message && error.message.includes('Duplicate DailyIframe')) {
+          errorMessage = 'Video call already in progress. Please refresh the page.';
+        } else if (error.message && error.message.includes('postMessage')) {
+          errorMessage = 'Video initialization failed. Please try again.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        setCallError(errorMessage);
+        setIsJoining(false);
       }
-      setIsJoining(false);
-    });
-
-    // Join with mobile-optimized settings
-    console.log('🎥 [DAILY] Attempting to join...');
-    await callFrame.join({
-      url: roomUrl,
-      userName: currentUserName || 'User',
-      showLeaveButton: true,
-      showFullscreenButton: !isMobile
-    });
-
-    console.log('✅ [DAILY] Join request sent');
-
-  } catch (error) {
-    console.error('❌ [DAILY] Failed to initialize:', error);
-    isInitializingRef.current = false;
-    
-    if (error.message && error.message.includes('Duplicate DailyIframe')) {
-      setCallError('Video call already in progress. Please refresh the page if you need to restart.');
-    } else if (error.message && error.message.includes('postMessage')) {
-      setCallError('Failed to initialize video. Please try again.');
-    } else {
-      setCallError(`Failed to join call: ${error.message}`);
     }
-    setIsJoining(false);
-  }
-};
+  };
 
   // Debounced participant count update
   const updateParticipantCount = useCallback(() => {
@@ -371,7 +415,7 @@ const initializeDailyCall = async (roomUrl) => {
     }
 
     participantUpdateTimeoutRef.current = setTimeout(() => {
-      if (callFrameRef.current) {
+      if (callFrameRef.current && isMountedRef.current) {
         try {
           const participants = callFrameRef.current.participants();
           const count = Object.keys(participants).length;
@@ -380,7 +424,7 @@ const initializeDailyCall = async (roomUrl) => {
           console.error('Error getting participants:', e);
         }
       }
-    }, 300); // Debounce by 300ms
+    }, 300);
   }, []);
 
   const acceptCall = useCallback(() => {
@@ -398,8 +442,10 @@ const initializeDailyCall = async (roomUrl) => {
     setCallRinging(false);
 
     setTimeout(() => {
-      initializeDailyCall(incomingCall.joinUrl);
-    }, 100);
+      if (isMountedRef.current) {
+        initializeDailyCall(incomingCall.joinUrl);
+      }
+    }, 300);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
@@ -429,47 +475,49 @@ const initializeDailyCall = async (roomUrl) => {
     setIncomingCall(null);
   }, [incomingCall, currentUserId]);
 
-  const endVideoCall = useCallback(() => {
-  console.log('🔴 [VIDEO] Ending call');
+  const endVideoCall = useCallback(async () => {
+    console.log('🔴 [VIDEO] Ending call');
 
-  if (callFrameRef.current) {
-    try {
-      callFrameRef.current.leave();
-      callFrameRef.current.destroy();
-      console.log('✅ [VIDEO] Frame destroyed successfully');
-    } catch (e) {
-      console.error('Error cleaning up:', e);
+    if (callFrameRef.current) {
+      try {
+        await callFrameRef.current.leave();
+        await callFrameRef.current.destroy();
+        console.log('✅ [VIDEO] Frame destroyed successfully');
+      } catch (e) {
+        console.error('Error cleaning up:', e);
+      }
+      callFrameRef.current = null;
     }
-    callFrameRef.current = null;
-  }
 
-  // Reset initialization flag
-  isInitializingRef.current = false;
+    // Reset initialization flag
+    isInitializingRef.current = false;
 
-  const meetingId = currentMeetingId;
-  const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
+    const meetingId = currentMeetingId;
+    const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
 
-  // Clear the container to ensure clean state for next call
-  if (dailyContainerRef.current) {
-    dailyContainerRef.current.innerHTML = '';
-  }
+    // Clear container for next call
+    if (dailyContainerRef.current) {
+      dailyContainerRef.current.innerHTML = '';
+    }
 
-  // Reset all state
-  setIsVideoCallOpen(false);
-  setCurrentMeetingUrl('');
-  setCurrentMeetingId('');
-  setParticipantCount(0);
-  setCallError(null);
-  setIsJoining(false);
+    // Reset all state
+    setIsVideoCallOpen(false);
+    setCurrentMeetingUrl('');
+    setCurrentMeetingId('');
+    setParticipantCount(0);
+    setCallError(null);
+    setIsJoining(false);
+    setContainerReady(false);
 
-  if (socketRef.current?.connected && meetingId) {
-    socketRef.current.emit('end_video_call', {
-      meetingId,
-      endedBy: currentUserId,
-      otherUserId,
-    });
-  }
-}, [currentMeetingId, selectedTutor, incomingCall, currentUserId]);
+    if (socketRef.current?.connected && meetingId) {
+      socketRef.current.emit('end_video_call', {
+        meetingId,
+        endedBy: currentUserId,
+        otherUserId,
+      });
+    }
+  }, [currentMeetingId, selectedTutor, incomingCall, currentUserId]);
+
   return (
     <>
       {/* Call Button */}
@@ -559,9 +607,11 @@ const initializeDailyCall = async (roomUrl) => {
 
           {/* Video Container */}
           <div className="flex-1 relative bg-gray-900 overflow-hidden">
-            <div ref={dailyContainerRef} className="w-full h-full" />
-            
-  
+            <div 
+              ref={dailyContainerRef} 
+              className="w-full h-full"
+              style={{ minHeight: '300px' }}
+            />
 
             {/* Error Display */}
             {callError && (
