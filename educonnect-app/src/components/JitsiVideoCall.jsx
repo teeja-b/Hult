@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Video, PhoneOff, Phone, X, Users, AlertCircle } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -21,6 +21,10 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   const callFrameRef = useRef(null);
   const dailyContainerRef = useRef(null);
   const isInitializingRef = useRef(false);
+  const participantUpdateTimeoutRef = useRef(null);
+
+  // Detect if mobile
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   // Check if Daily.co is loaded
   useEffect(() => {
@@ -42,6 +46,26 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
       return () => clearInterval(interval);
     }
+  }, []);
+
+  // Memoized socket event handlers
+  const handleIncomingCall = useCallback((callData) => {
+    console.log('📞 [VIDEO] Incoming call:', callData);
+    setIncomingCall(callData);
+    setCallRinging(true);
+  }, []);
+
+  const handleCallEnded = useCallback(({ meetingId }) => {
+    console.log(`🔴 [VIDEO] Call ended: ${meetingId}`);
+    if (currentMeetingId === meetingId) {
+      endVideoCall();
+    }
+  }, [currentMeetingId]);
+
+  const handleCallDeclined = useCallback(() => {
+    console.log('❌ [VIDEO] Call declined');
+    setIsCreatingCall(false);
+    alert('Call was declined');
   }, []);
 
   // Initialize Socket.IO
@@ -73,29 +97,17 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       setConnectionStatus('disconnected');
     });
 
-    socket.on('incoming_video_call', (callData) => {
-      console.log('📞 [VIDEO] Incoming call:', callData);
-      setIncomingCall(callData);
-      setCallRinging(true);
-    });
-
-    socket.on('call_ended', ({ meetingId }) => {
-      console.log(`🔴 [VIDEO] Call ended: ${meetingId}`);
-      if (currentMeetingId === meetingId) {
-        endVideoCall();
-      }
-    });
-
-    socket.on('call_declined', () => {
-      console.log('❌ [VIDEO] Call declined');
-      setIsCreatingCall(false);
-      alert('Call was declined');
-    });
+    socket.on('incoming_video_call', handleIncomingCall);
+    socket.on('call_ended', handleCallEnded);
+    socket.on('call_declined', handleCallDeclined);
 
     return () => {
+      socket.off('incoming_video_call', handleIncomingCall);
+      socket.off('call_ended', handleCallEnded);
+      socket.off('call_declined', handleCallDeclined);
       if (socket) socket.disconnect();
     };
-  }, [currentUserId]);
+  }, [currentUserId, handleIncomingCall, handleCallEnded, handleCallDeclined]);
 
   // Load Daily.co script
   useEffect(() => {
@@ -123,6 +135,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (participantUpdateTimeoutRef.current) {
+        clearTimeout(participantUpdateTimeoutRef.current);
+      }
       if (callFrameRef.current) {
         try {
           callFrameRef.current.destroy();
@@ -149,10 +164,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       return;
     }
 
-    console.log('\n' + '='.repeat(70));
     console.log('📞 [VIDEO] Starting video call');
-    console.log('='.repeat(70));
-
     setIsCreatingCall(true);
     setCallError(null);
 
@@ -246,13 +258,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     isInitializingRef.current = true;
     console.log('🎥 [DAILY] Creating call frame...');
-    console.log('🎥 [DAILY] Room URL:', roomUrl);
 
     // Clear container
     dailyContainerRef.current.innerHTML = '';
     setIsJoining(true);
 
     try {
+      // Mobile-optimized settings
       const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
         iframeStyle: {
           width: '100%',
@@ -261,14 +273,14 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           borderRadius: '0'
         },
         showLeaveButton: true,
-        showFullscreenButton: true,
+        showFullscreenButton: !isMobile, // Disable on mobile for performance
         showLocalVideo: true,
-        showParticipantsBar: true
+        showParticipantsBar: !isMobile // Simplify UI on mobile
       });
 
       callFrameRef.current = callFrame;
 
-      // Set up event listeners BEFORE joining
+      // Set up event listeners with minimal processing
       callFrame.on('loaded', () => {
         console.log('✅ [DAILY] Frame loaded');
       });
@@ -277,22 +289,19 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         console.log('🔄 [DAILY] Joining meeting...');
       });
 
-      callFrame.on('joined-meeting', (event) => {
+      callFrame.on('joined-meeting', () => {
         console.log('✅ [DAILY] Successfully joined meeting!');
-        console.log('👤 [DAILY] Participants:', event.participants);
         setIsJoining(false);
         setCallError(null);
         isInitializingRef.current = false;
         updateParticipantCount();
       });
 
-      callFrame.on('participant-joined', (event) => {
-        console.log('👤 [DAILY] Participant joined:', event.participant.user_name);
+      callFrame.on('participant-joined', () => {
         updateParticipantCount();
       });
 
-      callFrame.on('participant-left', (event) => {
-        console.log('👋 [DAILY] Participant left:', event.participant.user_name);
+      callFrame.on('participant-left', () => {
         updateParticipantCount();
       });
 
@@ -306,7 +315,6 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         console.error('❌ [DAILY] Error:', error);
         isInitializingRef.current = false;
         
-        // Handle specific Daily.co errors
         if (error.errorMsg === 'account-missing-payment-method') {
           setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
         } else {
@@ -315,15 +323,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         setIsJoining(false);
       });
 
-      // Join the call
+      // Join with mobile-optimized settings
       console.log('🎥 [DAILY] Attempting to join...');
-      console.log('🎥 [DAILY] User name:', currentUserName);
-
       await callFrame.join({
         url: roomUrl,
         userName: currentUserName || 'User',
         showLeaveButton: true,
-        showFullscreenButton: true
+        showFullscreenButton: !isMobile
       });
 
       console.log('✅ [DAILY] Join request sent');
@@ -332,7 +338,6 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       console.error('❌ [DAILY] Failed to initialize:', error);
       isInitializingRef.current = false;
       
-      // Handle duplicate instance error
       if (error.message && error.message.includes('Duplicate DailyIframe')) {
         setCallError('Video call already in progress. Please refresh the page if you need to restart.');
       } else {
@@ -342,20 +347,26 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     }
   };
 
-  const updateParticipantCount = () => {
-    if (callFrameRef.current) {
-      try {
-        const participants = callFrameRef.current.participants();
-        const count = Object.keys(participants).length;
-        setParticipantCount(count);
-        console.log(`👥 [DAILY] Participant count: ${count}`);
-      } catch (e) {
-        console.error('Error getting participants:', e);
-      }
+  // Debounced participant count update
+  const updateParticipantCount = useCallback(() => {
+    if (participantUpdateTimeoutRef.current) {
+      clearTimeout(participantUpdateTimeoutRef.current);
     }
-  };
 
-  const acceptCall = () => {
+    participantUpdateTimeoutRef.current = setTimeout(() => {
+      if (callFrameRef.current) {
+        try {
+          const participants = callFrameRef.current.participants();
+          const count = Object.keys(participants).length;
+          setParticipantCount(count);
+        } catch (e) {
+          console.error('Error getting participants:', e);
+        }
+      }
+    }, 300); // Debounce by 300ms
+  }, []);
+
+  const acceptCall = useCallback(() => {
     if (!incomingCall) return;
     if (!dailyLoaded) {
       alert('Video system not ready yet');
@@ -382,9 +393,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     }
 
     setIncomingCall(null);
-  };
+  }, [incomingCall, dailyLoaded, currentUserId]);
 
-  const declineCall = () => {
+  const declineCall = useCallback(() => {
     if (!incomingCall) return;
 
     console.log('❌ [VIDEO] Declining call');
@@ -399,9 +410,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     setCallRinging(false);
     setIncomingCall(null);
-  };
+  }, [incomingCall, currentUserId]);
 
-  const endVideoCall = () => {
+  const endVideoCall = useCallback(() => {
     console.log('🔴 [VIDEO] Ending call');
 
     if (callFrameRef.current) {
@@ -433,7 +444,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         otherUserId,
       });
     }
-  };
+  }, [currentMeetingId, selectedTutor, incomingCall, currentUserId]);
 
   return (
     <>
@@ -443,7 +454,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           <button
             onClick={startVideoCall}
             disabled={isCreatingCall || connectionStatus !== 'connected' || !dailyLoaded}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             <Video size={20} />
             {isCreatingCall ? 'Starting...' : 
@@ -460,28 +471,28 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       {/* Incoming Call Modal */}
       {callRinging && incomingCall && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full text-center">
+          <div className="bg-white rounded-lg p-6 sm:p-8 max-w-md w-full text-center">
             <div className="mb-6">
-              <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                <Video className="text-blue-600" size={48} />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <Video className="text-blue-600" size={isMobile ? 40 : 48} />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Incoming Video Call</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Incoming Video Call</h2>
               <p className="text-gray-600">{incomingCall.callerName} is calling...</p>
             </div>
 
-            <div className="flex gap-4 justify-center">
+            <div className="flex gap-3 sm:gap-4 justify-center">
               <button
                 onClick={declineCall}
-                className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition"
+                className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
               >
-                <PhoneOff size={20} /> Decline
+                <PhoneOff size={18} /> Decline
               </button>
               <button
                 onClick={acceptCall}
                 disabled={!dailyLoaded}
-                className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                className="flex items-center gap-2 bg-green-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50 touch-manipulation"
               >
-                <Phone size={20} /> {dailyLoaded ? 'Accept' : 'Loading...'}
+                <Phone size={18} /> {dailyLoaded ? 'Accept' : 'Loading...'}
               </button>
             </div>
           </div>
@@ -491,62 +502,64 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       {/* Video Call Window */}
       {isVideoCallOpen && (
         <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
-          {/* Header */}
-          <div className="bg-gray-800 text-white p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          {/* Header - Compact on mobile */}
+          <div className="bg-gray-800 text-white p-3 sm:p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
               <div className="flex items-center gap-2">
-                <Video className="text-green-500" size={24} />
-                <h2 className="text-lg font-semibold">
+                <Video className="text-green-500 flex-shrink-0" size={isMobile ? 20 : 24} />
+                <h2 className="text-sm sm:text-lg font-semibold truncate">
                   {selectedTutor?.name || incomingCall?.callerName || 'Video Call'}
                 </h2>
               </div>
 
-              <div className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded-full">
-                <Users size={16} />
-                <span className="text-sm">{participantCount} participant{participantCount !== 1 ? 's' : ''}</span>
-              </div>
+              {!isMobile && (
+                <div className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded-full">
+                  <Users size={16} />
+                  <span className="text-sm">{participantCount}</span>
+                </div>
+              )}
 
               {isJoining && (
-                <span className="text-sm text-yellow-400">Connecting...</span>
+                <span className="text-xs sm:text-sm text-yellow-400">Connecting...</span>
               )}
             </div>
 
             <button 
               onClick={endVideoCall} 
-              className="p-2 hover:bg-gray-700 rounded-full transition"
+              className="p-2 hover:bg-gray-700 active:bg-gray-600 rounded-full transition touch-manipulation flex-shrink-0"
               title="End call"
             >
-              <X size={24} />
+              <X size={isMobile ? 20 : 24} />
             </button>
           </div>
 
           {/* Video Container */}
-          <div className="flex-1 relative bg-gray-900">
+          <div className="flex-1 relative bg-gray-900 overflow-hidden">
             <div ref={dailyContainerRef} className="w-full h-full" />
             
             {/* Loading Overlay */}
             {isJoining && !callError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
-                  <p className="text-white text-lg">Joining call...</p>
-                  <p className="text-gray-400 text-sm mt-2">Please wait</p>
+                <div className="text-center px-4">
+                  <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-b-2 border-white mx-auto mb-4"></div>
+                  <p className="text-white text-base sm:text-lg">Joining call...</p>
+                  <p className="text-gray-400 text-xs sm:text-sm mt-2">Please wait</p>
                 </div>
               </div>
             )}
 
             {/* Error Display */}
             {callError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90">
-                <div className="bg-red-900 bg-opacity-50 border border-red-500 rounded-lg p-6 max-w-md">
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 p-4">
+                <div className="bg-red-900 bg-opacity-50 border border-red-500 rounded-lg p-4 sm:p-6 max-w-md w-full">
                   <div className="flex items-center gap-3 mb-3">
-                    <AlertCircle className="text-red-400" size={24} />
+                    <AlertCircle className="text-red-400 flex-shrink-0" size={24} />
                     <h3 className="text-white font-semibold">Call Error</h3>
                   </div>
-                  <p className="text-red-200 mb-4">{callError}</p>
+                  <p className="text-red-200 text-sm sm:text-base mb-4">{callError}</p>
                   <button
                     onClick={endVideoCall}
-                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
+                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 active:bg-red-800 transition w-full touch-manipulation"
                   >
                     Close
                   </button>
@@ -555,13 +568,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
             )}
           </div>
 
-          {/* Call Controls */}
-          <div className="bg-gray-800 p-4 flex items-center justify-center gap-4">
+          {/* Call Controls - Compact on mobile */}
+          <div className="bg-gray-800 p-3 sm:p-4 flex items-center justify-center">
             <button
               onClick={endVideoCall}
-              className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-full hover:bg-red-700 transition"
+              className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-full hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
             >
-              <PhoneOff size={20} /> Leave Call
+              <PhoneOff size={18} /> Leave Call
             </button>
           </div>
         </div>
