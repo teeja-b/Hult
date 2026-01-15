@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 
 import { MessageSquare, X, Send, CheckCheck, Check, User, Search, Paperclip, Mic, FileText, Image as ImageIcon, Video, PhoneOff } from 'lucide-react';
 import io from 'socket.io-client';
-import JitsiVideoCall from './JitsiVideoCall';
+
+import DailyVideoCall from './JitsiVideoCall';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
@@ -620,7 +621,7 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
                 Debug
               </button>
               {/* 👇 PASTE VIDEO BUTTON HERE */}
-<JitsiVideoCall 
+<DailyVideoCall
   currentUserId={currentUserId}
   selectedTutor={{
     user_id: selectedTutor.user_id,

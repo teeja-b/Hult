@@ -44,6 +44,7 @@ import hashlib
 import time
 import uuid
 import urllib.parse
+import requests
 
 
 cloudinary.config(
@@ -72,7 +73,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
 CORS(app)
-
+DAILY_API_KEY = os.getenv('DAILY_API_KEY')
 
 
 
@@ -950,25 +951,46 @@ def test_video_endpoint():
         }), 500
 
 
-@app.route('/api/video/create-meeting', methods=['POST'])
+@app.route('/api/video/create-daily-room', methods=['POST'])
 @jwt_required()
-def create_jitsi_meeting():
-    data = request.get_json()
-    
-    # Generate simple room name
-    meeting_id = str(uuid.uuid4())
-    room_name = f"educonnect-{meeting_id}"
-    
-    # Simple URL without JWT
-    base_url = f"https://meet.jit.si/{room_name}"
-    
-    return jsonify({
-        'success': True,
-        'meeting_id': meeting_id,
-        'room_name': room_name,
-        'joinUrl': base_url
-    }), 200
-
+def create_daily_room():
+    """Create Daily.co room"""
+    try:
+        data = request.get_json()
+        
+        # Create room via Daily API
+        response = requests.post(
+            'https://api.daily.co/v1/rooms',
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {DAILY_API_KEY}'
+            },
+            json={
+                'properties': {
+                    'max_participants': data.get('maxParticipants', 15),
+                    'enable_screenshare': True,
+                    'enable_chat': True,
+                    'enable_knocking': False,
+                    'start_video_off': False,
+                    'start_audio_off': False
+                }
+            }
+        )
+        
+        if response.status_code != 200:
+            raise Exception('Failed to create Daily room')
+        
+        room_data = response.json()
+        
+        return jsonify({
+            'success': True,
+            'roomUrl': room_data['url'],
+            'roomName': room_data['name']
+        }), 200
+        
+    except Exception as e:
+        print(f'❌ [DAILY] Error: {e}')
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Basic health check - NO AUTH REQUIRED"""

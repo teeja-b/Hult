@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import io from 'socket.io-client';
 import { Video, PhoneOff } from 'lucide-react';
-import JitsiVideoCall from './JitsiVideoCall';
+import DailyVideoCall from './JitsiVideoCall';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const TutorMessagingView = ({ 
@@ -759,7 +759,7 @@ const sendMessage = async () => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
-  <JitsiVideoCall
+  <DailyVideoCall
     currentUserId={currentTutorUserId}   // tutor (you)
     selectedTutor={selectedTutorForJitsi} // student (other side)
     currentUserName={tutorName}

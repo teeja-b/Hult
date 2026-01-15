@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Video, PhoneOff, Mic, MicOff, VideoOff, Phone, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Video, PhoneOff, Phone, X, Users } from 'lucide-react';
 import io from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
-const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Student' }) => {
+// Daily.co Video Call Component
+const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Student' }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
   const [currentMeetingId, setCurrentMeetingId] = useState('');
@@ -12,18 +13,16 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   const [incomingCall, setIncomingCall] = useState(null);
   const [callRinging, setCallRinging] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [participantCount, setParticipantCount] = useState(0);
 
-  const socketRef = React.useRef(null);
+  const socketRef = useRef(null);
+  const callFrameRef = useRef(null);
 
   // Initialize Socket.IO
   useEffect(() => {
-    console.log('🔌 [SOCKET] Initializing socket connection...');
-    
     const socket = io(API_URL, {
       auth: { userId: currentUserId },
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
       transports: ['websocket', 'polling']
     });
 
@@ -34,8 +33,7 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       setConnectionStatus('connected');
     });
 
-    socket.on('disconnect', (reason) => {
-      console.log('❌ [SOCKET] Disconnected:', reason);
+    socket.on('disconnect', () => {
       setConnectionStatus('disconnected');
     });
 
@@ -61,29 +59,19 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     };
   }, [currentUserId]);
 
-  // 🔥 FIX: Generate Jitsi URL without JWT (no moderator required)
-  const generateJitsiUrl = () => {
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(7);
-    const roomName = `EduConnect-${timestamp}-${randomId}`;
-    
-    // Build URL with config to disable moderator requirement
-    const baseUrl = `https://meet.jit.si/${roomName}`;
-    const config = {
-      startWithAudioMuted: false,
-      startWithVideoMuted: false,
-      prejoinPageEnabled: false, // Skip pre-join page
-      requireDisplayName: false,
-      disableModeratorIndicator: true,
-      enableWelcomePage: false,
-    };
-    
-    // Encode config as URL hash
-    const configString = encodeURIComponent(JSON.stringify(config));
-    const displayName = encodeURIComponent(currentUserName);
-    
-    return `${baseUrl}?displayName=${displayName}#config=${configString}`;
-  };
+  // Load Daily.co script
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.DailyIframe) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@daily-co/daily-js';
+      script.async = true;
+      document.body.appendChild(script);
+      
+      script.onload = () => {
+        console.log('✅ Daily.co loaded');
+      };
+    }
+  }, []);
 
   const startVideoCall = async () => {
     if (!selectedTutor) return;
@@ -92,36 +80,107 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       return;
     }
 
-    console.log('📞 [VIDEO] Starting video call...');
+    console.log('📞 [VIDEO] Starting Daily.co call...');
     setIsCreatingCall(true);
 
     try {
-      // 🔥 FIX: Use simple Jitsi URL (no backend needed)
-      const meetingUrl = generateJitsiUrl();
-      const meetingId = `meeting-${Date.now()}`;
+      const token = localStorage.getItem('token');
+      
+      // Call backend to create Daily room
+      const response = await fetch(`${API_URL}/api/video/create-daily-room`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          callerId: currentUserId,
+          receiverId: selectedTutor.user_id,
+          callerName: currentUserName,
+          receiverName: selectedTutor.name,
+          maxParticipants: 15 // Support 13 students + 2 tutors
+        }),
+      });
 
-      console.log('✅ [VIDEO] Meeting URL:', meetingUrl);
+      if (!response.ok) {
+        throw new Error('Failed to create room');
+      }
 
-      setCurrentMeetingUrl(meetingUrl);
-      setCurrentMeetingId(meetingId);
+      const data = await response.json();
+      console.log('✅ [VIDEO] Daily room created:', data);
+
+      setCurrentMeetingUrl(data.roomUrl);
+      setCurrentMeetingId(data.roomName);
       setIsVideoCallOpen(true);
+
+      // Initialize Daily.co call frame
+      initializeDailyCall(data.roomUrl);
 
       // Notify tutor via socket
       if (socketRef.current?.connected) {
         socketRef.current.emit('initiate_video_call', {
-          meetingId: meetingId,
+          meetingId: data.roomName,
           callerId: currentUserId,
           receiverId: selectedTutor.user_id,
           callerName: currentUserName,
-          joinUrl: meetingUrl,
+          joinUrl: data.roomUrl,
         });
-        console.log('✅ [VIDEO] Call notification sent!');
       }
     } catch (error) {
       console.error('❌ [VIDEO] Failed to start call:', error);
       alert(`Failed to start video call: ${error.message}`);
     } finally {
       setIsCreatingCall(false);
+    }
+  };
+
+  const initializeDailyCall = (roomUrl) => {
+    if (!window.DailyIframe) {
+      console.error('Daily.co not loaded yet');
+      return;
+    }
+
+    // Create Daily call frame
+    const callFrame = window.DailyIframe.createFrame('daily-call-container', {
+      iframeStyle: {
+        width: '100%',
+        height: '100%',
+        border: '0',
+      },
+      showLeaveButton: true,
+      showFullscreenButton: true,
+    });
+
+    callFrameRef.current = callFrame;
+
+    // Event listeners
+    callFrame.on('joined-meeting', () => {
+      console.log('✅ Joined Daily meeting');
+    });
+
+    callFrame.on('participant-joined', () => {
+      updateParticipantCount();
+    });
+
+    callFrame.on('participant-left', () => {
+      updateParticipantCount();
+    });
+
+    callFrame.on('left-meeting', () => {
+      endVideoCall();
+    });
+
+    // Join the room
+    callFrame.join({ 
+      url: roomUrl,
+      userName: currentUserName 
+    });
+  };
+
+  const updateParticipantCount = () => {
+    if (callFrameRef.current) {
+      const participants = callFrameRef.current.participants();
+      setParticipantCount(Object.keys(participants).length);
     }
   };
 
@@ -134,6 +193,9 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     setCurrentMeetingId(incomingCall.meetingId);
     setIsVideoCallOpen(true);
     setCallRinging(false);
+
+    // Initialize Daily call
+    initializeDailyCall(incomingCall.joinUrl);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
@@ -163,12 +225,20 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   const endVideoCall = () => {
     console.log('🔴 [VIDEO] Ending call');
     
+    // Leave Daily call
+    if (callFrameRef.current) {
+      callFrameRef.current.leave();
+      callFrameRef.current.destroy();
+      callFrameRef.current = null;
+    }
+    
     const meetingId = currentMeetingId;
     const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
     
     setIsVideoCallOpen(false);
     setCurrentMeetingUrl('');
     setCurrentMeetingId('');
+    setParticipantCount(0);
 
     if (socketRef.current?.connected && meetingId) {
       socketRef.current.emit('end_video_call', {
@@ -190,7 +260,7 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         >
           <Video size={20} />
           {isCreatingCall ? 'Starting...' : 
-           connectionStatus !== 'connected' ? 'Connecting...' : 'Video Call'}
+           connectionStatus !== 'connected' ? 'Connecting...' : 'Start Video Call'}
         </button>
       )}
 
@@ -225,29 +295,35 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       )}
 
       {/* Video Call Window */}
-      {isVideoCallOpen && currentMeetingUrl && (
+      {isVideoCallOpen && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* Header */}
           <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Video className="text-green-500" size={24} />
-              <h2 className="text-lg font-semibold">
-                Video Call with {selectedTutor?.name || incomingCall?.callerName || 'User'}
-              </h2>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Video className="text-green-500" size={24} />
+                <h2 className="text-lg font-semibold">
+                  Video Call with {selectedTutor?.name || incomingCall?.callerName || 'User'}
+                </h2>
+              </div>
+              
+              {/* Participant Counter */}
+              <div className="flex items-center gap-2 bg-gray-800 px-3 py-1 rounded-full">
+                <Users size={16} />
+                <span className="text-sm">{participantCount} participants</span>
+              </div>
             </div>
-            <button onClick={endVideoCall} className="p-2 hover:bg-gray-800 rounded-full transition">
+            
+            <button 
+              onClick={endVideoCall} 
+              className="p-2 hover:bg-gray-800 rounded-full transition"
+            >
               <X size={24} />
             </button>
           </div>
 
-          {/* Jitsi Meet Iframe - NO MODERATOR REQUIRED */}
-          <div className="flex-1 relative">
-            <iframe
-              src={currentMeetingUrl}
-              allow="camera; microphone; fullscreen; display-capture; autoplay"
-              className="w-full h-full"
-              title="Video Call"
-            />
-          </div>
+          {/* Daily.co Video Container */}
+          <div id="daily-call-container" className="flex-1 bg-gray-900" />
 
           {/* Call Controls */}
           <div className="bg-gray-900 p-4 flex items-center justify-center gap-4">
@@ -255,7 +331,7 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
               onClick={endVideoCall}
               className="flex items-center gap-2 bg-red-600 text-white px-6 py-4 rounded-full hover:bg-red-700 transition"
             >
-              <PhoneOff size={24} /> End Call
+              <PhoneOff size={24} /> Leave Call
             </button>
           </div>
         </div>
@@ -264,4 +340,4 @@ const JitsiVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   );
 };
 
-export default JitsiVideoCall;
+export default DailyVideoCall;
