@@ -328,203 +328,9 @@ class Booking(db.Model):
 
 
 
-@app.route('/api/video/create-meeting', methods=['POST'])
-@jwt_required()
-def create_jitsi_meeting():
-    """Create Jitsi meeting - FIXED VERSION"""
-    try:
-        data = request.get_json()
-        
-        caller_id = data.get('callerId')
-        caller_role = data.get('callerRole')
-        receiver_id = data.get('receiverId')
-        caller_name = data.get('callerName', 'User')
-        receiver_name = data.get('receiverName', 'User')
-        meeting_name = data.get('meetingName', 'EduConnect Session')
-        
-        print(f"\n{'='*70}")
-        print(f"📞 [VIDEO] Creating meeting")
-        print(f"📞 Caller: {caller_name} (ID: {caller_id}, Role: {caller_role})")
-        print(f"📞 Receiver: {receiver_name} (ID: {receiver_id})")
-        print(f"{'='*70}")
-        
-        # Generate unique meeting ID
-        meeting_id = str(uuid.uuid4())
-        room_name = f"educonnect-{meeting_id}"
-        
-        # Jitsi Meet server URL
-        jitsi_domain = os.getenv('JITSI_DOMAIN', 'meet.jit.si')
-        
-        # 🔥 SIMPLE FIX: Use URL parameters instead of hash config
-        # This bypasses the lobby/moderation entirely
-        base_url = f"https://{jitsi_domain}/{room_name}"
-        
-        # Add user display names as query parameters
-        caller_url = f"{base_url}?displayName={urllib.parse.quote(caller_name)}"
-        receiver_url = f"{base_url}?displayName={urllib.parse.quote(receiver_name)}"
-        
-        print(f"✅ [VIDEO] Meeting created: {meeting_id}")
-        print(f"📍 Room: {room_name}")
-        print(f"🔗 Caller URL: {caller_url}")
-        print(f"🔗 Receiver URL: {receiver_url}")
-        print(f"{'='*70}\n")
-        
-        return jsonify({
-            'success': True,
-            'meeting_id': meeting_id,
-            'room_name': room_name,
-            'tutorJoinUrl': caller_url if caller_role == 'tutor' else receiver_url,
-            'studentJoinUrl': receiver_url if caller_role == 'tutor' else caller_url,
-            'jitsi_domain': jitsi_domain
-        }), 200
-        
-    except Exception as e:
-        print(f"\n❌ [VIDEO] Error creating meeting:")
-        print(f"❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print(f"{'='*70}\n")
-        
-        return jsonify({
-            'success': False,
-            'error': 'Failed to create meeting',
-            'details': str(e)
-        }), 500
-# Add this debug endpoint to test your video setup
-# Place this BEFORE your create_jitsi_meeting function
-
-@app.route('/api/video/test', methods=['POST', 'GET'])
-def test_video_endpoint():
-    """Test video endpoint - no JWT required"""
-    try:
-        print("\n" + "🧪"*35)
-        print("🧪 VIDEO TEST ENDPOINT HIT")
-        print("🧪"*35)
-        
-        if request.method == 'POST':
-            data = request.get_json()
-            print(f"📦 Received data: {data}")
-        
-        # Test imports
-        try:
-            import uuid
-            test_uuid = str(uuid.uuid4())
-            print(f"✅ uuid works: {test_uuid}")
-        except Exception as e:
-            print(f"❌ uuid failed: {e}")
-            return jsonify({'error': 'uuid import failed', 'details': str(e)}), 500
-        
-        try:
-            import urllib.parse
-            test_encode = urllib.parse.quote("Test User")
-            print(f"✅ urllib.parse works: {test_encode}")
-        except Exception as e:
-            print(f"❌ urllib.parse failed: {e}")
-            return jsonify({'error': 'urllib.parse import failed', 'details': str(e)}), 500
-        
-        # Test URL generation
-        meeting_id = str(uuid.uuid4())
-        room_name = f"educonnect-test-{meeting_id}"
-        jitsi_domain = 'meet.jit.si'
-        
-        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
-        
-        print(f"✅ Test URL generated: {test_url}")
-        print("🧪"*35 + "\n")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Video endpoint test successful',
-            'test_url': test_url,
-            'meeting_id': meeting_id,
-            'imports': {
-                'uuid': 'OK',
-                'urllib.parse': 'OK'
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"\n❌ VIDEO TEST ERROR:")
-        print(f"❌ {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("🧪"*35 + "\n")
-        
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
-@app.route('/api/video/end-meeting', methods=['POST'])
-@jwt_required()
-def end_jitsi_meeting():
-    """End a Jitsi meeting"""
-    try:
-        data = request.get_json()
-        meeting_id = data.get('meetingId')
-        
-        # Update meeting status in database (if stored)
-        # meeting = Meeting.query.filter_by(meeting_id=meeting_id).first()
-        # if meeting:
-        #     meeting.status = 'ended'
-        #     meeting.ended_at = datetime.utcnow()
-        #     db.session.commit()
-        
-        print(f"✅ [VIDEO] Ended meeting: {meeting_id}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Meeting ended'
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ [VIDEO] Failed to end meeting: {e}")
-        return jsonify({'error': 'Failed to end meeting'}), 500
 
 
-def generate_jitsi_jwt(room_name, user_name, user_email, moderator=False):
-    """
-    Generate JWT token for Jitsi authentication
-    Note: For production, you should use a proper JWT library and your own Jitsi server
-    """
-    import jwt as pyjwt
-    from datetime import datetime, timedelta
-    
-    # Your Jitsi app credentials (get these from your Jitsi server config)
-    # For meet.jit.si, JWT is optional. For self-hosted, you need to configure this.
-    APP_ID = os.getenv('JITSI_APP_ID', 'educonnect')
-    APP_SECRET = os.getenv('JITSI_APP_SECRET', 'your-secret-key')
-    
-    # JWT payload
-    payload = {
-        'context': {
-            'user': {
-                'name': user_name,
-                'email': user_email,
-                'moderator': moderator
-            }
-        },
-        'aud': APP_ID,
-        'iss': APP_ID,
-        'sub': 'meet.jit.si',  # or your Jitsi domain
-        'room': room_name,
-        'exp': datetime.utcnow() + timedelta(hours=2),  # Token expires in 2 hours
-        'nbf': datetime.utcnow() - timedelta(minutes=5)
-    }
-    
-    # Generate JWT
-    token = pyjwt.encode(payload, APP_SECRET, algorithm='HS256')
-    
-    return token
 
-
-def build_config_fragment(config):
-    """Build URL fragment for Jitsi configuration"""
-    import json
-    import urllib.parse
-    
-    config_str = json.dumps(config)
-    return f"config.{urllib.parse.quote(config_str)}"
 
 
 
@@ -1083,7 +889,286 @@ def handle_mark_as_read(data):
 
 
 
+@app.route('/api/video/create-meeting', methods=['POST'])
+@jwt_required()
+def create_jitsi_meeting():
+    """Create Jitsi meeting - FIXED VERSION"""
+    try:
+        data = request.get_json()
+        
+        caller_id = data.get('callerId')
+        caller_role = data.get('callerRole')
+        receiver_id = data.get('receiverId')
+        caller_name = data.get('callerName', 'User')
+        receiver_name = data.get('receiverName', 'User')
+        meeting_name = data.get('meetingName', 'EduConnect Session')
+        
+        print(f"\n{'='*70}")
+        print(f"📞 [VIDEO] Creating meeting")
+        print(f"📞 Caller: {caller_name} (ID: {caller_id}, Role: {caller_role})")
+        print(f"📞 Receiver: {receiver_name} (ID: {receiver_id})")
+        print(f"{'='*70}")
+        
+        # Generate unique meeting ID
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-{meeting_id}"
+        
+        # Jitsi Meet server URL
+        jitsi_domain = os.getenv('JITSI_DOMAIN', 'meet.jit.si')
+        
+        # 🔥 SIMPLE FIX: Use URL parameters instead of hash config
+        # This bypasses the lobby/moderation entirely
+        base_url = f"https://{jitsi_domain}/{room_name}"
+        
+        # Add user display names as query parameters
+        caller_url = f"{base_url}?displayName={urllib.parse.quote(caller_name)}"
+        receiver_url = f"{base_url}?displayName={urllib.parse.quote(receiver_name)}"
+        
+        print(f"✅ [VIDEO] Meeting created: {meeting_id}")
+        print(f"📍 Room: {room_name}")
+        print(f"🔗 Caller URL: {caller_url}")
+        print(f"🔗 Receiver URL: {receiver_url}")
+        print(f"{'='*70}\n")
+        
+        return jsonify({
+            'success': True,
+            'meeting_id': meeting_id,
+            'room_name': room_name,
+            'tutorJoinUrl': caller_url if caller_role == 'tutor' else receiver_url,
+            'studentJoinUrl': receiver_url if caller_role == 'tutor' else caller_url,
+            'jitsi_domain': jitsi_domain
+        }), 200
+        
+    except Exception as e:
+        print(f"\n❌ [VIDEO] Error creating meeting:")
+        print(f"❌ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*70}\n")
+        
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create meeting',
+            'details': str(e)
+        }), 500
+# Add this debug endpoint to test your video setup
+# Place this BEFORE your create_jitsi_meeting function
 
+@app.route('/api/video/test', methods=['POST', 'GET'])
+def test_video_endpoint():
+    """Test video endpoint - no JWT required"""
+    try:
+        print("\n" + "🧪"*35)
+        print("🧪 VIDEO TEST ENDPOINT HIT")
+        print("🧪"*35)
+        
+        if request.method == 'POST':
+            data = request.get_json()
+            print(f"📦 Received data: {data}")
+        
+        # Test imports
+        try:
+            import uuid
+            test_uuid = str(uuid.uuid4())
+            print(f"✅ uuid works: {test_uuid}")
+        except Exception as e:
+            print(f"❌ uuid failed: {e}")
+            return jsonify({'error': 'uuid import failed', 'details': str(e)}), 500
+        
+        try:
+            import urllib.parse
+            test_encode = urllib.parse.quote("Test User")
+            print(f"✅ urllib.parse works: {test_encode}")
+        except Exception as e:
+            print(f"❌ urllib.parse failed: {e}")
+            return jsonify({'error': 'urllib.parse import failed', 'details': str(e)}), 500
+        
+        # Test URL generation
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-test-{meeting_id}"
+        jitsi_domain = 'meet.jit.si'
+        
+        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
+        
+        print(f"✅ Test URL generated: {test_url}")
+        print("🧪"*35 + "\n")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Video endpoint test successful',
+            'test_url': test_url,
+            'meeting_id': meeting_id,
+            'imports': {
+                'uuid': 'OK',
+                'urllib.parse': 'OK'
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"\n❌ VIDEO TEST ERROR:")
+        print(f"❌ {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("🧪"*35 + "\n")
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Basic health check - NO AUTH REQUIRED"""
+    return jsonify({
+        'status': 'online',
+        'message': 'Server is running',
+        'routes_loaded': True
+    }), 200
+
+
+@app.route('/api/video/test', methods=['GET', 'POST', 'OPTIONS'])
+def test_video_endpoint():
+    """Test video endpoint - NO JWT REQUIRED"""
+    
+    # Handle OPTIONS for CORS
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response, 200
+    
+    try:
+        print("\n" + "🧪"*35)
+        print("🧪 VIDEO TEST ENDPOINT HIT")
+        print(f"🧪 Method: {request.method}")
+        print("🧪"*35)
+        
+        # Test basic functionality
+        test_data = {}
+        
+        if request.method == 'POST':
+            try:
+                test_data = request.get_json() or {}
+                print(f"📦 Received POST data: {test_data}")
+            except Exception as e:
+                print(f"❌ Error parsing JSON: {e}")
+        
+        # Test imports
+        import_status = {}
+        try:
+            import uuid
+            test_uuid = str(uuid.uuid4())
+            import_status['uuid'] = 'OK'
+            print(f"✅ uuid works: {test_uuid}")
+        except Exception as e:
+            import_status['uuid'] = f'FAILED: {e}'
+            print(f"❌ uuid failed: {e}")
+        
+        try:
+            import urllib.parse
+            test_encode = urllib.parse.quote("Test User")
+            import_status['urllib'] = 'OK'
+            print(f"✅ urllib.parse works: {test_encode}")
+        except Exception as e:
+            import_status['urllib'] = f'FAILED: {e}'
+            print(f"❌ urllib.parse failed: {e}")
+        
+        # Test URL generation
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-test-{meeting_id}"
+        jitsi_domain = 'meet.jit.si'
+        
+        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
+        
+        print(f"✅ Test URL generated: {test_url}")
+        print("🧪"*35 + "\n")
+        
+        response_data = {
+            'success': True,
+            'message': 'Video test endpoint is working!',
+            'method': request.method,
+            'test_url': test_url,
+            'meeting_id': meeting_id,
+            'imports': import_status,
+            'received_data': test_data
+        }
+        
+        response = jsonify(response_data)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200
+        
+    except Exception as e:
+        print(f"\n❌ VIDEO TEST ERROR:")
+        print(f"❌ {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("🧪"*35 + "\n")
+        
+        response = jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        })
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+
+@app.route('/api/debug/routes', methods=['GET'])
+def list_all_routes():
+    """List all registered Flask routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'path': str(rule)
+        })
+    
+    # Sort by path
+    routes.sort(key=lambda x: x['path'])
+    
+    return jsonify({
+        'total_routes': len(routes),
+        'routes': routes
+    }), 200
+
+
+def generate_jitsi_jwt(room_name, user_name, user_email, moderator=False):
+    """
+    Generate JWT token for Jitsi authentication
+    Note: For production, you should use a proper JWT library and your own Jitsi server
+    """
+    import jwt as pyjwt
+    from datetime import datetime, timedelta
+    
+    # Your Jitsi app credentials (get these from your Jitsi server config)
+    # For meet.jit.si, JWT is optional. For self-hosted, you need to configure this.
+    APP_ID = os.getenv('JITSI_APP_ID', 'educonnect')
+    APP_SECRET = os.getenv('JITSI_APP_SECRET', 'your-secret-key')
+    
+    # JWT payload
+    payload = {
+        'context': {
+            'user': {
+                'name': user_name,
+                'email': user_email,
+                'moderator': moderator
+            }
+        },
+        'aud': APP_ID,
+        'iss': APP_ID,
+        'sub': 'meet.jit.si',  # or your Jitsi domain
+        'room': room_name,
+        'exp': datetime.utcnow() + timedelta(hours=2),  # Token expires in 2 hours
+        'nbf': datetime.utcnow() - timedelta(minutes=5)
+    }
+    
+    # Generate JWT
+    token = pyjwt.encode(payload, APP_SECRET, algorithm='HS256')
+    
+    return token
 # ============================================================================
 # HEALTH CHECK FOR SOCKET.IO
 # ============================================================================
