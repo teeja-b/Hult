@@ -208,6 +208,11 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const initializeDailyCall = async (roomUrl) => {
+    if (callFrameRef.current) {
+  console.log('[DAILY] Frame already exists, skipping creation');
+  return;
+}
+
     if (!window.DailyIframe) {
       console.error('❌ [DAILY] Daily.co not available');
       setCallError('Video library not loaded');
@@ -229,6 +234,10 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       }
       callFrameRef.current = null;
     }
+
+    if (dailyContainerRef.current) {
+  dailyContainerRef.current.innerHTML = '';
+}
 
     console.log('🎥 [DAILY] Creating call frame...');
     console.log('🎥 [DAILY] Room URL:', roomUrl);
