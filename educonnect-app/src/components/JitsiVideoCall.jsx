@@ -275,19 +275,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         showLeaveButton: true,
         showFullscreenButton: !isMobile, // Disable on mobile for performance
         showLocalVideo: true,
-        showParticipantsBar: !isMobile, // Simplify UI on mobile
-        // IMPORTANT: Skip the prejoin UI and join directly
-        dailyConfig: {
-          camAndMicNoConfigurable: false,
-          userMediaAudioConstraints: { 
-            autoGainControl: true, 
-            noiseSuppression: true 
-          },
-          userMediaVideoConstraints: {
-            width: { ideal: isMobile ? 640 : 1280 },
-            height: { ideal: isMobile ? 480 : 720 }
-          }
-        }
+        showParticipantsBar: !isMobile // Simplify UI on mobile
       });
 
       callFrameRef.current = callFrame;
@@ -341,9 +329,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         url: roomUrl,
         userName: currentUserName || 'User',
         showLeaveButton: true,
-        showFullscreenButton: !isMobile,
-        // Skip prejoin screen and join immediately
-        token: undefined // If you have tokens, add here
+        showFullscreenButton: !isMobile
       });
 
       console.log('✅ [DAILY] Join request sent');
@@ -551,7 +537,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           <div className="flex-1 relative bg-gray-900 overflow-hidden">
             <div ref={dailyContainerRef} className="w-full h-full" />
             
-            {/* Error Display Only - No Loading Overlay */}
+   
+
+            {/* Error Display */}
             {callError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 p-4">
                 <div className="bg-red-900 bg-opacity-50 border border-red-500 rounded-lg p-4 sm:p-6 max-w-md w-full">
