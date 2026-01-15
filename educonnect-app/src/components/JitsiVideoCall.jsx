@@ -20,7 +20,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
   const dailyContainerRef = useRef(null);
-  const joinAttempts = useRef(0);
+  const isInitializingRef = useRef(false);
 
   // Check if Daily.co is loaded
   useEffect(() => {
@@ -120,6 +120,19 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     }
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (callFrameRef.current) {
+        try {
+          callFrameRef.current.destroy();
+        } catch (e) {
+          console.log('Cleanup error:', e);
+        }
+      }
+    };
+  }, []);
+
   const startVideoCall = async () => {
     if (!selectedTutor) {
       alert('Please select a tutor first');
@@ -208,10 +221,16 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const initializeDailyCall = async (roomUrl) => {
+    // Prevent duplicate initialization
+    if (isInitializingRef.current) {
+      console.log('⏸️ [DAILY] Already initializing, skipping...');
+      return;
+    }
+
     if (callFrameRef.current) {
-  console.log('[DAILY] Frame already exists, skipping creation');
-  return;
-}
+      console.log('⏸️ [DAILY] Frame already exists, skipping creation');
+      return;
+    }
 
     if (!window.DailyIframe) {
       console.error('❌ [DAILY] Daily.co not available');
@@ -225,25 +244,13 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       return;
     }
 
-    // Destroy existing frame if any
-    if (callFrameRef.current) {
-      try {
-        callFrameRef.current.destroy();
-      } catch (e) {
-        console.log('Old frame cleanup:', e);
-      }
-      callFrameRef.current = null;
-    }
-
-    if (dailyContainerRef.current) {
-  dailyContainerRef.current.innerHTML = '';
-}
-
+    isInitializingRef.current = true;
     console.log('🎥 [DAILY] Creating call frame...');
     console.log('🎥 [DAILY] Room URL:', roomUrl);
 
+    // Clear container
+    dailyContainerRef.current.innerHTML = '';
     setIsJoining(true);
-    joinAttempts.current += 1;
 
     try {
       const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
@@ -275,6 +282,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         console.log('👤 [DAILY] Participants:', event.participants);
         setIsJoining(false);
         setCallError(null);
+        isInitializingRef.current = false;
         updateParticipantCount();
       });
 
@@ -291,11 +299,19 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       callFrame.on('left-meeting', () => {
         console.log('🔴 [DAILY] Left meeting');
         setIsJoining(false);
+        isInitializingRef.current = false;
       });
 
       callFrame.on('error', (error) => {
         console.error('❌ [DAILY] Error:', error);
-        setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
+        isInitializingRef.current = false;
+        
+        // Handle specific Daily.co errors
+        if (error.errorMsg === 'account-missing-payment-method') {
+          setCallError('Daily.co account requires payment method setup. Please contact your administrator.');
+        } else {
+          setCallError(`Call error: ${error.errorMsg || 'Unknown error'}`);
+        }
         setIsJoining(false);
       });
 
@@ -314,14 +330,15 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     } catch (error) {
       console.error('❌ [DAILY] Failed to initialize:', error);
-      setCallError(`Failed to join call: ${error.message}`);
-      setIsJoining(false);
+      isInitializingRef.current = false;
       
-      // Retry once
-      if (joinAttempts.current === 1) {
-        console.log('🔄 [DAILY] Retrying...');
-        setTimeout(() => initializeDailyCall(roomUrl), 1000);
+      // Handle duplicate instance error
+      if (error.message && error.message.includes('Duplicate DailyIframe')) {
+        setCallError('Video call already in progress. Please refresh the page if you need to restart.');
+      } else {
+        setCallError(`Failed to join call: ${error.message}`);
       }
+      setIsJoining(false);
     }
   };
 
@@ -397,6 +414,8 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       callFrameRef.current = null;
     }
 
+    isInitializingRef.current = false;
+
     const meetingId = currentMeetingId;
     const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
 
@@ -406,7 +425,6 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     setParticipantCount(0);
     setCallError(null);
     setIsJoining(false);
-    joinAttempts.current = 0;
 
     if (socketRef.current?.connected && meetingId) {
       socketRef.current.emit('end_video_call', {
@@ -507,7 +525,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
             <div ref={dailyContainerRef} className="w-full h-full" />
             
             {/* Loading Overlay */}
-            {isJoining && (
+            {isJoining && !callError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
@@ -518,7 +536,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
             )}
 
             {/* Error Display */}
-            {callError && !isJoining && (
+            {callError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90">
                 <div className="bg-red-900 bg-opacity-50 border border-red-500 rounded-lg p-6 max-w-md">
                   <div className="flex items-center gap-3 mb-3">
