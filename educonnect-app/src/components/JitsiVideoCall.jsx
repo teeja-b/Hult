@@ -208,7 +208,8 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       // Wait for container to mount before initializing
       setTimeout(() => {
         initializeDailyCall(data.roomUrl);
-      }, 100);
+      }, 200
+    );
 
       // Notify tutor
       if (socketRef.current?.connected) {
@@ -398,7 +399,7 @@ const initializeDailyCall = async (roomUrl) => {
 
     setTimeout(() => {
       initializeDailyCall(incomingCall.joinUrl);
-    }, 100);
+    }, 200);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
