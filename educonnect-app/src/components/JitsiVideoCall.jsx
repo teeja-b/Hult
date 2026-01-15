@@ -537,7 +537,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           <div className="flex-1 relative bg-gray-900 overflow-hidden">
             <div ref={dailyContainerRef} className="w-full h-full" />
             
-   
+  
 
             {/* Error Display */}
             {callError && (
