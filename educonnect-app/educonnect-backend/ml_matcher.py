@@ -1,36 +1,65 @@
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics.pairwise import cosine_similarity
 import json
 from datetime import datetime
+from collections import defaultdict
+import pickle
 
-class TutorMatchingSystem:
+class RLTutorMatchingSystem:
     """
-    Enhanced ML-based tutor matching system with improved algorithms
+    Reinforcement Learning-Enhanced Tutor Matching System
     
-    Key Improvements:
-    - Fuzzy subject matching with semantic similarity
-    - Dynamic weight adjustment based on student priorities
-    - Multi-factor skill compatibility assessment
-    - Confidence scoring for match quality
-    - Learning history integration
+    Key RL Improvements:
+    - Q-Learning for feature weight optimization
+    - Contextual bandits for exploration vs exploitation
+    - Outcome-based learning from student feedback
+    - Dynamic tutor scoring based on historical performance
+    - Personalized matching that improves over time
     """
     
-    def __init__(self):
+    def __init__(self, learning_rate=0.1, discount_factor=0.9, epsilon=0.15):
         self.scaler = StandardScaler()
         
-        # Base feature weights (can be adjusted dynamically)
+        # RL Parameters
+        self.learning_rate = learning_rate  # How fast we learn from feedback
+        self.discount_factor = discount_factor  # Future reward importance
+        self.epsilon = epsilon  # Exploration rate (15% try new things)
+        
+        # Base feature weights (will be adjusted by RL)
         self.base_weights = {
-            'subject_match': 0.35,           # Most important: Subject expertise
-            'skill_compatibility': 0.25,     # Second: Skill level match
-            'schedule_match': 0.15,          # Third: Availability
-            'language_match': 0.12,          # Fourth: Language compatibility
-            'learning_style_match': 0.08,    # Fifth: Teaching style
-            'rating': 0.05                   # Least: Tutor rating (quality indicator)
+            'subject_match': 0.35,
+            'skill_compatibility': 0.25,
+            'schedule_match': 0.15,
+            'language_match': 0.12,
+            'learning_style_match': 0.08,
+            'rating': 0.05
         }
         
-        # Subject similarity mappings for fuzzy matching
+        # RL Components
+        self.q_table = defaultdict(lambda: defaultdict(float))  # State-action values
+        self.tutor_performance = defaultdict(lambda: {
+            'total_matches': 0,
+            'successful_matches': 0,
+            'avg_satisfaction': 0.0,
+            'completion_rate': 0.0,
+            'student_retention': 0.0,
+            'response_time_score': 1.0,
+            'reliability_score': 1.0
+        })
+        
+        # Personalized student preferences (learned over time)
+        self.student_preferences = defaultdict(lambda: {
+            'weight_adjustments': {},
+            'preferred_tutor_traits': {},
+            'match_history': [],
+            'satisfaction_history': []
+        })
+        
+        # Feature importance learning
+        self.feature_rewards = defaultdict(list)
+        
+        # Subject similarity mappings
         self.subject_groups = {
             'math': ['mathematics', 'algebra', 'calculus', 'geometry', 'statistics', 'trigonometry'],
             'science': ['physics', 'chemistry', 'biology', 'science'],
@@ -39,51 +68,298 @@ class TutorMatchingSystem:
             'arts': ['art', 'music', 'drawing', 'painting', 'design']
         }
     
+    def get_state_representation(self, student_profile, tutor_profile):
+        """
+        Convert student-tutor pair into a state representation for RL
+        """
+        student_features = self.prepare_student_features(student_profile)
+        tutor_features = self.prepare_tutor_features(tutor_profile)
+        
+        # Create a hashable state key
+        state = (
+            tuple(sorted(student_features['preferred_subjects'])),
+            student_features['skill_level'],
+            student_features['learning_style'],
+            student_features['available_time'],
+            tuple(sorted(tutor_features['expertise'])),
+            tutor_features['teaching_style'],
+            'experienced' if tutor_features['total_sessions'] > 100 else 'new'
+        )
+        
+        return state
+    
+    def calculate_tutor_performance_score(self, tutor_id):
+        """
+        Calculate dynamic performance score based on historical data
+        This is what differentiates tutors beyond static features
+        """
+        perf = self.tutor_performance[tutor_id]
+        
+        if perf['total_matches'] == 0:
+            return 0.7  # Neutral score for new tutors
+        
+        # Multiple factors contribute to performance
+        success_rate = perf['successful_matches'] / max(perf['total_matches'], 1)
+        satisfaction = perf['avg_satisfaction']
+        completion = perf['completion_rate']
+        retention = perf['student_retention']
+        response = perf['response_time_score']
+        reliability = perf['reliability_score']
+        
+        # Weighted combination of performance metrics
+        performance_score = (
+            0.25 * success_rate +           # How often matches work out
+            0.20 * satisfaction +            # Student satisfaction ratings
+            0.20 * completion +              # Course completion rate
+            0.15 * retention +               # Student comes back for more
+            0.10 * response +                # Fast response to messages
+            0.10 * reliability               # Shows up on time, consistent
+        )
+        
+        # Apply confidence based on sample size
+        confidence = min(1.0, perf['total_matches'] / 20)
+        
+        # Blend with neutral score based on confidence
+        final_score = confidence * performance_score + (1 - confidence) * 0.7
+        
+        return final_score
+    
+    def get_personalized_weights(self, student_id, base_weights):
+        """
+        Get personalized feature weights for a student based on their history
+        """
+        if student_id not in self.student_preferences:
+            return base_weights
+        
+        prefs = self.student_preferences[student_id]
+        
+        # If student has enough history, use learned weights
+        if len(prefs['match_history']) >= 3:
+            adjusted_weights = base_weights.copy()
+            
+            for feature, adjustment in prefs['weight_adjustments'].items():
+                if feature in adjusted_weights:
+                    adjusted_weights[feature] *= (1 + adjustment)
+            
+            # Normalize
+            total = sum(adjusted_weights.values())
+            return {k: v / total for k, v in adjusted_weights.items()}
+        
+        return base_weights
+    
+    def select_action_epsilon_greedy(self, state, available_tutors):
+        """
+        Epsilon-greedy action selection: balance exploration vs exploitation
+        """
+        if np.random.random() < self.epsilon:
+            # Explore: randomly select a tutor
+            return np.random.choice(available_tutors)
+        else:
+            # Exploit: select best tutor based on Q-values
+            q_values = {tutor: self.q_table[state][tutor] for tutor in available_tutors}
+            return max(q_values, key=q_values.get)
+    
+    def update_q_value(self, state, action, reward, next_state):
+        """
+        Update Q-table using Q-learning algorithm
+        """
+        current_q = self.q_table[state][action]
+        
+        # Get max Q-value for next state
+        max_next_q = max(self.q_table[next_state].values()) if self.q_table[next_state] else 0
+        
+        # Q-learning update rule
+        new_q = current_q + self.learning_rate * (
+            reward + self.discount_factor * max_next_q - current_q
+        )
+        
+        self.q_table[state][action] = new_q
+    
+    def record_match_outcome(self, student_id, tutor_id, student_profile, 
+                            tutor_profile, outcome_data):
+        """
+        Learn from match outcomes to improve future recommendations
+        
+        outcome_data should contain:
+        - satisfaction_rating: 1-5 stars
+        - completed: bool (did they complete the course/session)
+        - would_recommend: bool
+        - response_time: average response time in hours
+        - punctuality_score: 0-1 (showed up on time)
+        """
+        # Calculate reward based on outcome
+        satisfaction = outcome_data.get('satisfaction_rating', 3) / 5.0
+        completed = 1.0 if outcome_data.get('completed', False) else 0.0
+        recommend = 1.0 if outcome_data.get('would_recommend', False) else 0.0
+        
+        # Overall reward (0 to 1)
+        reward = 0.4 * satisfaction + 0.3 * completed + 0.3 * recommend
+        
+        # Update tutor performance metrics
+        perf = self.tutor_performance[tutor_id]
+        perf['total_matches'] += 1
+        
+        if reward > 0.6:  # Consider it successful
+            perf['successful_matches'] += 1
+        
+        # Running average of satisfaction
+        n = perf['total_matches']
+        perf['avg_satisfaction'] = (
+            (perf['avg_satisfaction'] * (n - 1) + satisfaction) / n
+        )
+        
+        # Update completion rate
+        perf['completion_rate'] = (
+            (perf['completion_rate'] * (n - 1) + completed) / n
+        )
+        
+        # Update response time score
+        if 'response_time' in outcome_data:
+            response_hours = outcome_data['response_time']
+            # Excellent: <2h, Good: <6h, OK: <24h, Poor: >24h
+            response_score = max(0, 1 - (response_hours / 24))
+            perf['response_time_score'] = (
+                (perf['response_time_score'] * (n - 1) + response_score) / n
+            )
+        
+        # Update reliability score
+        if 'punctuality_score' in outcome_data:
+            perf['reliability_score'] = (
+                (perf['reliability_score'] * (n - 1) + 
+                 outcome_data['punctuality_score']) / n
+            )
+        
+        # Update Q-table
+        state = self.get_state_representation(student_profile, tutor_profile)
+        self.update_q_value(state, tutor_id, reward, state)
+        
+        # Update student preferences
+        prefs = self.student_preferences[student_id]
+        prefs['match_history'].append({
+            'tutor_id': tutor_id,
+            'reward': reward,
+            'timestamp': datetime.now().isoformat()
+        })
+        prefs['satisfaction_history'].append(satisfaction)
+        
+        # Learn which features matter most for this student
+        self._update_feature_importance(student_id, student_profile, 
+                                       tutor_profile, reward)
+        
+        return reward
+    
+    def _update_feature_importance(self, student_id, student_profile, 
+                                   tutor_profile, reward):
+        """
+        Learn which features lead to better outcomes for each student
+        """
+        prefs = self.student_preferences[student_id]
+        
+        # Calculate how well each feature matched
+        student_features = self.prepare_student_features(student_profile)
+        tutor_features = self.prepare_tutor_features(tutor_profile)
+        
+        feature_scores = {
+            'subject_match': self.calculate_subject_match(
+                student_features['preferred_subjects'],
+                tutor_features['expertise']
+            ),
+            'skill_compatibility': self.calculate_skill_compatibility(
+                student_features,
+                tutor_features['total_sessions'],
+                student_features['skill_level']
+            ),
+            'schedule_match': self.calculate_schedule_match(
+                student_features['available_time'],
+                tutor_features['availability']
+            ),
+            'language_match': self.calculate_language_match(
+                student_features['preferred_languages'],
+                tutor_features['languages']
+            ),
+            'learning_style_match': self.calculate_learning_style_match(
+                student_features['learning_style'],
+                tutor_features['teaching_style']
+            )
+        }
+        
+        # Update weight adjustments based on correlation with reward
+        for feature, score in feature_scores.items():
+            self.feature_rewards[f"{student_id}_{feature}"].append({
+                'score': score,
+                'reward': reward
+            })
+            
+            # If we have enough data, adjust weights
+            history = self.feature_rewards[f"{student_id}_{feature}"]
+            if len(history) >= 5:
+                # Calculate correlation between feature score and reward
+                scores = [h['score'] for h in history[-10:]]
+                rewards = [h['reward'] for h in history[-10:]]
+                
+                correlation = np.corrcoef(scores, rewards)[0, 1]
+                
+                # Adjust weight based on correlation
+                if not np.isnan(correlation):
+                    # Positive correlation: increase weight
+                    # Negative correlation: decrease weight
+                    adjustment = correlation * 0.2  # Max 20% adjustment
+                    prefs['weight_adjustments'][feature] = adjustment
+    
     def prepare_student_features(self, student_profile):
-        """Enhanced student feature extraction with validation"""
+        """Enhanced student feature extraction with None safety"""
         features = {
-            'math_score': max(1, min(10, student_profile.get('math_score', 5))),
-            'science_score': max(1, min(10, student_profile.get('science_score', 5))),
-            'language_score': max(1, min(10, student_profile.get('language_score', 5))),
-            'tech_score': max(1, min(10, student_profile.get('tech_score', 5))),
-            'motivation_level': max(1, min(10, student_profile.get('motivation_level', 7))),
-            'learning_style': student_profile.get('learning_style', 'visual').lower(),
-            'preferred_subjects': [s.lower().strip() for s in student_profile.get('preferred_subjects', [])],
-            'skill_level': student_profile.get('skill_level', 'beginner').lower(),
-            'available_time': student_profile.get('available_time', 'evening').lower(),
-            'preferred_languages': [l.lower().strip() for l in student_profile.get('preferred_languages', ['english'])]
+            'math_score': max(1, min(10, student_profile.get('math_score', 5) or 5)),
+            'science_score': max(1, min(10, student_profile.get('science_score', 5) or 5)),
+            'language_score': max(1, min(10, student_profile.get('language_score', 5) or 5)),
+            'tech_score': max(1, min(10, student_profile.get('tech_score', 5) or 5)),
+            'motivation_level': max(1, min(10, student_profile.get('motivation_level', 7) or 7)),
+            'learning_style': (student_profile.get('learning_style') or 'visual').lower(),
+            'preferred_subjects': [
+                s.lower().strip() 
+                for s in (student_profile.get('preferred_subjects') or []) 
+                if s
+            ],
+            'skill_level': (student_profile.get('skill_level') or 'beginner').lower(),
+            'available_time': (student_profile.get('available_time') or 'evening').lower(),
+            'preferred_languages': [
+                l.lower().strip() 
+                for l in (student_profile.get('preferred_languages') or ['english']) 
+                if l
+            ]
         }
         return features
-    
+
     def prepare_tutor_features(self, tutor_profile):
-        """Enhanced tutor feature extraction with validation"""
+        """Enhanced tutor feature extraction with None safety"""
         features = {
-            'expertise': [e.lower().strip() for e in tutor_profile.get('expertise', [])],
-            'languages': [l.lower().strip() for l in tutor_profile.get('languages', ['english'])],
-            'availability': tutor_profile.get('availability', {}),
-            'rating': max(0.0, min(5.0, tutor_profile.get('rating', 4.0))),
-            'total_sessions': max(0, tutor_profile.get('total_sessions', 0)),
-            'teaching_style': tutor_profile.get('teaching_style', 'adaptive').lower()
+            'expertise': [
+                e.lower().strip() 
+                for e in (tutor_profile.get('expertise') or []) 
+                if e
+            ],
+            'languages': [
+                l.lower().strip() 
+                for l in (tutor_profile.get('languages') or ['english']) 
+                if l
+            ],
+            'availability': tutor_profile.get('availability') or {},
+            'rating': max(0.0, min(5.0, tutor_profile.get('rating', 4.0) or 4.0)),
+            'total_sessions': max(0, tutor_profile.get('total_sessions', 0) or 0),
+            'teaching_style': (tutor_profile.get('teaching_style') or 'adaptive').lower()
         }
         return features
     
     def get_subject_category(self, subject):
-        """Map a subject to its category for semantic matching"""
+        """Map subject to category"""
         subject = subject.lower()
         for category, keywords in self.subject_groups.items():
             if subject in keywords or any(keyword in subject for keyword in keywords):
                 return category
-        return subject  # Return original if no category found
+        return subject
     
     def calculate_subject_match(self, student_subjects, tutor_expertise):
-        """
-        Enhanced subject matching with fuzzy matching and semantic similarity
-        
-        Improvements:
-        - Exact matches get highest score
-        - Related subjects (same category) get partial credit
-        - Partial string matches considered
-        """
+        """Enhanced subject matching with fuzzy matching"""
         if not student_subjects or not tutor_expertise:
             return 0.3
         
@@ -96,17 +372,13 @@ class TutorMatchingSystem:
         for student_subject in student_subjects:
             subject_score = 0
             
-            # Check for exact match
             if student_subject in tutor_expertise:
                 subject_score = 1.0
             else:
-                # Check for partial matches
                 for tutor_subject in tutor_expertise:
-                    # Substring match
                     if student_subject in tutor_subject or tutor_subject in student_subject:
                         subject_score = max(subject_score, 0.8)
                     
-                    # Category match (related subjects)
                     student_category = self.get_subject_category(student_subject)
                     tutor_category = self.get_subject_category(tutor_subject)
                     if student_category == tutor_category and student_category in self.subject_groups:
@@ -114,20 +386,10 @@ class TutorMatchingSystem:
             
             total_score += subject_score
         
-        # Normalize by number of student subjects
         return total_score / max_possible_score if max_possible_score > 0 else 0.5
     
     def calculate_skill_compatibility(self, student_features, tutor_sessions, student_skill):
-        """
-        Enhanced skill compatibility with multi-factor assessment
-        
-        Considers:
-        - Student's self-assessed skill level
-        - Student's subject scores
-        - Tutor's experience level
-        - Motivation level
-        """
-        # Get student's average capability score
+        """Multi-factor skill compatibility"""
         avg_score = np.mean([
             student_features.get('math_score', 5),
             student_features.get('science_score', 5),
@@ -135,10 +397,8 @@ class TutorMatchingSystem:
             student_features.get('tech_score', 5)
         ])
         
-        # Normalize to 0-1 scale
         normalized_score = avg_score / 10.0
         
-        # Map skill levels to numeric values
         skill_map = {
             'beginner': 0.2,
             'intermediate': 0.5,
@@ -147,30 +407,17 @@ class TutorMatchingSystem:
         }
         skill_value = skill_map.get(student_skill.lower(), 0.5)
         
-        # Combined student capability (weighted average)
         student_capability = 0.6 * skill_value + 0.4 * normalized_score
         
-        # Tutor experience tiers
         if tutor_sessions > 200:
-            tutor_tier = 'expert'  # Can handle all levels
             compatibility = 0.95
         elif tutor_sessions > 100:
-            tutor_tier = 'experienced'  # Best for intermediate-advanced
-            if student_capability > 0.4:
-                compatibility = 0.95
-            else:
-                compatibility = 0.80
+            compatibility = 0.95 if student_capability > 0.4 else 0.80
         elif tutor_sessions > 30:
-            tutor_tier = 'established'  # Good for all levels
             compatibility = 0.85
         else:
-            tutor_tier = 'new'  # Best for beginners
-            if student_capability < 0.5:
-                compatibility = 0.90
-            else:
-                compatibility = 0.65
+            compatibility = 0.90 if student_capability < 0.5 else 0.65
         
-        # Boost for high motivation students with experienced tutors
         motivation = student_features.get('motivation_level', 5) / 10.0
         if motivation > 0.7 and tutor_sessions > 100:
             compatibility = min(1.0, compatibility + 0.05)
@@ -178,14 +425,7 @@ class TutorMatchingSystem:
         return compatibility
     
     def calculate_schedule_match(self, student_time, tutor_availability):
-        """
-        Enhanced schedule matching with flexible time slots
-        
-        Improvements:
-        - Handles multiple availability slots
-        - Considers adjacent time slots
-        - Weighted scoring for primary vs secondary preferences
-        """
+        """Schedule matching"""
         if not tutor_availability or not isinstance(tutor_availability, dict):
             return 0.5
         
@@ -195,34 +435,24 @@ class TutorMatchingSystem:
         if not available_slots:
             return 0.3
         
-        # Exact match - good but not perfect (scheduling still needs coordination)
         if student_time in available_slots:
             return 0.88
         
-        # Adjacent time slot mapping
         adjacent_times = {
             'morning': ['afternoon'],
             'afternoon': ['morning', 'evening'],
             'evening': ['afternoon']
         }
         
-        # Check for adjacent time slots
         adjacent = adjacent_times.get(student_time, [])
         for slot in available_slots:
             if slot in adjacent:
                 return 0.65
         
-        # Tutor is available but not at preferred time
         return 0.35
     
     def calculate_language_match(self, student_languages, tutor_languages):
-        """
-        Enhanced language matching with primary/secondary language support
-        
-        Improvements:
-        - Weighted scoring for multiple language overlaps
-        - Bonus for multiple shared languages
-        """
+        """Language matching"""
         if not student_languages or not tutor_languages:
             return 0.5
         
@@ -234,38 +464,26 @@ class TutorMatchingSystem:
         if not common_languages:
             return 0.0
         
-        # Score based on number of shared languages
         overlap_ratio = len(common_languages) / len(student_set)
         
-        # More realistic scoring - don't give 100% so easily
         if overlap_ratio == 1.0 and len(common_languages) > 1:
-            return 0.95  # Multiple perfect language match
+            return 0.95
         elif overlap_ratio == 1.0:
-            return 0.85  # Single perfect language match
+            return 0.85
         
-        # Partial match
         return 0.6 + (0.25 * overlap_ratio)
     
     def calculate_learning_style_match(self, student_style, tutor_style):
-        """
-        Enhanced learning style matching with compatibility matrix
-        
-        Improvements:
-        - Compatibility scores for different style combinations
-        - Recognition that some styles are more compatible than others
-        """
+        """Learning style matching"""
         student_style = student_style.lower()
         tutor_style = tutor_style.lower()
         
-        # Adaptive tutors are good but not perfect - they need to adjust
         if tutor_style == 'adaptive':
             return 0.90
         
-        # Perfect match - but rare in real teaching
         if student_style == tutor_style:
             return 0.95
         
-        # Compatibility matrix - more realistic scores
         compatibility = {
             'visual': {'hands-on': 0.65, 'auditory': 0.45, 'kinesthetic': 0.55},
             'auditory': {'hands-on': 0.55, 'visual': 0.45, 'kinesthetic': 0.45},
@@ -276,91 +494,30 @@ class TutorMatchingSystem:
         return compatibility.get(student_style, {}).get(tutor_style, 0.55)
     
     def normalize_rating(self, rating):
-        """Enhanced rating normalization with realistic scaling"""
-        # More realistic scaling - even 5-star tutors aren't perfect
+        """Rating normalization"""
         normalized = rating / 5.0
-        # Cap at 92% even for perfect 5.0 ratings
         return min(0.92, normalized * 0.90 + 0.02)
     
-    def calculate_confidence_score(self, breakdown):
+    def match_student_to_tutors(self, student_id, student_profile, tutors_list, 
+                                use_rl=True):
         """
-        Calculate confidence in the match quality
-        
-        High confidence when:
-        - Multiple high scores across different factors
-        - Critical factors (subject, skill) are high
-        - No very low scores in important areas
-        """
-        critical_factors = ['subject_match', 'skill_compatibility']
-        critical_avg = np.mean([breakdown[f] for f in critical_factors])
-        
-        all_scores = list(breakdown.values())
-        overall_avg = np.mean(all_scores)
-        score_variance = np.var(all_scores)
-        
-        # High confidence if critical factors are strong and variance is low
-        confidence = 0.5 * (critical_avg / 100) + 0.3 * (overall_avg / 100) + 0.2 * (1 - min(score_variance / 1000, 1))
-        
-        return min(1.0, confidence)
-    
-    def adjust_weights_dynamically(self, student_profile):
-        """
-        Dynamically adjust feature weights based on student characteristics
-        
-        Examples:
-        - High motivation students: increase skill compatibility weight
-        - Beginners: increase learning style weight
-        - Specific subject focus: increase subject match weight
-        """
-        weights = self.base_weights.copy()
-        
-        # Get motivation level
-        motivation = student_profile.get('motivation_level', 5)
-        
-        # Get skill level
-        skill_level = student_profile.get('skill_level', 'beginner').lower()
-        
-        # High motivation: care more about skill compatibility
-        if motivation > 7:
-            weights['skill_compatibility'] += 0.05
-            weights['schedule_match'] -= 0.03
-            weights['rating'] -= 0.02
-        
-        # Beginners: care more about teaching style and tutor patience
-        if skill_level == 'beginner':
-            weights['learning_style_match'] += 0.05
-            weights['skill_compatibility'] += 0.05
-            weights['subject_match'] -= 0.05
-            weights['rating'] -= 0.05
-        
-        # Advanced students: care more about expertise
-        if skill_level in ['advanced', 'expert']:
-            weights['subject_match'] += 0.05
-            weights['rating'] += 0.05
-            weights['learning_style_match'] -= 0.05
-            weights['schedule_match'] -= 0.05
-        
-        # Normalize weights to sum to 1.0
-        total = sum(weights.values())
-        weights = {k: v / total for k, v in weights.items()}
-        
-        return weights
-    
-    def match_student_to_tutors(self, student_profile, tutors_list):
-        """
-        Enhanced matching with dynamic weighting and confidence scoring
+        Enhanced matching with RL and performance-based differentiation
         """
         student_features = self.prepare_student_features(student_profile)
         
-        # Dynamically adjust weights based on student profile
-        weights = self.adjust_weights_dynamically(student_profile)
+        # Get personalized or base weights
+        if use_rl and student_id:
+            weights = self.get_personalized_weights(student_id, self.base_weights)
+        else:
+            weights = self.base_weights.copy()
         
         matches = []
         
         for tutor in tutors_list:
+            tutor_id = tutor.get('id')
             tutor_features = self.prepare_tutor_features(tutor)
             
-            # Calculate individual match components
+            # Calculate base feature scores
             subject_score = self.calculate_subject_match(
                 student_features['preferred_subjects'],
                 tutor_features['expertise']
@@ -389,8 +546,8 @@ class TutorMatchingSystem:
             
             rating_score = self.normalize_rating(tutor_features['rating'])
             
-            # Calculate weighted total score
-            total_score = (
+            # Calculate base weighted score
+            base_score = (
                 weights['subject_match'] * subject_score +
                 weights['skill_compatibility'] * skill_score +
                 weights['schedule_match'] * schedule_score +
@@ -399,10 +556,22 @@ class TutorMatchingSystem:
                 weights['rating'] * rating_score
             )
             
-            # Convert to percentage
-            match_percentage = int(total_score * 100)
+            # Add RL-based performance score (THIS IS KEY FOR DIFFERENTIATION)
+            if use_rl:
+                performance_score = self.calculate_tutor_performance_score(tutor_id)
+                
+                # Blend base score with performance score
+                # Performance has 30% influence (significant but not overwhelming)
+                final_score = 0.70 * base_score + 0.30 * performance_score
+            else:
+                final_score = base_score
             
-            # Create breakdown
+            # Add small random exploration bonus
+            if use_rl and np.random.random() < 0.1:
+                final_score += np.random.uniform(0, 0.05)
+            
+            match_percentage = int(final_score * 100)
+            
             breakdown = {
                 'subject_match': int(subject_score * 100),
                 'skill_compatibility': int(skill_score * 100),
@@ -412,98 +581,71 @@ class TutorMatchingSystem:
                 'rating': int(rating_score * 100)
             }
             
-            # Calculate confidence
-            confidence = self.calculate_confidence_score(breakdown)
+            if use_rl:
+                breakdown['performance_score'] = int(performance_score * 100)
             
             matches.append({
-                'tutor_id': tutor.get('id'),
+                'tutor_id': tutor_id,
                 'tutor_name': tutor.get('name'),
                 'match_score': match_percentage,
-                'confidence': round(confidence * 100),
                 'breakdown': breakdown,
-                'weights_used': {k: round(v, 3) for k, v in weights.items()}
+                'weights_used': {k: round(v, 3) for k, v in weights.items()},
+                'total_matches': self.tutor_performance[tutor_id]['total_matches'],
+                'success_rate': (
+                    self.tutor_performance[tutor_id]['successful_matches'] /
+                    max(self.tutor_performance[tutor_id]['total_matches'], 1)
+                ) if use_rl else None
             })
         
-        # Sort by match score, then by confidence
-        matches.sort(key=lambda x: (x['match_score'], x['confidence']), reverse=True)
+        # Sort by match score
+        matches.sort(key=lambda x: x['match_score'], reverse=True)
         
         return matches
     
-    def get_top_matches(self, student_profile, tutors_list, top_n=5):
-        """Get top N tutor matches with minimum quality threshold"""
-        all_matches = self.match_student_to_tutors(student_profile, tutors_list)
-        
-        # Filter matches with minimum 40% score
-        quality_matches = [m for m in all_matches if m['match_score'] >= 40]
-        
-        return quality_matches[:top_n]
-    
-    def explain_match(self, match_result):
-        """
-        Enhanced explanation with more detailed insights
-        """
-        breakdown = match_result['breakdown']
-        confidence = match_result.get('confidence', 50)
-        explanations = []
-        
-        # Subject match explanations
-        if breakdown['subject_match'] >= 90:
-            explanations.append("✨ Expert in your exact subjects of interest")
-        elif breakdown['subject_match'] >= 70:
-            explanations.append("✓ Strong expertise in related subjects")
-        elif breakdown['subject_match'] >= 50:
-            explanations.append("✓ Can teach your requested subjects")
-        
-        # Skill compatibility
-        if breakdown['skill_compatibility'] >= 85:
-            explanations.append("🎯 Perfect experience level for your skills")
-        elif breakdown['skill_compatibility'] >= 70:
-            explanations.append("✓ Well-suited for your skill level")
-        
-        # Schedule
-        if breakdown['schedule_match'] >= 90:
-            explanations.append("📅 Available at your ideal times")
-        elif breakdown['schedule_match'] >= 60:
-            explanations.append("✓ Has availability close to your preference")
-        
-        # Language
-        if breakdown['language_match'] >= 90:
-            explanations.append("🗣️ Speaks all your preferred languages")
-        elif breakdown['language_match'] >= 70:
-            explanations.append("✓ Shares your primary language")
-        
-        # Learning style
-        if breakdown['learning_style_match'] >= 90:
-            explanations.append("🎨 Teaching style matches your learning preference")
-        
-        # Rating
-        if breakdown['rating'] >= 95:
-            explanations.append("⭐ Top-rated tutor with excellent reviews")
-        elif breakdown['rating'] >= 85:
-            explanations.append("✓ Highly rated by previous students")
-        
-        # Confidence indicator
-        if confidence >= 80:
-            explanations.append("💪 High confidence match based on multiple factors")
-        
-        return explanations
-    
     def save_model(self, filepath):
-        """Save configuration"""
-        config = {
+        """Save model with RL state"""
+        model_data = {
             'base_weights': self.base_weights,
             'subject_groups': self.subject_groups,
-            'version': '2.0',
+            'q_table': dict(self.q_table),
+            'tutor_performance': dict(self.tutor_performance),
+            'student_preferences': dict(self.student_preferences),
+            'feature_rewards': dict(self.feature_rewards),
+            'learning_rate': self.learning_rate,
+            'discount_factor': self.discount_factor,
+            'epsilon': self.epsilon,
+            'version': '3.0-RL',
             'last_updated': datetime.now().isoformat()
         }
-        with open(filepath, 'w') as f:
-            json.dump(config, f, indent=2)
-        print(f"✓ Model configuration saved to {filepath}")
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+        
+        print(f"✓ RL Model saved to {filepath}")
     
     def load_model(self, filepath):
-        """Load configuration"""
-        with open(filepath, 'r') as f:
-            config = json.load(f)
-        self.base_weights = config.get('base_weights', self.base_weights)
-        self.subject_groups = config.get('subject_groups', self.subject_groups)
-        print(f"✓ Model configuration loaded from {filepath}")
+        """Load model with RL state"""
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+        
+        self.base_weights = model_data.get('base_weights', self.base_weights)
+        self.subject_groups = model_data.get('subject_groups', self.subject_groups)
+        self.q_table = defaultdict(lambda: defaultdict(float), model_data.get('q_table', {}))
+        self.tutor_performance = defaultdict(lambda: {
+            'total_matches': 0,
+            'successful_matches': 0,
+            'avg_satisfaction': 0.0,
+            'completion_rate': 0.0,
+            'student_retention': 0.0,
+            'response_time_score': 1.0,
+            'reliability_score': 1.0
+        }, model_data.get('tutor_performance', {}))
+        self.student_preferences = defaultdict(lambda: {
+            'weight_adjustments': {},
+            'preferred_tutor_traits': {},
+            'match_history': [],
+            'satisfaction_history': []
+        }, model_data.get('student_preferences', {}))
+        self.feature_rewards = defaultdict(list, model_data.get('feature_rewards', {}))
+        
+        print(f"✓ RL Model loaded from {filepath}")

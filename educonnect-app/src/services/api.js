@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // FIXED: Use REACT_APP_API_URL and fallback to production URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' || 'http://localhost:3000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 console.log('🔥 API Base URL:', API_BASE_URL); // Debug log
 
@@ -150,5 +150,13 @@ export const checkApiHealth = async () => {
     return false;
   }
 };
-
+export const deleteAccount = async () => {
+  try {
+    const response = await api.delete('/api/user/delete-account');
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    throw error;
+  }
+};
 export default api;

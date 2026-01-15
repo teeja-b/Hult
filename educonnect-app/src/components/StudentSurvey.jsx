@@ -5,19 +5,19 @@ const StudentSurvey = ({ onComplete, onClose }) => {
   const [step, setStep] = useState(1);
   const [surveyData, setSurveyData] = useState({
     // Skill scores (1-10)
-    math_score: 5,
-    science_score: 5,
-    language_score: 5,
-    tech_score: 5,
-    motivation_level: 5,
+    mathScore: 5,
+    scienceScore: 5,
+    languageScore: 5,
+    techScore: 5,
+    motivationLevel: 5,
     
     // Profile data
-    learning_style: '',
-    preferred_subjects: [],
-    skill_level: '',
-    available_time: '',
-    preferred_languages: [],
-    learning_goals: ''
+    learningStyle: '',
+    preferredSubjects: [],
+    skillLevel: '',
+    availableTime: '',
+    preferredLanguages: [],
+    learningGoals: ''
   });
 
   const totalSteps = 4;
@@ -37,76 +37,89 @@ const StudentSurvey = ({ onComplete, onClose }) => {
     });
   };
 
-const handleSubmit = async () => {
-  console.log('🚀 ========== SUBMIT STARTED ==========');
-  console.log('Survey data:', surveyData);
-  
-  try {
-    const token = localStorage.getItem('token');
-    console.log('Token:', token ? 'EXISTS' : 'MISSING');
+  const handleSubmit = async () => {
+    console.log('🚀 ========== SUBMIT STARTED ==========');
+    console.log('Survey data:', surveyData);
     
-    if (!token) {
-      alert('Please log in first');
-      return;
+    try {
+      const token = localStorage.getItem('token');
+      console.log('Token:', token ? 'EXISTS' : 'MISSING');
+      
+      if (!token) {
+        alert('Please log in first');
+        return;
+      }
+
+      console.log('📤 About to send survey request...');
+
+      // Convert camelCase to snake_case for backend
+      const backendData = {
+        math_score: surveyData.mathScore,
+        science_score: surveyData.scienceScore,
+        language_score: surveyData.languageScore,
+        tech_score: surveyData.techScore,
+        motivation_level: surveyData.motivationLevel,
+        learning_style: surveyData.learningStyle,
+        preferred_subjects: surveyData.preferredSubjects,
+        skill_level: surveyData.skillLevel,
+        available_time: surveyData.availableTime,
+        preferred_languages: surveyData.preferredLanguages,
+        learning_goals: surveyData.learningGoals
+      };
+
+      const surveyResponse = await fetch('https://hult.onrender.com/api/student/survey', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(backendData)
+      });
+
+      console.log('📥 Survey response received:', surveyResponse.status);
+      
+      const surveyResult = await surveyResponse.json();
+      console.log('Survey result:', surveyResult);
+
+      if (!surveyResponse.ok) {
+        throw new Error(surveyResult.error || 'Failed to submit survey');
+      }
+
+      console.log('✅ Survey saved! Now updating profile...');
+
+      // Update profile with snake_case
+      const profileResponse = await fetch('https://hult.onrender.com/api/student/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(backendData)
+      });
+
+      console.log('📥 Profile response received:', profileResponse.status);
+
+      const profileResult = await profileResponse.json();
+      console.log('Profile result:', profileResult);
+
+      if (!profileResponse.ok) {
+        throw new Error(profileResult.error || 'Failed to update profile');
+      }
+
+      // ✅ SAVE CAMELCASE TO LOCALSTORAGE for AI matching
+      localStorage.setItem('studentSurvey', JSON.stringify(surveyData));
+      console.log('✅ Survey data saved to localStorage (camelCase)');
+
+      console.log('✅ ========== SUBMIT COMPLETE ==========');
+      alert('Survey completed successfully! 🎉');
+      onComplete();
+      
+    } catch (error) {
+      console.error('❌ Survey submission error:', error);
+      alert(`Error: ${error.message}`);
     }
+  };
 
-    console.log('📤 About to send survey request...');
-
-    const surveyResponse = await fetch('https://hult.onrender.com/api/student/survey', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(surveyData)
-    });
-
-    console.log('📥 Survey response received:', surveyResponse.status);
-    
-    const surveyResult = await surveyResponse.json();
-    console.log('Survey result:', surveyResult);
-
-    if (!surveyResponse.ok) {
-      throw new Error(surveyResult.error || 'Failed to submit survey');
-    }
-
-    console.log('✅ Survey saved! Now updating profile...');
-
-    // Update profile
-    const profileResponse = await fetch('https://hult.onrender.com/api/student/profile', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        learning_style: surveyData.learning_style,
-        preferred_subjects: surveyData.preferred_subjects,
-        skill_level: surveyData.skill_level,
-        available_time: surveyData.available_time,
-        preferred_languages: surveyData.preferred_languages,
-        learning_goals: surveyData.learning_goals
-      })
-    });
-
-    console.log('📥 Profile response received:', profileResponse.status);
-
-    const profileResult = await profileResponse.json();
-    console.log('Profile result:', profileResult);
-
-    if (!profileResponse.ok) {
-      throw new Error(profileResult.error || 'Failed to update profile');
-    }
-
-    console.log('✅ ========== SUBMIT COMPLETE ==========');
-    alert('Survey completed successfully! 🎉');
-    onComplete();
-    
-  } catch (error) {
-    console.error('❌ Survey submission error:', error);
-    alert(`Error: ${error.message}`);
-  }
-};
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
@@ -122,14 +135,14 @@ const handleSubmit = async () => {
             <BookOpen size={20} className="text-blue-600" />
             Mathematics
           </label>
-          <span className="text-2xl font-bold text-blue-600">{surveyData.math_score}/10</span>
+          <span className="text-2xl font-bold text-blue-600">{surveyData.mathScore}/10</span>
         </div>
         <input
           type="range"
           min="1"
           max="10"
-          value={surveyData.math_score}
-          onChange={(e) => updateData('math_score', parseInt(e.target.value))}
+          value={surveyData.mathScore}
+          onChange={(e) => updateData('mathScore', parseInt(e.target.value))}
           className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -145,14 +158,14 @@ const handleSubmit = async () => {
             <Zap size={20} className="text-green-600" />
             Science
           </label>
-          <span className="text-2xl font-bold text-green-600">{surveyData.science_score}/10</span>
+          <span className="text-2xl font-bold text-green-600">{surveyData.scienceScore}/10</span>
         </div>
         <input
           type="range"
           min="1"
           max="10"
-          value={surveyData.science_score}
-          onChange={(e) => updateData('science_score', parseInt(e.target.value))}
+          value={surveyData.scienceScore}
+          onChange={(e) => updateData('scienceScore', parseInt(e.target.value))}
           className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -168,14 +181,14 @@ const handleSubmit = async () => {
             <Languages size={20} className="text-purple-600" />
             Language Arts
           </label>
-          <span className="text-2xl font-bold text-purple-600">{surveyData.language_score}/10</span>
+          <span className="text-2xl font-bold text-purple-600">{surveyData.languageScore}/10</span>
         </div>
         <input
           type="range"
           min="1"
           max="10"
-          value={surveyData.language_score}
-          onChange={(e) => updateData('language_score', parseInt(e.target.value))}
+          value={surveyData.languageScore}
+          onChange={(e) => updateData('languageScore', parseInt(e.target.value))}
           className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -191,14 +204,14 @@ const handleSubmit = async () => {
             <Code size={20} className="text-orange-600" />
             Technology
           </label>
-          <span className="text-2xl font-bold text-orange-600">{surveyData.tech_score}/10</span>
+          <span className="text-2xl font-bold text-orange-600">{surveyData.techScore}/10</span>
         </div>
         <input
           type="range"
           min="1"
           max="10"
-          value={surveyData.tech_score}
-          onChange={(e) => updateData('tech_score', parseInt(e.target.value))}
+          value={surveyData.techScore}
+          onChange={(e) => updateData('techScore', parseInt(e.target.value))}
           className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -214,14 +227,14 @@ const handleSubmit = async () => {
             <Star size={20} className="text-yellow-600" />
             Motivation Level
           </label>
-          <span className="text-2xl font-bold text-yellow-600">{surveyData.motivation_level}/10</span>
+          <span className="text-2xl font-bold text-yellow-600">{surveyData.motivationLevel}/10</span>
         </div>
         <input
           type="range"
           min="1"
           max="10"
-          value={surveyData.motivation_level}
-          onChange={(e) => updateData('motivation_level', parseInt(e.target.value))}
+          value={surveyData.motivationLevel}
+          onChange={(e) => updateData('motivationLevel', parseInt(e.target.value))}
           className="w-full h-2 bg-yellow-200 rounded-lg appearance-none cursor-pointer"
         />
         <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -247,9 +260,9 @@ const handleSubmit = async () => {
           {['visual', 'auditory', 'kinesthetic'].map(style => (
             <button
               key={style}
-              onClick={() => updateData('learning_style', style)}
+              onClick={() => updateData('learningStyle', style)}
               className={`w-full p-4 rounded-lg border-2 text-left transition ${
-                surveyData.learning_style === style
+                surveyData.learningStyle === style
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-blue-300'
               }`}
@@ -272,9 +285,9 @@ const handleSubmit = async () => {
           {['beginner', 'intermediate', 'advanced'].map(level => (
             <button
               key={level}
-              onClick={() => updateData('skill_level', level)}
+              onClick={() => updateData('skillLevel', level)}
               className={`p-3 rounded-lg border-2 transition ${
-                surveyData.skill_level === level
+                surveyData.skillLevel === level
                   ? 'border-purple-500 bg-purple-50'
                   : 'border-gray-200 hover:border-purple-300'
               }`}
@@ -295,9 +308,9 @@ const handleSubmit = async () => {
           {['morning', 'afternoon', 'evening'].map(time => (
             <button
               key={time}
-              onClick={() => updateData('available_time', time)}
+              onClick={() => updateData('availableTime', time)}
               className={`p-3 rounded-lg border-2 transition ${
-                surveyData.available_time === time
+                surveyData.availableTime === time
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:border-green-300'
               }`}
@@ -328,14 +341,14 @@ const handleSubmit = async () => {
             'Computer Science', 'History', 'Art', 'Music', 'Business', 'Languages'].map(subject => (
             <button
               key={subject}
-              onClick={() => toggleArrayItem('preferred_subjects', subject)}
+              onClick={() => toggleArrayItem('preferredSubjects', subject)}
               className={`p-3 rounded-lg border-2 transition text-sm ${
-                surveyData.preferred_subjects.includes(subject)
+                surveyData.preferredSubjects.includes(subject)
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-blue-300'
               }`}
             >
-              {surveyData.preferred_subjects.includes(subject) && (
+              {surveyData.preferredSubjects.includes(subject) && (
                 <CheckCircle size={16} className="inline mr-1 text-blue-600" />
               )}
               {subject}
@@ -354,14 +367,14 @@ const handleSubmit = async () => {
             'Portuguese', 'Russian'].map(lang => (
             <button
               key={lang}
-              onClick={() => toggleArrayItem('preferred_languages', lang)}
+              onClick={() => toggleArrayItem('preferredLanguages', lang)}
               className={`p-3 rounded-lg border-2 transition ${
-                surveyData.preferred_languages.includes(lang)
+                surveyData.preferredLanguages.includes(lang)
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:border-green-300'
               }`}
             >
-              {surveyData.preferred_languages.includes(lang) && (
+              {surveyData.preferredLanguages.includes(lang) && (
                 <CheckCircle size={16} className="inline mr-1 text-green-600" />
               )}
               {lang}
@@ -385,8 +398,8 @@ const handleSubmit = async () => {
           Describe your learning goals
         </label>
         <textarea
-          value={surveyData.learning_goals}
-          onChange={(e) => updateData('learning_goals', e.target.value)}
+          value={surveyData.learningGoals}
+          onChange={(e) => updateData('learningGoals', e.target.value)}
           placeholder="Example: I want to improve my math skills to prepare for university entrance exams..."
           className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
           rows="6"
@@ -397,9 +410,9 @@ const handleSubmit = async () => {
         <h3 className="font-semibold text-blue-900 mb-2">Survey Summary</h3>
         <div className="space-y-1 text-sm text-blue-800">
           <p>✓ Skill ratings completed</p>
-          <p>✓ Learning style: <span className="font-semibold capitalize">{surveyData.learning_style || 'Not set'}</span></p>
-          <p>✓ Subjects: {surveyData.preferred_subjects.length} selected</p>
-          <p>✓ Languages: {surveyData.preferred_languages.length} selected</p>
+          <p>✓ Learning style: <span className="font-semibold capitalize">{surveyData.learningStyle || 'Not set'}</span></p>
+          <p>✓ Subjects: {surveyData.preferredSubjects.length} selected</p>
+          <p>✓ Languages: {surveyData.preferredLanguages.length} selected</p>
         </div>
       </div>
     </div>
@@ -407,9 +420,9 @@ const handleSubmit = async () => {
 
   const canProceed = () => {
     if (step === 1) return true;
-    if (step === 2) return surveyData.learning_style && surveyData.skill_level && surveyData.available_time;
-    if (step === 3) return surveyData.preferred_subjects.length > 0 && surveyData.preferred_languages.length > 0;
-    if (step === 4) return surveyData.learning_goals.trim().length > 10;
+    if (step === 2) return surveyData.learningStyle && surveyData.skillLevel && surveyData.availableTime;
+    if (step === 3) return surveyData.preferredSubjects.length > 0 && surveyData.preferredLanguages.length > 0;
+    if (step === 4) return surveyData.learningGoals.trim().length > 10;
     return false;
   };
 

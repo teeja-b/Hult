@@ -4,17 +4,27 @@ import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
 import { register, login, getMatchedTutors } from './services/api';
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Users, Award, Heart, Download, Menu, X, Search, Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, Video, FileText, CheckCircle, MapPin, Shield, AlertCircle } from 'lucide-react';
+import { BookOpen, Users, Award, Heart, Download, Menu, X, Search, Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, Video, FileText, CheckCircle, MapPin, Shield, AlertCircle,Lock } from 'lucide-react';
 import { LogOut } from 'lucide-react';
 import TutorCourseManager from './components/TutorCourseManager';
 import MessagingVideoChat from './components/MessagingVideoChat';
 import TutorMessagingView from './components/TutorMessagingView';
+import { 
+  EnhancedRegisterModal, 
+  EnhancedLoginModal, 
+  ForgotPasswordModal,
+  EmailVerificationBanner 
+} from './components/AuthModals';
 
-
-
-
+import PasswordResetPage from './components/PasswordResetPage';
+import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
+import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackModal';
 const EduConnectApp = () => {
+<<<<<<< HEAD
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000' || 'http://localhost:5000';
+=======
+  const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' ;
+>>>>>>> 6a7d4909f8e8382812d7f6eec2b7cfa438baf524
   const [showCourseManager, setShowCourseManager] = useState(false);
 const [tutorStats, setTutorStats] = useState({
   totalCourses: 0,
@@ -23,6 +33,9 @@ const [tutorStats, setTutorStats] = useState({
 
 });
 
+
+  // Add this with your other state declarations (around line 40)
+const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showStudentProfile, setShowStudentProfile] = useState(false);
   const [showTutorProfile, setShowTutorProfile] = useState(false);
   const [showTutorOnboarding, setShowTutorOnboarding] = useState(false);
@@ -41,20 +54,15 @@ const [tutorStats, setTutorStats] = useState({
   const [matchedTutors, setMatchedTutors] = useState([]);
   const [showVerification, setShowVerification] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-
-
+  const [courses, setCourses] = useState([]);
+const [tutors, setTutors] = useState([]);
+  const [showProfileCompletionPrompt, setShowProfileCompletionPrompt] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [registerData, setRegisterData] = useState({ 
-    name: '',
-    email: '', 
-    password: '',
-    role: 'student'
-  });
-
-  const [selectedTutor, setSelectedTutor] = useState(null);
+ const [selectedTutor, setSelectedTutor] = useState(null);
+const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+const [feedbackTutor, setFeedbackTutor] = useState(null);
   const [bookingData, setBookingData] = useState({
     subject: '',
     date: '',
@@ -248,18 +256,19 @@ const [downloading, setDownloading] = useState(null);
     'UY': { name: 'Uruguay', income: 'high-income' },
   };
 
-  const courses = [
-    { id: 1, title: 'Introduction to Mathematics', tutor: 'Dr. Sarah Johnson', level: 'Beginner', duration: '8 weeks', rating: 4.8, students: 1234, offline: true, category: 'Math' },
-    { id: 2, title: 'Web Development Basics', tutor: 'John Smith', level: 'Intermediate', duration: '10 weeks', rating: 4.9, students: 2341, offline: true, category: 'Technology' },
-    { id: 3, title: 'English Grammar Mastery', tutor: 'Emma Williams', level: 'Beginner', duration: '6 weeks', rating: 4.7, students: 987, offline: false, category: 'Language' },
-    { id: 4, title: 'Physics Fundamentals', tutor: 'Prof. Michael Chen', level: 'Advanced', duration: '12 weeks', rating: 4.9, students: 1567, offline: true, category: 'Science' },
-  ];
-
-  const tutors = [
-    { id: 1, name: 'Dr. Sarah Johnson', expertise: 'Mathematics, Physics', rating: 4.9, sessions: 234, languages: ['English', 'Spanish'], availability: 'Morning', matchScore: 95 },
-    { id: 2, name: 'John Smith', expertise: 'Web Development, Programming', rating: 4.8, sessions: 189, languages: ['English'], availability: 'Evening', matchScore: 88 },
-    { id: 3, name: 'Emma Williams', expertise: 'English, Literature', rating: 4.7, sessions: 156, languages: ['English', 'French'], availability: 'Afternoon', matchScore: 92 },
-  ];
+useEffect(() => {
+  if (isAuthenticated && userType === 'tutor') {
+    const profileComplete = localStorage.getItem('profileComplete');
+    const promptDismissed = sessionStorage.getItem('profilePromptDismissed');
+    
+    if (profileComplete !== 'true' && !promptDismissed) {
+      // Show prompt after a short delay
+      setTimeout(() => {
+        setShowProfileCompletionPrompt(true);
+      }, 1000);
+    }
+  }
+}, [isAuthenticated, userType]);
 
 const NavBar = ({ 
   userType,
@@ -324,7 +333,12 @@ const NavBar = ({
                 <LogOut size={16} />
                 Logout
               </button>
-             
+              {userType === 'tutor' && localStorage.getItem('profileComplete') === 'false' && (
+                <div className="hidden sm:flex items-center gap-2 bg-yellow-100 px-3 py-2 rounded-lg border border-yellow-300">
+                  <AlertCircle size={16} className="text-yellow-600" />
+                  <span className="text-xs font-medium text-yellow-800">Profile Incomplete</span>
+                </div>
+              )}
             </>
           )}
           
@@ -342,7 +356,8 @@ const NavBar = ({
       {menuOpen && (
         <div className="border-t border-white/20 bg-white/10 backdrop-blur-md">
           <div className="p-2 space-y-1">
-            {/* Main Navigation */}
+            
+            {/* HOME - Always visible */}
             <button 
               onClick={() => { setCurrentView('home'); setMenuOpen(false); }} 
               className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
@@ -350,9 +365,9 @@ const NavBar = ({
               <BookOpen size={20} />
               <span className="font-medium">Home</span>
             </button>
-            
-            {/* Student-only navigation items */}
-            {userType === 'student' && (
+
+            {/* STUDENT MENU ITEMS - Only show when authenticated as student */}
+            {isAuthenticated && userType === 'student' && (
               <>
                 <button 
                   onClick={() => { setCurrentView('courses'); setMenuOpen(false); }} 
@@ -362,15 +377,13 @@ const NavBar = ({
                   <span className="font-medium">Courses</span>
                 </button>
                 
-                {isAuthenticated && (
-                  <button 
-                    onClick={() => { setCurrentView('my-courses'); setMenuOpen(false); }} 
-                    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3 bg-white/10"
-                  >
-                    <BookOpen size={20} />
-                    <span className="font-medium">📚 My Courses</span>
-                  </button>
-                )}
+                <button 
+                  onClick={() => { setCurrentView('my-courses'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3 bg-white/10"
+                >
+                  <BookOpen size={20} />
+                  <span className="font-medium">📚 My Courses</span>
+                </button>
                 
                 <button 
                   onClick={() => { setCurrentView('tutors'); setMenuOpen(false); }} 
@@ -387,49 +400,10 @@ const NavBar = ({
                   <Download size={20} />
                   <span className="font-medium">Offline Library</span>
                 </button>
-                
-          
               </>
             )}
-                  <button 
-                  onClick={() => { setCurrentView('donate'); setMenuOpen(false); }} 
-                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-                >
-                  <Heart size={20} />
-                  <span className="font-medium">Support Us</span>
-                </button>
-                {/* Certificates - Available for both students and tutors */}
-            <button 
-              onClick={() => { setCurrentView('certificates'); setMenuOpen(false); }} 
-              className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-            >
-              <Award size={20} />
-              <span className="font-medium">Certificates</span>
-            </button>
-          
 
-            {/* Divider */}
-            {isAuthenticated && <div className="border-t border-white/20 my-2"></div>}
-
-            {/* User Profile */}
-            {isAuthenticated && (
-              <button 
-                onClick={() => { 
-                  if (userType === 'student') {
-                    setShowStudentProfile(true);
-                  } else if (userType === 'tutor') {
-                    setShowTutorProfile(true);
-                  }
-                  setMenuOpen(false); 
-                }} 
-                className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-              >
-                <Users size={20} />
-                <span className="font-medium">My Profile</span>
-              </button>
-            )}
-
-            {/* Tutor-specific - MANAGE COURSES BUTTON */}
+            {/* TUTOR MENU ITEMS - Only show when authenticated as tutor */}
             {isAuthenticated && userType === 'tutor' && (
               <button 
                 onClick={() => { 
@@ -444,9 +418,56 @@ const NavBar = ({
               </button>
             )}
 
-            {/* Logout for mobile */}
+            {/* COMMON AUTHENTICATED USER ITEMS */}
             {isAuthenticated && (
               <>
+                <button 
+                  onClick={() => { setCurrentView('donate'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Heart size={20} />
+                  <span className="font-medium">Support Us</span>
+                </button>
+
+                <button 
+                  onClick={() => { setCurrentView('certificates'); setMenuOpen(false); }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Award size={20} />
+                  <span className="font-medium">Certificates</span>
+                </button>
+
+                {/* Divider */}
+                <div className="border-t border-white/20 my-2"></div>
+
+                {/* User Profile */}
+                <button 
+                  onClick={() => { 
+                    if (userType === 'student') {
+                      setShowStudentProfile(true);
+                    } else if (userType === 'tutor') {
+                      setShowTutorProfile(true);
+                    }
+                    setMenuOpen(false); 
+                  }} 
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Users size={20} />
+                  <span className="font-medium">My Profile</span>
+                </button>
+
+                <button 
+                  onClick={() => {
+                    setShowPasswordReset(true);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+                >
+                  <Lock size={20} />
+                  <span className="font-medium">Change Password</span>
+                </button>
+
+                {/* Logout for mobile */}
                 <div className="border-t border-white/20 my-2 sm:hidden"></div>
                 <button 
                   onClick={handleLogout}
@@ -463,17 +484,110 @@ const NavBar = ({
     </div>
   );
 };
+// In your App.js, add this test component temporarily:
 
+const DebugTutorFetch = () => {
+  const [tutors, setTutors] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchTutors = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://hult.onrender.com/api/tutors');
+      const data = await response.json();
+      console.log('📊 Frontend received:', data);
+      setTutors(data.tutors || []);
+    } catch (error) {
+      console.error('❌ Fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+      <h3 className="font-bold mb-2">🔍 Debug: Tutor Fetch Test</h3>
+      <button 
+        onClick={fetchTutors}
+        className="bg-blue-600 text-white px-4 py-2 rounded mb-2"
+      >
+        Fetch Tutors
+      </button>
+      
+      {loading && <p>Loading...</p>}
+      
+      {tutors.length > 0 && (
+        <div className="mt-2">
+          <p className="font-semibold">Found {tutors.length} tutors:</p>
+          <ul className="text-xs space-y-1 mt-2">
+            {tutors.map(t => (
+              <li key={t.id} className="bg-white p-2 rounded">
+                {t.name} - {t.expertise?.slice(0, 50)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Add this to your HomeView temporarily:
+{userType === 'student' && <DebugTutorFetch />}
 // Replace your existing useEffect (around line 489) with these TWO separate effects:
 
+// Replace your initial useEffect with this:
 useEffect(() => {
   detectUserLocation();
+  
   const token = localStorage.getItem('token');
   const storedUserType = localStorage.getItem('userType');
-  if (token) {
+  const profileComplete = localStorage.getItem('profileComplete');
+  
+  console.log('🔍 App Mount - Checking stored data:');
+  console.log('- token:', token ? 'exists' : 'missing');
+  console.log('- userType:', storedUserType);
+  console.log('- profileComplete:', profileComplete);
+  
+  if (token && storedUserType) {
     setIsAuthenticated(true);
     setUserType(storedUserType);
+    
+    // ✅ CRITICAL: Don't show onboarding if profile is complete
+    if (storedUserType === 'tutor') {
+      const isComplete = profileComplete === 'true';
+      console.log('📝 Tutor detected on mount, profileComplete =', isComplete);
+      
+      // Only show onboarding if explicitly incomplete
+      if (!isComplete) {
+        console.log('⚠️ Profile incomplete, will show prompt if needed');
+      } else {
+        console.log('✅ Profile complete, no prompt needed');
+      }
+    }
   }
+}, []);
+
+// Fetch courses and tutors count for student home dashboard
+// Fetch courses and tutors count for student home dashboard
+useEffect(() => {
+  const fetchHomeStats = async () => {
+    try {
+      const coursesRes = await fetch(`${API_URL}/api/courses`);
+      const coursesData = await coursesRes.json();
+      setCourses(coursesData.courses || []);
+      
+      const tutorsRes = await fetch(`${API_URL}/api/tutors`);
+      const tutorsData = await tutorsRes.json();
+      setTutors(tutorsData.tutors || []);
+    } catch (error) {
+      console.error('Failed to fetch home stats:', error);
+      setCourses([]);
+      setTutors([]);
+    }
+  };
+  
+  fetchHomeStats();
 }, []);
 
 // NEW: Separate effect to fetch tutor stats when authentication and userType are ready
@@ -520,7 +634,9 @@ useEffect(() => {
     }, 1500);
   };
 
-  const handleAIMatching = async () => {
+  // Replace the handleAIMatching function in your App.js with this fixed version:
+
+const handleAIMatching = async () => {
   if (!isAuthenticated) {
     alert('Please log in first to use AI matching!');
     setShowLogin(true);
@@ -528,8 +644,9 @@ useEffect(() => {
   }
 
   const surveyString = localStorage.getItem('studentSurvey');
+  
   if (!surveyString) {
-    alert('Please complete your survey first!');
+    alert('Please complete your survey first to enable AI matching!');
     setShowSurvey(true);
     return;
   }
@@ -540,46 +657,120 @@ useEffect(() => {
   } catch (error) {
     console.error('Failed to parse survey data:', error);
     alert('Survey data is corrupted. Please complete the survey again.');
+    setShowSurvey(true);
+    return;
+  }
+
+  console.log('📊 Survey data for AI matching:', survey);
+
+  // Validate that survey has required fields (camelCase)
+  if (!survey.learningStyle || !survey.preferredSubjects || !survey.skillLevel || 
+      !survey.availableTime || !survey.preferredLanguages || !survey.learningGoals) {
+    console.warn('Missing survey fields');
+    alert('Please complete all survey fields.');
+    setShowSurvey(true);
     return;
   }
 
   setAiMatching(true);
   
   try {
-    const response = await getMatchedTutors(survey);
-    console.log('ML API Response:', response.data);
+    const token = localStorage.getItem('token');
     
-    // Handle response from Flask backend
-    if (response.data && response.data.matches) {
-      setMatchedTutors(response.data.matches);
-      setCurrentView('matched-tutors'); // Navigate to results page
-    } else if (Array.isArray(response.data)) {
-      setMatchedTutors(response.data);
-      setCurrentView('matched-tutors'); // Navigate to results page
+    // Convert camelCase to snake_case for backend
+    const studentProfile = {
+      learning_style: survey.learningStyle,
+      preferred_subjects: survey.preferredSubjects,
+      skill_level: survey.skillLevel,
+      learning_goals: survey.learningGoals,
+      available_time: survey.availableTime,
+      preferred_languages: survey.preferredLanguages,
+      math_score: survey.mathScore || 5,
+      science_score: survey.scienceScore || 5,
+      language_score: survey.languageScore || 5,
+      tech_score: survey.techScore || 5,
+      motivation_level: survey.motivationLevel || 7
+    };
+
+    console.log('🎯 Sending student profile to ML API:', studentProfile);
+
+    const response = await fetch(`${API_URL}/api/match/tutors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        student_profile: studentProfile,
+        use_rl: true
+      })
+    });
+
+    const testResponse = await fetch(`${API_URL}/api/debug/test-match`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    student_profile: studentProfile
+  })
+});
+
+const testResult = await testResponse.json();
+console.log('🧪 Test result:', testResult);
+
+    console.log('📡 ML API Response status:', response.status);
+
+    console.log('🎯 Sending to AI:', {
+  learningStyle: survey.learningStyle,
+  subjects: survey.preferredSubjects,
+  skillLevel: survey.skillLevel,
+  mathScore: survey.mathScore,
+  scienceScore: survey.scienceScore,
+  languageScore: survey.languageScore,
+  techScore: survey.techScore,
+  motivationLevel: survey.motivationLevel
+});
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Server error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ ML API Response data:', data);
+    
+    if (data.success && data.matches && data.matches.length > 0) {
+      console.log(`🎉 Found ${data.matches.length} matches!`);
+      setMatchedTutors(data.matches);
+      setCurrentView('matched-tutors');
+    } else {
+      console.warn('⚠️ No matches found');
+      alert('No tutors found matching your criteria. Try updating your preferences or browse all tutors.');
+      setCurrentView('tutors');
     }
     
   } catch (error) {
-    console.error('ML API Error:', error);
+    console.error('❌ ML API Error:', error);
     
-    if (error.response) {
-      if (error.response.status === 422) {
-        alert(`Validation Error: ${JSON.stringify(error.response.data)}`);
-      } else if (error.response.status === 401) {
-        alert('Authentication failed. Please log in again.');
-        setIsAuthenticated(false);
-        localStorage.removeItem('token');
-        setShowLogin(true);
-      } else {
-        alert(`Server error: ${error.response.data.message || 'Unknown error'}`);
-      }
+    if (error.message.includes('401')) {
+      alert('Authentication failed. Please log in again.');
+      setIsAuthenticated(false);
+      localStorage.removeItem('token');
+      setShowLogin(true);
+    } else if (error.message.includes('422')) {
+      alert('Invalid survey data. Please complete the survey again.');
+      setShowSurvey(true);
+    } else if (error.message.includes('fetch')) {
+      alert('Cannot connect to matching server. Please check your connection and try again.');
     } else {
-      alert('Cannot connect to ML server. Please check your connection.');
+      alert(`Matching failed: ${error.message}`);
     }
   } finally {
     setAiMatching(false);
   }
 };
-
 // MATCHED TUTORS RESULTS VIEW - Displays ML-generated matches
 const MatchedTutorsView = () => {
   if (!matchedTutors || matchedTutors.length === 0) {
@@ -614,6 +805,16 @@ const MatchedTutorsView = () => {
     );
   }
 
+  const handleOpenFeedback = (tutor) => {
+    setFeedbackTutor(tutor);
+    setShowFeedbackModal(true);
+  };
+
+  const handleFeedbackSubmit = () => {
+    // Refresh matches after feedback
+    handleAIMatching();
+  };
+
   return (
     <div className="p-4">
       <button 
@@ -623,7 +824,7 @@ const MatchedTutorsView = () => {
         ← Back to Find Tutors
       </button>
 
-      {/* Success Header - Shows ML algorithm info */}
+      {/* Success Header */}
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-6 rounded-lg mb-4">
         <div className="flex items-center gap-3 mb-2">
           <Award size={32} />
@@ -638,7 +839,7 @@ const MatchedTutorsView = () => {
             <span className="text-2xl font-bold">{matchedTutors.length}</span>
           </div>
           <div className="text-xs mt-2 opacity-80">
-            Using: Weighted Feature Matching with ML
+            Using: ML-Powered Matching with Performance History
           </div>
         </div>
       </div>
@@ -648,105 +849,30 @@ const MatchedTutorsView = () => {
         <div className="flex items-start gap-2">
           <BarChart3 className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
           <div>
-            <h4 className="font-semibold text-blue-900 mb-1">How ML Matching Works</h4>
+            <h4 className="font-semibold text-blue-900 mb-1">Enhanced ML Matching</h4>
             <p className="text-sm text-blue-800">
-              Our machine learning algorithm analyzes your learning style, goals, subjects, 
-              and preferences to calculate compatibility scores with each tutor. 
-              The breakdown shows how well each factor matches.
+              Our algorithm now learns from student feedback to improve recommendations over time.
+              Rate your tutors to help us match you better!
             </p>
           </div>
         </div>
       </div>
 
-      {/* Matched Tutors List - Data from ML backend */}
+      {/* Matched Tutors using TutorMatchCard */}
       <div className="space-y-4">
-        {matchedTutors.map((tutor, index) => (
-          <div 
-            key={tutor.id} 
-            className="bg-white rounded-lg shadow-lg p-4 border-2 border-purple-200 hover:border-purple-400 transition"
-          >
-            {/* Rank Badge */}
-            <div className="flex items-start gap-3 mb-3">
-              <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold flex-shrink-0">
-                #{index + 1}
-              </div>
-              
-              <div className="flex-1">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h3 className="font-bold text-gray-800 text-lg">{tutor.name}</h3>
-                    <p className="text-sm text-gray-600">{tutor.expertise}</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full">
-                    <span className="text-lg font-bold">{tutor.matchScore}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Match Breakdown - From ML model */}
-            {tutor.breakdown && (
-              <div className="bg-purple-50 rounded-lg p-3 mb-3">
-                <h4 className="text-xs font-semibold text-purple-900 mb-2 flex items-center gap-1">
-                  <BarChart3 size={14} />
-                  ML Match Breakdown
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(tutor.breakdown).slice(0, 4).map(([key, value]) => {
-                    const percentage = Math.round(value);
-                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    
-                    return (
-                      <div key={key} className="bg-white rounded p-2">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-gray-600 truncate">{label}</span>
-                          <span className="font-semibold text-purple-700">{percentage}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div 
-                            className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Why This Match - From ML explanations */}
-            {tutor.explanations && tutor.explanations.length > 0 && (
-              <div className="bg-green-50 rounded-lg p-3 mb-3">
-                <h4 className="text-xs font-semibold text-green-900 mb-2 flex items-center gap-1">
-                  <CheckCircle size={14} />
-                  Why This Match?
-                </h4>
-                <ul className="space-y-1">
-                  {tutor.explanations.slice(0, 3).map((exp, idx) => (
-                    <li key={idx} className="text-xs text-gray-700 flex items-start gap-1">
-                      <span className="text-green-600 flex-shrink-0">•</span>
-                      <span>{exp}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Tutor Stats */}
-            <div className="flex gap-2 text-xs text-gray-600 mb-3 flex-wrap">
-              <span className="bg-yellow-100 px-2 py-1 rounded">⭐ {tutor.rating}</span>
-              <span className="bg-blue-100 px-2 py-1 rounded">{tutor.sessions} sessions</span>
-              <span className="bg-green-100 px-2 py-1 rounded">
-                {Array.isArray(tutor.languages) ? tutor.languages.join(', ') : tutor.languages}
-              </span>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
+        {matchedTutors.map((match, index) => (
+          <div key={match.tutor_id || index}>
+            <TutorMatchCard 
+              match={match}
+              onFeedback={handleOpenFeedback}
+              showPerformance={true}
+            />
+            
+            {/* Additional Action Buttons */}
+            <div className="flex gap-2 mt-2">
               <button 
                 onClick={() => {
-                  setSelectedTutor(tutor);
+                  setSelectedTutor(match);
                   setCurrentView('tutor-profile');
                 }}
                 className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 rounded-lg hover:shadow-lg transition text-sm font-semibold"
@@ -755,12 +881,12 @@ const MatchedTutorsView = () => {
               </button>
               <button 
                 onClick={() => {
-                  setSelectedTutor(tutor);
-                  setCurrentView('tutor-profile');
+                  setSelectedTutor(match);
+                  setCurrentView('chat');
                 }}
                 className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
               >
-                Book Now
+                Message Tutor
               </button>
             </div>
           </div>
@@ -769,10 +895,9 @@ const MatchedTutorsView = () => {
 
       {/* Bottom CTA */}
       <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-purple-200 rounded-lg p-4">
-        <h4 className="font-semibold text-gray-800 mb-2">Not satisfied with these matches?</h4>
+        <h4 className="font-semibold text-gray-800 mb-2">Help us improve your matches</h4>
         <p className="text-sm text-gray-600 mb-3">
-          The ML model improves with more data. Try updating your learning preferences 
-          or browse all available tutors.
+          After working with a tutor, rate your experience to get even better recommendations!
         </p>
         <div className="flex gap-2">
           <button 
@@ -792,11 +917,24 @@ const MatchedTutorsView = () => {
           </button>
         </div>
       </div>
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && feedbackTutor && (
+        <TutorFeedbackModal
+          tutor={{
+            id: feedbackTutor.tutor_id,
+            name: feedbackTutor.tutor_name
+          }}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackTutor(null);
+          }}
+          onSubmit={handleFeedbackSubmit}
+        />
+      )}
     </div>
   );
 };
-
-
 
 
 // Enhanced download function with actual downloading
@@ -920,443 +1058,385 @@ useEffect(() => {
     }
   };
 const [showSurvey, setShowSurvey] = useState(false);
-const RegisterModal = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold mb-4">Create Account</h2>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const response = await register({ name, email, password, role });
-            console.log('🔍 Register response:', response.data);
-            
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('userId', response.data.user.id);
-            localStorage.setItem('userName', response.data.user.name);
-            localStorage.setItem('userType', response.data.user.user_type);
-            setIsAuthenticated(true);
-            setUserType(response.data.user.user_type);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
 
-            // ✅ CRITICAL: Handle tutor_profile_id for new tutors
-            if (role === 'tutor') {
-              if (response.data.user.tutor_profile_id) {
-                localStorage.setItem('tutorProfileId', response.data.user.tutor_profile_id);
-                console.log('✅ Stored tutorProfileId:', response.data.user.tutor_profile_id);
-              } else {
-                console.log('📝 New tutor registered - will get profile ID after onboarding');
-              }
-              setShowTutorOnboarding(true);
-            }
-            
-            alert('Registration successful! ' + (role === 'tutor' ? 'Please complete your tutor profile.' : 'Welcome!'));
-            setShowRegister(false);
-            
-            if (role === 'student') {
-              setShowLogin(false); // Keep them logged in
-            }
-          } catch (error) {
-            console.error('Registration error:', error);
-            alert('Registration failed: ' + (error.response?.data?.message || 'Unknown error'));
-          }
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Full Name</label>
-              <input 
-                type="text" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
-              <input 
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded"
-                minLength="6"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">I am a...</label>
-              <select 
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full p-2 border rounded"
-              >
-                <option value="student">Student</option>
-                <option value="tutor">Tutor</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex gap-2 mt-6">
-            <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700">
-              Register
-            </button>
-            <button type="button" onClick={() => setShowRegister(false)} className="flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400">
-              Cancel
-            </button>
-          </div>
-          
-          <p className="text-sm text-center mt-3">
-            Already have an account?{' '}
-            <button 
-              type="button"
-              onClick={() => { setShowRegister(false); setShowLogin(true); }}
-              className="text-blue-600 hover:underline"
-            >
-              Login here
-            </button>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
-};
-const LoginModal = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-xl font-bold mb-4">Login to Continue</h2>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const response = await login({ email, password });
-            console.log('🔍 Login response:', response.data);
-            
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('userId', response.data.user.id);
-            localStorage.setItem('userName', response.data.user.name);
-            localStorage.setItem('userType', response.data.user.user_type);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-
-            // ✅ CRITICAL: Handle tutor_profile_id
-            if (response.data.user.user_type === 'tutor') {
-              if (response.data.user.tutor_profile_id) {
-                localStorage.setItem('tutorProfileId', response.data.user.tutor_profile_id);
-                console.log('✅ Stored tutorProfileId:', response.data.user.tutor_profile_id);
-              } else {
-                // Try to fetch tutor profile from backend
-                console.warn('⚠️ No tutor_profile_id in login response. Fetching from API...');
-                try {
-                  const token = response.data.token;
-                  const profileResponse = await fetch('https://hult.onrender.com/api/tutor/profile', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                  });
-                  const profileData = await profileResponse.json();
-                  
-                  if (profileData.tutor_profile_id) {
-                    localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
-                    console.log('✅ Fetched and stored tutorProfileId:', profileData.tutor_profile_id);
-                  } else {
-                    alert('⚠️ Your tutor profile is incomplete. Please complete onboarding first.');
-                    setShowTutorOnboarding(true);
-                  }
-                } catch (fetchError) {
-                  console.error('Failed to fetch tutor profile:', fetchError);
-                  alert('⚠️ Could not load tutor profile. Please complete your profile setup.');
-                  setShowTutorOnboarding(true);
-                }
-              }
-            }
-            
-            setIsAuthenticated(true);
-            setUserType(response.data.user.user_type);
-            setShowLogin(false);
-            alert('Login successful!');
-            
-          } catch (error) {
-            console.error('Login error:', error);
-            alert('Login failed: ' + (error.response?.data?.message || 'Unknown error'));
-          }
-        }}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
-              <input 
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </div>
-          </div>
-          
-          <div className="flex gap-2 mt-6">
-            <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-              Login
-            </button>
-            <button type="button" onClick={() => setShowLogin(false)} className="flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400">
-              Cancel
-            </button>
-          </div>
-          
-          <p className="text-sm text-center mt-3">
-            Don't have an account?{' '}
-            <button 
-              type="button"
-              onClick={() => { setShowLogin(false); setShowRegister(true); }}
-              className="text-blue-600 hover:underline"
-            >
-              Register here
-            </button>
-          </p>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 const HomeView = () => {
+  // Student Landing Page
+  const StudentLandingPage = () => (
+    <div className="pb-6">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 text-white p-6 rounded-xl mb-4 shadow-lg">
+        <div className="text-center">
+          <div className="bg-white/20 backdrop-blur-sm w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <GraduationCap size={32} />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Learn Without Limits</h1>
+          <p className="text-blue-100 text-sm mb-4">
+            AI-powered education tailored to your needs, accessible from anywhere
+          </p>
 
+        </div>
+      </div>
+
+      {/* Key Benefits */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-3 text-center">Why Students Love EduConnect</h2>
+        <div className="space-y-3">
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-blue-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <MessageSquare className="text-blue-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">AI-Powered Matching</h3>
+                <p className="text-sm text-gray-600">Get matched with tutors who perfectly fit your learning style and goals</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-purple-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <Download className="text-purple-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Learn Offline</h3>
+                <p className="text-sm text-gray-600">Download courses and access them anytime, even without internet</p>
+              </div>
+            </div>
+          </div>
+
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-orange-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <Award className="text-orange-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Earn Certificates</h3>
+                <p className="text-sm text-gray-600">Complete courses and receive verified certificates for your achievements</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-pink-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-pink-100 p-2 rounded-lg">
+                <Globe className="text-pink-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Global Access</h3>
+                <p className="text-sm text-gray-600">Fair pricing based on your location - quality education for everyone</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="space-y-3">
+        <button 
+          onClick={() => setShowRegister(true)}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl shadow-lg hover:shadow-xl transition font-bold text-lg flex items-center justify-center gap-2"
+        >
+          <GraduationCap size={24} />
+          Start Learning Now
+        </button>
+        <button 
+          onClick={() => setShowLogin(true)}
+          className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 rounded-xl hover:bg-gray-50 transition font-semibold"
+        >
+          Already have an account? Log In
+        </button>
+        <button 
+          onClick={() => setUserType(null)}
+          className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition"
+        >
+          ← Back to home
+        </button>
+      </div>
+    </div>
+  );
+
+  // Tutor Landing Page
+  const TutorLandingPage = () => (
+    <div className="pb-6">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-br from-green-600 via-teal-600 to-blue-600 text-white p-6 rounded-xl mb-4 shadow-lg">
+        <div className="text-center">
+          <div className="bg-white/20 backdrop-blur-sm w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users size={32} />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Teach & Inspire</h1>
+          <p className="text-green-100 text-sm mb-4">
+            Share your knowledge with students worldwide and earn while you educate
+          </p>
+    
+          
+        </div>
+      </div>
+
+      {/* Key Benefits */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-3 text-center">Why Tutors Choose EduConnect</h2>
+        <div className="space-y-3">
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-green-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <BarChart3 className="text-green-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">AI Student Matching</h3>
+                <p className="text-sm text-gray-600">Get matched with students who need your expertise most</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-blue-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <BookOpen className="text-blue-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Easy Course Creation</h3>
+                <p className="text-sm text-gray-600">Upload videos, documents, and create comprehensive courses effortlessly</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-purple-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <MessageSquare className="text-purple-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Built-in Messaging</h3>
+              
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-orange-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <DollarSign className="text-orange-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Flexible Earnings</h3>
+                <p className="text-sm text-gray-600">Set your own rates and work on your schedule</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg p-4 shadow-md border-l-4 border-pink-500">
+            <div className="flex items-start gap-3">
+              <div className="bg-pink-100 p-2 rounded-lg">
+                <Globe className="text-pink-600" size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">Make an Impact</h3>
+                <p className="text-sm text-gray-600">Help students in developing countries access quality education</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="space-y-3">
+        <button 
+          onClick={() => setShowRegister(true)}
+          className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-4 rounded-xl shadow-lg hover:shadow-xl transition font-bold text-lg flex items-center justify-center gap-2"
+        >
+          <Users size={24} />
+          Become a Tutor
+        </button>
+        <button 
+          onClick={() => setShowLogin(true)}
+          className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 rounded-xl hover:bg-gray-50 transition font-semibold"
+        >
+          Already a tutor? Log In
+        </button>
+        <button 
+          onClick={() => setUserType(null)}
+          className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition"
+        >
+          ← Back to home
+        </button>
+      </div>
+    </div>
+  );
+
+  // Logged-in Dashboard
+  const LoggedInDashboard = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg">
+        <h3 className="text-xl font-bold text-gray-800 mb-2">
+          Welcome back, {userType === 'student' ? 'Learner' : 'Educator'}!
+        </h3>
+       
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {userType === 'student' ? (
+          <>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+              <BookOpen className="text-blue-500 mb-2" />
+              <h4 className="font-semibold text-sm">Courses</h4>
+              <p className="text-2xl font-bold text-gray-800">{courses.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+              <Users className="text-green-500 mb-2" />
+              <h4 className="font-semibold text-sm">Tutors</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+              <Download className="text-purple-500 mb-2" />
+              <h4 className="font-semibold text-sm">Offline</h4>
+              <p className="text-2xl font-bold text-gray-800">{offlineCourses.length}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+              <BookOpen className="text-blue-500 mb-2" />
+              <h4 className="font-semibold text-sm">My Courses</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalCourses}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
+              <Users className="text-green-500 mb-2" />
+              <h4 className="font-semibold text-sm">Students</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalStudents}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
+              <MessageSquare className="text-purple-500 mb-2" />
+              <h4 className="font-semibold text-sm">Messages</h4>
+              <p className="text-2xl font-bold text-gray-800">{tutorStats.totalMessages}</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {userType === 'student' && (
+        <div className="space-y-3">
+          {/* Survey Button */}
+          <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              📝 Learning Profile Survey
+            </h4>
+            <p className="text-sm text-gray-600 mb-3">
+              Complete this survey to unlock AI-powered tutor matching!
+            </p>
+            <button 
+              onClick={() => setShowSurvey(true)}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded hover:shadow-lg transition"
+            >
+              Complete Survey
+            </button>
+          </div>
+
+          {/* AI Matching */}
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2 flex items-center gap-2">
+              <MessageSquare size={20} />
+              AI Learning Assistant
+            </h4>
+            <p className="text-sm text-gray-600 mb-3">
+              Get personalized course recommendations based on your learning style and goals.
+            </p>
+            <button 
+              onClick={handleAIMatching}
+              disabled={aiMatching}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:bg-gray-400"
+            >
+              {aiMatching ? 'Analyzing Your Profile...' : 'Find My Perfect Match'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Initial Welcome Screen (no userType selected)
+  const WelcomeScreen = () => (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white p-6 rounded-xl text-center">
+        <GraduationCap size={48} className="mx-auto mb-3" />
+        <h2 className="text-3xl font-bold mb-2">Welcome to EduConnect</h2>
+        <p className="text-blue-100">AI-powered personalized learning for everyone, everywhere.</p>
+      </div>
+
+      <div className="space-y-3">
+        <button 
+          onClick={() => setUserType('student')}
+          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-3"
+        >
+          <BookOpen size={28} />
+          <div className="text-left">
+            <div className="font-bold text-lg">I'm a Student</div>
+            <div className="text-sm text-blue-100">Discover courses & tutors</div>
+          </div>
+        </button>
+        <button 
+          onClick={() => setUserType('tutor')}
+          className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition flex items-center justify-center gap-3"
+        >
+          <Users size={28} />
+          <div className="text-left">
+            <div className="font-bold text-lg">I'm a Tutor</div>
+            <div className="text-sm text-green-100">Share your expertise</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-4">
-    {showRegister && <RegisterModal />}
-    {showLogin && <LoginModal />}
-    {showSurvey && (
-  <StudentSurvey
-    onClose={() => setShowSurvey(false)}
-    onComplete={() => {
-      const surveyData = { completed: true };
-      localStorage.setItem('studentSurvey', JSON.stringify(surveyData));
-      setShowSurvey(false);
-      alert('Survey completed! You can now use AI matching.');
-    }}
-  />
-)}
+      {showRegister && (
+        <EnhancedRegisterModal 
+          onClose={() => setShowRegister(false)}
+          onSuccess={(data) => {
+            setIsAuthenticated(true);
+            setUserType(data.user.user_type);
+            setShowRegister(false);
+          }}
+        />
+      )}
 
-    
-      {isDetecting ? (
-        <div className="text-center py-12">
-          <Globe className="animate-spin mx-auto mb-4 text-blue-600" size={48} />
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">Detecting Your Location...</h3>
-          <p className="text-sm text-gray-600">Analyzing IP address and region</p>
+      {showLogin && (
+        <EnhancedLoginModal 
+          onClose={() => setShowLogin(false)}
+          onSuccess={(data) => {
+            setIsAuthenticated(true);
+            setUserType(data.user.user_type);
+            setShowLogin(false);
+          }}
+        />
+      )}
 
-        </div>
+      {showSurvey && (
+        <StudentSurvey
+          onClose={() => setShowSurvey(false)}
+          onComplete={() => {
+            console.log('📋 Survey completed successfully');
+            setShowSurvey(false);
+            alert('✅ Survey completed! You can now use AI matching to find your perfect tutor.');
+          }}
+        />
+      )}
+
+      {isAuthenticated ? (
+        <LoggedInDashboard />
       ) : (
         <>
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 p-4 rounded-lg mb-4">
-            <div className="flex items-start gap-3 mb-3">
-              <MapPin className="text-blue-600 flex-shrink-0 mt-1" size={24} />
-              <div className="flex-1">
-                <h3 className="font-bold text-gray-800 mb-1">Location Detected</h3>
-                <p className="text-sm text-gray-700">
-                  <strong>{detectedCountry?.name}</strong> ({detectedCountry?.code})
-                </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  Classification: <span className="font-semibold capitalize">{incomeLevel?.replace('-', ' ')}</span>
-                </p>
-              </div>
-              {locationVerified && (
-                <Shield className="text-green-600" size={20} />
-              )}
-            </div>
-            
-            <div className="bg-white p-3 rounded border border-blue-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Your Access Level:</span>
-                <span className={`text-lg font-bold ${getPricingColor()}`}>{getPricing()}</span>
-              </div>
-            </div>
-
-            {!locationVerified && incomeLevel !== 'high-income' && (
-              <button 
-                onClick={() => setShowVerification(true)}
-                className="w-full mt-3 bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700 transition"
-              >
-                <Shield className="inline mr-2" size={16} />
-                Verify Location for Full Access
-              </button>
-            )}
-          </div>
-
-          {showVerification && (
-            <div className="bg-yellow-50 border-2 border-yellow-300 p-4 rounded-lg mb-4">
-              <div className="flex items-start gap-2 mb-3">
-                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-                <div>
-                  <h4 className="font-semibold text-yellow-900 mb-1">Verify Your Location</h4>
-                  <p className="text-sm text-yellow-800">To ensure fair pricing, please verify your phone number.</p>
-                </div>
-              </div>
-              
-              <input
-                type="tel"
-                placeholder="Enter phone number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className="w-full p-2 border rounded mb-2"
-              />
-              
-              <div className="flex gap-2">
-                <button 
-                  onClick={verifyPhone}
-                  className="flex-1 bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700"
-                >
-                  Verify
-                </button>
-                <button 
-                  onClick={() => setShowVerification(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-400"
-                >
-                  Later
-                </button>
-              </div>
-            </div>
-          )}
-
           {!userType ? (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-gray-800">Welcome to EduConnect</h2>
-              <p className="text-gray-600">AI-powered personalized learning for everyone, everywhere.</p>
-
-              <div className="space-y-3">
-                <button 
-                  onClick={() => setUserType('student')}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition"
-                >
-                  <BookOpen className="inline mr-2" />
-                  I'm a Student
-                </button>
-                <button 
-                  onClick={() => setUserType('tutor')}
-                  className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white p-4 rounded-lg shadow-lg hover:shadow-xl transition"
-                >
-                  <Users className="inline mr-2" />
-                  I'm a Tutor
-                </button>
-              </div>
-            </div>
+            <WelcomeScreen />
+          ) : userType === 'student' ? (
+            <StudentLandingPage />
           ) : (
-            <div className="space-y-4">
-              <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-4 rounded-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  Welcome, {userType === 'student' ? 'Learner' : 'Educator'}!
-                </h3>
-                <p className="text-gray-600">Your access: <strong className={getPricingColor()}>{getPricing()}</strong></p>
-              </div>
-
-<div className="grid grid-cols-2 gap-3">
-  {userType === 'student' ? (
-    <>
-      <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-        <BookOpen className="text-blue-500 mb-2" />
-        <h4 className="font-semibold text-sm">Courses</h4>
-        <p className="text-2xl font-bold text-gray-800">{courses.length}</p>
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-        <Users className="text-green-500 mb-2" />
-        <h4 className="font-semibold text-sm">Tutors</h4>
-        <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-        <Download className="text-purple-500 mb-2" />
-        <h4 className="font-semibold text-sm">Offline</h4>
-        <p className="text-2xl font-bold text-gray-800">{offlineCourses.length}</p>
-      </div>
-    
-    </>
-  ) : (
-    <>
-    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-      <BookOpen className="text-blue-500 mb-2" />
-      <h4 className="font-semibold text-sm">My Courses</h4>
-      <p className="text-2xl font-bold text-gray-800">{tutorStats.totalCourses}</p>
-    </div>
-    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-      <Users className="text-green-500 mb-2" />
-      <h4 className="font-semibold text-sm">Students</h4>
-      <p className="text-2xl font-bold text-gray-800">{tutorStats.totalStudents}</p>
-    </div>
-    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-      <MessageSquare className="text-purple-500 mb-2" />
-      <h4 className="font-semibold text-sm">Messages</h4>
-      <p className="text-2xl font-bold text-gray-800">{tutorStats.totalMessages}</p>
-    </div>
-
-  </>
-  )}
-  
-</div>
-
-
-
-
-              {userType === 'student' && (
-                <div className="space-y-3">
-                  {/* Survey Button */}
-                  <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      📝 Learning Profile Survey
-                    </h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Complete this survey to unlock AI-powered tutor matching!
-                    </p>
-                    <button 
-                      onClick={() => setShowSurvey(true)}
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded hover:shadow-lg transition"
-                    >
-                      Complete Survey
-                    </button>
-                  </div>
-
-                  {/* AI Matching */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      <MessageSquare size={20} />
-                      AI Learning Assistant
-                    </h4>
-                    <p className="text-sm text-gray-600 mb-3">
-                      Get personalized course recommendations based on your learning style and goals.
-                    </p>
-                    <button 
-                      onClick={handleAIMatching}
-                      disabled={aiMatching}
-                      className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:bg-gray-400"
-                    >
-                      {aiMatching ? 'Analyzing Your Profile...' : 'Find My Perfect Match'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <TutorLandingPage />
           )}
         </>
       )}
@@ -2585,6 +2665,11 @@ const CourseMaterialsView = () => {
     }
   };
 
+  const handleOpenFeedback = (tutor) => {
+    setFeedbackTutor(tutor);
+    setShowFeedbackModal(true);
+  };
+
   if (loading) {
     return (
       <div className="p-4 text-center">
@@ -2645,6 +2730,12 @@ const CourseMaterialsView = () => {
               <button className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 transition text-sm">
                 Message
               </button>
+              <button 
+                onClick={() => handleOpenFeedback(tutor)}
+                className="bg-purple-100 text-purple-700 px-3 py-2 rounded hover:bg-purple-200 transition text-sm font-semibold"
+              >
+                Rate
+              </button>
             </div>
           </div>
         ))}
@@ -2655,12 +2746,24 @@ const CourseMaterialsView = () => {
           </div>
         )}
       </div>
+
+      {/* 👇 PLACE THE FEEDBACK MODAL HERE - Right before the closing </div> */}
+      {showFeedbackModal && feedbackTutor && (
+        <TutorFeedbackModal
+          tutor={feedbackTutor}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackTutor(null);
+          }}
+          onSubmit={() => {
+            // Optionally refresh tutor list
+            fetchTutors();
+          }}
+        />
+      )}
     </div>
   );
 };
-
-
-
 
   const DonateView = () => (
     <div className="p-4">
@@ -2722,7 +2825,11 @@ const CourseMaterialsView = () => {
     </div>
   );
 return (
+
+
   <div className="max-w-md mx-auto bg-gray-50 min-h-screen">
+    
+ 
     <NavBar 
       userType={userType}
       isAuthenticated={isAuthenticated}
@@ -2737,6 +2844,8 @@ return (
       setShowTutorProfile={setShowTutorProfile}
       setShowCourseManager={setShowCourseManager}
     />
+
+    
 
     {/* Always show HomeView when not authenticated, otherwise show requested view */}
     {!isAuthenticated ? (
@@ -2753,6 +2862,7 @@ return (
         {currentView === 'matched-tutors' && <MatchedTutorsView />}
         {currentView === 'my-courses' && <MyCoursesView key={currentView} />}
         {currentView === 'course-materials' && <CourseMaterialsView />}
+        
        
       </>
     )}
@@ -2785,22 +2895,51 @@ return (
     )}
 
     {/* Modals and profiles - available for authenticated users */}
-    {showTutorOnboarding && (
-      <TutorOnboarding
-        onComplete={(profileData) => {
-          if (profileData?.tutor_profile_id) {
-            localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
-            console.log('✅ Saved tutorProfileId from onboarding:', profileData.tutor_profile_id);
-          }
-          setShowTutorOnboarding(false);
-          alert('Profile setup complete! You can now be matched with students.');
-        }}
-        onSkip={() => {
-          setShowTutorOnboarding(false);
-          alert('⚠️ Warning: You need to complete your profile to receive messages from students.');
-        }}
-      />
-    )}
+ {showTutorOnboarding && (
+  <TutorOnboarding
+    onComplete={(profileData) => {
+      // ✅ Update localStorage to mark profile as complete
+      localStorage.setItem('profileComplete', 'true');
+      
+      if (profileData?.tutor_profile_id) {
+        localStorage.setItem('tutorProfileId', profileData.tutor_profile_id);
+        console.log('✅ Saved tutorProfileId from onboarding:', profileData.tutor_profile_id);
+      }
+      
+      // ✅ Update user object in localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        user.profile_complete = true;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      
+      setShowTutorOnboarding(false);
+      alert('✅ Profile setup complete! You can now be matched with students.');
+    }}
+    onSkip={() => {
+      setShowTutorOnboarding(false);
+      alert('⚠️ Warning: You need to complete your profile to receive messages from students.');
+    }}
+  />
+)}
+
+{showProfileCompletionPrompt && (
+  <ProfileCompletionPrompt
+    onComplete={() => {
+      setShowTutorProfile(true);
+      setShowProfileCompletionPrompt(false);
+    }}
+    onDismiss={() => {
+      sessionStorage.setItem('profilePromptDismissed', 'true');
+      setShowProfileCompletionPrompt(false);
+    }}
+  />
+)}
+
+{showPasswordReset && (
+  <PasswordResetPage onClose={() => setShowPasswordReset(false)} />
+)}
 
     {showStudentProfile && (
       <StudentProfile onClose={() => setShowStudentProfile(false)} />
@@ -2864,7 +3003,9 @@ return (
   </div>
 )}
   </div>
+
 );
+
 };
 
 export default EduConnectApp;
