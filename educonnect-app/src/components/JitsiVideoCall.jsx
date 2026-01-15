@@ -275,7 +275,19 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         showLeaveButton: true,
         showFullscreenButton: !isMobile, // Disable on mobile for performance
         showLocalVideo: true,
-        showParticipantsBar: !isMobile // Simplify UI on mobile
+        showParticipantsBar: !isMobile, // Simplify UI on mobile
+        // IMPORTANT: Skip the prejoin UI and join directly
+        dailyConfig: {
+          camAndMicNoConfigurable: false,
+          userMediaAudioConstraints: { 
+            autoGainControl: true, 
+            noiseSuppression: true 
+          },
+          userMediaVideoConstraints: {
+            width: { ideal: isMobile ? 640 : 1280 },
+            height: { ideal: isMobile ? 480 : 720 }
+          }
+        }
       });
 
       callFrameRef.current = callFrame;
@@ -329,7 +341,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
         url: roomUrl,
         userName: currentUserName || 'User',
         showLeaveButton: true,
-        showFullscreenButton: !isMobile
+        showFullscreenButton: !isMobile,
+        // Skip prejoin screen and join immediately
+        token: undefined // If you have tokens, add here
       });
 
       console.log('✅ [DAILY] Join request sent');
@@ -537,18 +551,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           <div className="flex-1 relative bg-gray-900 overflow-hidden">
             <div ref={dailyContainerRef} className="w-full h-full" />
             
-            {/* Loading Overlay */}
-            {isJoining && !callError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75">
-                <div className="text-center px-4">
-                  <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-b-2 border-white mx-auto mb-4"></div>
-                  <p className="text-white text-base sm:text-lg">Joining call...</p>
-                  <p className="text-gray-400 text-xs sm:text-sm mt-2">Please wait</p>
-                </div>
-              </div>
-            )}
-
-            {/* Error Display */}
+            {/* Error Display Only - No Loading Overlay */}
             {callError && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 p-4">
                 <div className="bg-red-900 bg-opacity-50 border border-red-500 rounded-lg p-4 sm:p-6 max-w-md w-full">
