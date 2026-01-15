@@ -330,12 +330,12 @@ class Booking(db.Model):
 @app.route('/api/video/create-meeting', methods=['POST'])
 @jwt_required()
 def create_jitsi_meeting():
-   
+    """Create Jitsi meeting with proper configuration"""
     try:
         data = request.get_json()
         
         caller_id = data.get('callerId')
-        caller_role = data.get('callerRole')  # 'student' or 'tutor'
+        caller_role = data.get('callerRole')
         receiver_id = data.get('receiverId')
         caller_name = data.get('callerName', 'User')
         receiver_name = data.get('receiverName', 'User')
@@ -348,36 +348,30 @@ def create_jitsi_meeting():
         # Jitsi Meet server URL
         jitsi_domain = os.getenv('JITSI_DOMAIN', 'meet.jit.si')
         
-        # Build config fragment for URL hash
-        caller_config = {
-            'prejoinPageEnabled': False,
-            'startWithAudioMuted': False,
-            'startWithVideoMuted': False,
-            'subject': meeting_name,
-            'userInfo': {
-                'displayName': caller_name
-            }
+        # 🔥 FIX: Build proper configuration that bypasses lobby/moderation
+        # This configuration disables lobby and moderation features
+        config_params = {
+            'prejoinPageEnabled': 'false',
+            'startWithAudioMuted': 'false', 
+            'startWithVideoMuted': 'false',
+            'requireDisplayName': 'false',
+            'disableModeratorIndicator': 'true',
+            'enableLobbyChat': 'false',
+            'hideConferenceSubject': 'false'
         }
         
-        receiver_config = {
-            'prejoinPageEnabled': False,
-            'startWithAudioMuted': False,
-            'startWithVideoMuted': False,
-            'subject': meeting_name,
-            'userInfo': {
-                'displayName': receiver_name
-            }
-        }
+        # Build URL with config parameters
+        config_string = '&'.join([f'config.{key}={value}' for key, value in config_params.items()])
         
-        # Pass displayName explicitly to build_config_fragment
-        caller_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(caller_config)}"
-        receiver_url = f"https://{jitsi_domain}/{room_name}#{build_config_fragment(receiver_config)}"
-
-      
+        # Create URLs for both participants
+        base_url = f"https://{jitsi_domain}/{room_name}"
+        
+        caller_url = f"{base_url}?userInfo.displayName={urllib.parse.quote(caller_name)}#{config_string}"
+        receiver_url = f"{base_url}?userInfo.displayName={urllib.parse.quote(receiver_name)}#{config_string}"
+        
         print(f"✅ [VIDEO] Created Jitsi meeting: {meeting_id}")
         print(f"[VIDEO] Room: {room_name}")
-        print(f"[VIDEO] Caller URL: {caller_url}")
-        print(f"[VIDEO] Receiver URL: {receiver_url}")
+        print(f"[VIDEO] Config: {config_string}")
         
         return jsonify({
             'success': True,
@@ -393,7 +387,6 @@ def create_jitsi_meeting():
         import traceback
         traceback.print_exc()
         return jsonify({'error': 'Failed to create meeting'}), 500
-
 
 @app.route('/api/video/end-meeting', methods=['POST'])
 @jwt_required()
