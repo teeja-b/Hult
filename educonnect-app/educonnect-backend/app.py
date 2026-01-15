@@ -886,7 +886,68 @@ def handle_mark_as_read(data):
         'messageIds': message_ids
     }, room=conversation_id, include_self=False)
 
-
+@app.route('/api/video/test', methods=['POST', 'GET'])
+def test_video_endpoint():
+    """Test video endpoint - no JWT required"""
+    try:
+        print("\n" + "🧪"*35)
+        print("🧪 VIDEO TEST ENDPOINT HIT")
+        print("🧪"*35)
+        
+        if request.method == 'POST':
+            data = request.get_json()
+            print(f"📦 Received data: {data}")
+        
+        # Test imports
+        try:
+            import uuid
+            test_uuid = str(uuid.uuid4())
+            print(f"✅ uuid works: {test_uuid}")
+        except Exception as e:
+            print(f"❌ uuid failed: {e}")
+            return jsonify({'error': 'uuid import failed', 'details': str(e)}), 500
+        
+        try:
+            import urllib.parse
+            test_encode = urllib.parse.quote("Test User")
+            print(f"✅ urllib.parse works: {test_encode}")
+        except Exception as e:
+            print(f"❌ urllib.parse failed: {e}")
+            return jsonify({'error': 'urllib.parse import failed', 'details': str(e)}), 500
+        
+        # Test URL generation
+        meeting_id = str(uuid.uuid4())
+        room_name = f"educonnect-test-{meeting_id}"
+        jitsi_domain = 'meet.jit.si'
+        
+        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
+        
+        print(f"✅ Test URL generated: {test_url}")
+        print("🧪"*35 + "\n")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Video endpoint test successful',
+            'test_url': test_url,
+            'meeting_id': meeting_id,
+            'imports': {
+                'uuid': 'OK',
+                'urllib.parse': 'OK'
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"\n❌ VIDEO TEST ERROR:")
+        print(f"❌ {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("🧪"*35 + "\n")
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 
 @app.route('/api/video/create-meeting', methods=['POST'])
@@ -954,68 +1015,7 @@ def create_jitsi_meeting():
 # Add this debug endpoint to test your video setup
 # Place this BEFORE your create_jitsi_meeting function
 
-@app.route('/api/video/test', methods=['POST', 'GET'])
-def test_video_endpoint():
-    """Test video endpoint - no JWT required"""
-    try:
-        print("\n" + "🧪"*35)
-        print("🧪 VIDEO TEST ENDPOINT HIT")
-        print("🧪"*35)
-        
-        if request.method == 'POST':
-            data = request.get_json()
-            print(f"📦 Received data: {data}")
-        
-        # Test imports
-        try:
-            import uuid
-            test_uuid = str(uuid.uuid4())
-            print(f"✅ uuid works: {test_uuid}")
-        except Exception as e:
-            print(f"❌ uuid failed: {e}")
-            return jsonify({'error': 'uuid import failed', 'details': str(e)}), 500
-        
-        try:
-            import urllib.parse
-            test_encode = urllib.parse.quote("Test User")
-            print(f"✅ urllib.parse works: {test_encode}")
-        except Exception as e:
-            print(f"❌ urllib.parse failed: {e}")
-            return jsonify({'error': 'urllib.parse import failed', 'details': str(e)}), 500
-        
-        # Test URL generation
-        meeting_id = str(uuid.uuid4())
-        room_name = f"educonnect-test-{meeting_id}"
-        jitsi_domain = 'meet.jit.si'
-        
-        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
-        
-        print(f"✅ Test URL generated: {test_url}")
-        print("🧪"*35 + "\n")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Video endpoint test successful',
-            'test_url': test_url,
-            'meeting_id': meeting_id,
-            'imports': {
-                'uuid': 'OK',
-                'urllib.parse': 'OK'
-            }
-        }), 200
-        
-    except Exception as e:
-        print(f"\n❌ VIDEO TEST ERROR:")
-        print(f"❌ {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("🧪"*35 + "\n")
-        
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -1027,92 +1027,7 @@ def health_check():
     }), 200
 
 
-@app.route('/api/video/test', methods=['GET', 'POST', 'OPTIONS'])
-def test_video_endpoint():
-    """Test video endpoint - NO JWT REQUIRED"""
-    
-    # Handle OPTIONS for CORS
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        return response, 200
-    
-    try:
-        print("\n" + "🧪"*35)
-        print("🧪 VIDEO TEST ENDPOINT HIT")
-        print(f"🧪 Method: {request.method}")
-        print("🧪"*35)
-        
-        # Test basic functionality
-        test_data = {}
-        
-        if request.method == 'POST':
-            try:
-                test_data = request.get_json() or {}
-                print(f"📦 Received POST data: {test_data}")
-            except Exception as e:
-                print(f"❌ Error parsing JSON: {e}")
-        
-        # Test imports
-        import_status = {}
-        try:
-            import uuid
-            test_uuid = str(uuid.uuid4())
-            import_status['uuid'] = 'OK'
-            print(f"✅ uuid works: {test_uuid}")
-        except Exception as e:
-            import_status['uuid'] = f'FAILED: {e}'
-            print(f"❌ uuid failed: {e}")
-        
-        try:
-            import urllib.parse
-            test_encode = urllib.parse.quote("Test User")
-            import_status['urllib'] = 'OK'
-            print(f"✅ urllib.parse works: {test_encode}")
-        except Exception as e:
-            import_status['urllib'] = f'FAILED: {e}'
-            print(f"❌ urllib.parse failed: {e}")
-        
-        # Test URL generation
-        meeting_id = str(uuid.uuid4())
-        room_name = f"educonnect-test-{meeting_id}"
-        jitsi_domain = 'meet.jit.si'
-        
-        test_url = f"https://{jitsi_domain}/{room_name}?displayName={urllib.parse.quote('Test User')}"
-        
-        print(f"✅ Test URL generated: {test_url}")
-        print("🧪"*35 + "\n")
-        
-        response_data = {
-            'success': True,
-            'message': 'Video test endpoint is working!',
-            'method': request.method,
-            'test_url': test_url,
-            'meeting_id': meeting_id,
-            'imports': import_status,
-            'received_data': test_data
-        }
-        
-        response = jsonify(response_data)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        return response, 200
-        
-    except Exception as e:
-        print(f"\n❌ VIDEO TEST ERROR:")
-        print(f"❌ {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("🧪"*35 + "\n")
-        
-        response = jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        return response, 500
+
 
 
 @app.route('/api/debug/routes', methods=['GET'])
