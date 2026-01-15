@@ -4,7 +4,6 @@ import io from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
-// Daily.co Video Call Component
 const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Student' }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
@@ -17,6 +16,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
+  const dailyContainerRef = useRef(null); // ✅ Ref for the video container
 
   // Initialize Socket.IO
   useEffect(() => {
@@ -44,9 +44,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     });
 
     socket.on('call_ended', ({ meetingId }) => {
-      if (currentMeetingId === meetingId) {
-        endVideoCall();
-      }
+      if (currentMeetingId === meetingId) endVideoCall();
     });
 
     socket.on('call_declined', () => {
@@ -57,7 +55,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     return () => {
       socket?.disconnect();
     };
-  }, [currentUserId]);
+  }, [currentUserId, currentMeetingId]);
 
   // Load Daily.co script
   useEffect(() => {
@@ -67,9 +65,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       script.async = true;
       document.body.appendChild(script);
       
-      script.onload = () => {
-        console.log('✅ Daily.co loaded');
-      };
+      script.onload = () => console.log('✅ Daily.co loaded');
     }
   }, []);
 
@@ -85,8 +81,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     try {
       const token = localStorage.getItem('token');
-      
-      // Call backend to create Daily room
+
       const response = await fetch(`${API_URL}/api/video/create-daily-room`, {
         method: 'POST',
         headers: {
@@ -98,13 +93,11 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           receiverId: selectedTutor.user_id,
           callerName: currentUserName,
           receiverName: selectedTutor.name,
-          maxParticipants: 15 // Support 13 students + 2 tutors
+          maxParticipants: 15,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create room');
-      }
+      if (!response.ok) throw new Error('Failed to create room');
 
       const data = await response.json();
       console.log('✅ [VIDEO] Daily room created:', data);
@@ -113,7 +106,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
       setCurrentMeetingId(data.roomName);
       setIsVideoCallOpen(true);
 
-      // Initialize Daily.co call frame
+      // Initialize Daily.co frame
       initializeDailyCall(data.roomUrl);
 
       // Notify tutor via socket
@@ -135,46 +128,23 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const initializeDailyCall = (roomUrl) => {
-    if (!window.DailyIframe) {
-      console.error('Daily.co not loaded yet');
-      return;
-    }
+    if (!window.DailyIframe) return console.error('Daily.co not loaded yet');
+    if (!dailyContainerRef.current) return console.error('Container not mounted yet');
 
-    // Create Daily call frame
-    const callFrame = window.DailyIframe.createFrame('daily-call-container', {
-      iframeStyle: {
-        width: '100%',
-        height: '100%',
-        border: '0',
-      },
+    const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
+      iframeStyle: { width: '100%', height: '100%', border: '0' },
       showLeaveButton: true,
       showFullscreenButton: true,
     });
 
     callFrameRef.current = callFrame;
 
-    // Event listeners
-    callFrame.on('joined-meeting', () => {
-      console.log('✅ Joined Daily meeting');
-    });
+    callFrame.on('joined-meeting', () => console.log('✅ Joined Daily meeting'));
+    callFrame.on('participant-joined', updateParticipantCount);
+    callFrame.on('participant-left', updateParticipantCount);
+    callFrame.on('left-meeting', endVideoCall);
 
-    callFrame.on('participant-joined', () => {
-      updateParticipantCount();
-    });
-
-    callFrame.on('participant-left', () => {
-      updateParticipantCount();
-    });
-
-    callFrame.on('left-meeting', () => {
-      endVideoCall();
-    });
-
-    // Join the room
-    callFrame.join({ 
-      url: roomUrl,
-      userName: currentUserName 
-    });
+    callFrame.join({ url: roomUrl, userName: currentUserName });
   };
 
   const updateParticipantCount = () => {
@@ -186,15 +156,12 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
   const acceptCall = () => {
     if (!incomingCall) return;
-    
-    console.log('✅ [VIDEO] Accepting call');
-    
+
     setCurrentMeetingUrl(incomingCall.joinUrl);
     setCurrentMeetingId(incomingCall.meetingId);
     setIsVideoCallOpen(true);
     setCallRinging(false);
 
-    // Initialize Daily call
     initializeDailyCall(incomingCall.joinUrl);
 
     if (socketRef.current?.connected) {
@@ -223,18 +190,15 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
   };
 
   const endVideoCall = () => {
-    console.log('🔴 [VIDEO] Ending call');
-    
-    // Leave Daily call
     if (callFrameRef.current) {
       callFrameRef.current.leave();
       callFrameRef.current.destroy();
       callFrameRef.current = null;
     }
-    
+
     const meetingId = currentMeetingId;
     const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
-    
+
     setIsVideoCallOpen(false);
     setCurrentMeetingUrl('');
     setCurrentMeetingId('');
@@ -242,9 +206,9 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
     if (socketRef.current?.connected && meetingId) {
       socketRef.current.emit('end_video_call', {
-        meetingId: meetingId,
+        meetingId,
         endedBy: currentUserId,
-        otherUserId: otherUserId,
+        otherUserId,
       });
     }
   };
@@ -259,8 +223,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Video size={20} />
-          {isCreatingCall ? 'Starting...' : 
-           connectionStatus !== 'connected' ? 'Connecting...' : 'Start Video Call'}
+          {isCreatingCall ? 'Starting...' : connectionStatus !== 'connected' ? 'Connecting...' : 'Start Video Call'}
         </button>
       )}
 
@@ -306,24 +269,21 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
                   Video Call with {selectedTutor?.name || incomingCall?.callerName || 'User'}
                 </h2>
               </div>
-              
+
               {/* Participant Counter */}
               <div className="flex items-center gap-2 bg-gray-800 px-3 py-1 rounded-full">
                 <Users size={16} />
                 <span className="text-sm">{participantCount} participants</span>
               </div>
             </div>
-            
-            <button 
-              onClick={endVideoCall} 
-              className="p-2 hover:bg-gray-800 rounded-full transition"
-            >
+
+            <button onClick={endVideoCall} className="p-2 hover:bg-gray-800 rounded-full transition">
               <X size={24} />
             </button>
           </div>
 
           {/* Daily.co Video Container */}
-          <div id="daily-call-container" className="flex-1 bg-gray-900" />
+          <div ref={dailyContainerRef} className="flex-1 bg-gray-900" />
 
           {/* Call Controls */}
           <div className="bg-gray-900 p-4 flex items-center justify-center gap-4">
