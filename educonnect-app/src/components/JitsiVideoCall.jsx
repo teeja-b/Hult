@@ -424,7 +424,7 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
           console.error('Error getting participants:', e);
         }
       }
-    }, 300);
+    }, 100);
   }, []);
 
   const acceptCall = useCallback(() => {
