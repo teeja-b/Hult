@@ -759,14 +759,11 @@ const sendMessage = async () => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
-<JitsiVideoCall 
-  currentUserId={tutor.user_id}
-  selectedTutor={{
-    user_id: student.user_id,  // Student's user ID
-    name: student.full_name
-  }}
-  currentUserName={tutor.full_name}
-/>
+  <JitsiVideoCall
+    currentUserId={currentTutorUserId}   // tutor (you)
+    selectedTutor={selectedTutorForJitsi} // student (other side)
+    currentUserName={tutorName}
+  />
  
             </div>
           </div>

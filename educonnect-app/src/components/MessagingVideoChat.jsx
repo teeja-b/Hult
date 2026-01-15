@@ -621,13 +621,14 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
               </button>
               {/* 👇 PASTE VIDEO BUTTON HERE */}
 <JitsiVideoCall 
-  currentUserId={user.id}
+  currentUserId={currentUserId}
   selectedTutor={{
-    user_id: tutor.user_id,  // 🔥 CRITICAL: Use user_id not tutor_id
-    name: tutor.name
+    user_id: selectedTutor.user_id,
+    name: selectedTutor.name
   }}
-  currentUserName={user.full_name}  // 🔥 ADD THIS
+  currentUserName="Student"
 />
+
               <button 
                 onClick={() => setShowMessages(false)}
                 className="hover:bg-blue-700 p-1 rounded transition-colors"
