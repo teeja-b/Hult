@@ -1275,8 +1275,16 @@ const HomeView = () => {
       </div>
 
           <div className="mt-4">
-      <FCMDebugPanel />
+      <details className="bg-white rounded-lg shadow-md">
+        <summary className="p-4 cursor-pointer font-semibold text-gray-800 hover:bg-gray-50">
+          🔧 Notification Debug Tools (Click to expand)
+        </summary>
+        <div className="p-4 border-t">
+          <FCMDebugPanel />
+        </div>
+      </details>
     </div>
+
 
       <div className="grid grid-cols-2 gap-3">
         {userType === 'student' ? (
@@ -2866,6 +2874,19 @@ return (
        
       </>
     )}
+
+      <FCMInitializer 
+      onNotification={(payload) => {
+        console.log('📨 Received notification in App:', payload);
+        
+        // You can show a toast or update UI here
+        if (payload.data?.type === 'call') {
+          // Handle incoming call
+          console.log('📞 Incoming call from:', payload.data?.caller_name);
+        }
+      }}
+    />
+
 
     {/* Chat view - only for authenticated users */}
     {isAuthenticated && currentView === 'chat' && (
