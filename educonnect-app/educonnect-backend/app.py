@@ -420,8 +420,7 @@ class Booking(db.Model):
 
 def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
     """
-    Send FCM notification to a specific user (PRODUCTION VERSION)
-
+    Send FCM notification to a specific user (PRODUCTION VERSION - FIXED)
     """
     global FIREBASE_ENABLED
     if not FIREBASE_ENABLED:
@@ -439,11 +438,42 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
             print(f"⚠️ No FCM tokens found for user {user_id}")
             return False
         
+        # ✅ GET YOUR ACTUAL FRONTEND URL
+        # Option 1: From environment variable
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        # Option 2: Hardcode it (if you know it)
+        # frontend_url = 'https://hult-ten.vercel.app'
+        
         # Prepare notification data
         notification_data = data or {}
         notification_data['type'] = notification_type
         notification_data['timestamp'] = datetime.utcnow().isoformat()
         notification_data['user_id'] = str(user_id)
+        
+        # ✅ FIX: Build proper click URL
+        click_url = notification_data.get('url')
+        
+        if not click_url:
+            # Default URLs based on notification type
+            if notification_type == 'call':
+                meeting_id = notification_data.get('meeting_id', '')
+                click_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
+            elif notification_type == 'message':
+                conversation_id = notification_data.get('conversation_id', '')
+                click_url = f"{frontend_url}/messages/{conversation_id}"
+            else:
+                click_url = frontend_url
+        
+        # ✅ Ensure URL is absolute HTTPS
+        if not click_url.startswith('https://') and not click_url.startswith('http://'):
+            click_url = frontend_url + click_url
+        
+        # ✅ Force HTTPS
+        if click_url.startswith('http://'):
+            click_url = click_url.replace('http://', 'https://')
+        
+        print(f"📍 Click URL: {click_url}")
         
         # Convert all data values to strings (FCM requirement)
         notification_data = {k: str(v) for k, v in notification_data.items()}
@@ -465,10 +495,10 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
                         notification=fcm_messaging.WebpushNotification(
                             title=title,
                             body=body,
-                            icon='https://your-domain.com/icons/icon-192x192.png',  # Use full URL
-                            badge='https://your-domain.com/icons/icon-192x192.png',
+                            icon=f'{frontend_url}/logo192.png',  # ✅ Use your actual logo
+                            badge=f'{frontend_url}/logo192.png',
                             tag=notification_type,
-                            require_interaction=notification_type == 'call',  # Keep call notifications
+                            require_interaction=notification_type == 'call',
                             vibrate=[200, 100, 200] if notification_type == 'call' else None,
                             actions=[
                                 fcm_messaging.WebpushNotificationAction(
@@ -478,7 +508,7 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
                             ] if notification_type == 'call' else None
                         ),
                         fcm_options=fcm_messaging.WebpushFCMOptions(
-                            link=notification_data.get('url', 'https://your-domain.com/')
+                            link=click_url  # ✅ Now properly formatted
                         )
                     ),
                     # Android config (for future mobile app)
@@ -525,11 +555,14 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
 
 
 def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    """Send call notification to receiver"""
+    """Send call notification to receiver - FIXED"""
     try:
         caller = User.query.get(caller_id)
         if not caller:
             return False
+        
+        # ✅ Use actual frontend URL
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
         
         return send_fcm_notification(
             user_id=receiver_id,
@@ -541,7 +574,7 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                 'caller_name': caller.full_name,
                 'meeting_id': meeting_id,
                 'join_url': join_url,
-                'url': f"/video-call?meetingId={meeting_id}"
+                'url': f"{frontend_url}/video-call?meetingId={meeting_id}"  # ✅ Full URL
             },
             notification_type='call'
         )
@@ -551,7 +584,7 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
 
 
 def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
-    """Send new message notification"""
+    """Send new message notification - FIXED"""
     try:
         sender = User.query.get(sender_id)
         if not sender:
@@ -559,6 +592,9 @@ def send_message_notification(sender_id, receiver_id, message_text, conversation
         
         # Truncate long messages
         preview = message_text[:50] + '...' if len(message_text) > 50 else message_text
+        
+        # ✅ Use actual frontend URL
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
         
         return send_fcm_notification(
             user_id=receiver_id,
@@ -569,15 +605,13 @@ def send_message_notification(sender_id, receiver_id, message_text, conversation
                 'sender_id': str(sender_id),
                 'sender_name': sender.full_name,
                 'conversation_id': str(conversation_id),
-                'url': f"/messages/{conversation_id}"
+                'url': f"{frontend_url}/messages/{conversation_id}"  # ✅ Full URL
             },
             notification_type='message'
         )
     except Exception as e:
         print(f"❌ Error sending message notification: {e}")
         return False
-
-
 @app.route('/api/notifications/register-token', methods=['POST'])
 @jwt_required()
 def register_fcm_token():
