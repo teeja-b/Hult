@@ -45,7 +45,48 @@ import time
 import uuid
 import urllib.parse
 import requests
+import firebase_admin
+from firebase_admin import credentials, messaging as fcm_messaging
+import json
 
+def initialize_firebase():
+    """
+    Initialize Firebase Admin SDK for PRODUCTION
+    
+    Setup Instructions:
+    1. Go to Firebase Console > Project Settings > Service Accounts
+    2. Click "Generate New Private Key"
+    3. Copy the ENTIRE JSON content
+    4. In Render.com dashboard:
+       - Go to Environment Variables
+       - Add: FIREBASE_CREDENTIALS
+       - Paste the entire JSON as the value
+    """
+    try:
+        firebase_creds = os.getenv('FIREBASE_CREDENTIALS')
+        
+        if not firebase_creds:
+            print("❌ FIREBASE_CREDENTIALS not found in environment variables")
+            print("⚠️  Push notifications will NOT work!")
+            return False
+        
+        # Parse JSON from environment variable
+        cred_dict = json.loads(firebase_creds)
+        cred = credentials.Certificate(cred_dict)
+        
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase Admin initialized successfully (PRODUCTION)")
+        return True
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in FIREBASE_CREDENTIALS: {e}")
+        print("⚠️  Check your environment variable formatting")
+        return False
+    except Exception as e:
+        print(f"❌ Firebase Admin initialization failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
@@ -205,6 +246,16 @@ class User(db.Model):
     location = db.Column(db.String(100))
     date_of_birth = db.Column(db.Date)
 
+class FCMToken(db.Model):
+    """Store FCM tokens for users"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(500), nullable=False, unique=True)
+    device_type = db.Column(db.String(50))  # 'web', 'android', 'ios'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
 class StudentProfile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -330,8 +381,243 @@ class Booking(db.Model):
 
 
 
+def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
+    """
+    Send FCM notification to a specific user (PRODUCTION VERSION)
+    """
+    if not FIREBASE_ENABLED:
+        print("⚠️ Firebase not enabled, skipping notification")
+        return False
+    
+    try:
+        # Get all active FCM tokens for this user
+        tokens = FCMToken.query.filter_by(
+            user_id=user_id,
+            is_active=True
+        ).all()
+        
+        if not tokens:
+            print(f"⚠️ No FCM tokens found for user {user_id}")
+            return False
+        
+        # Prepare notification data
+        notification_data = data or {}
+        notification_data['type'] = notification_type
+        notification_data['timestamp'] = datetime.utcnow().isoformat()
+        notification_data['user_id'] = str(user_id)
+        
+        # Convert all data values to strings (FCM requirement)
+        notification_data = {k: str(v) for k, v in notification_data.items()}
+        
+        successful_sends = 0
+        invalid_tokens = []
+        
+        for token_obj in tokens:
+            try:
+                # Create message with web-specific configuration
+                message = fcm_messaging.Message(
+                    notification=fcm_messaging.Notification(
+                        title=title,
+                        body=body
+                    ),
+                    data=notification_data,
+                    token=token_obj.token,
+                    webpush=fcm_messaging.WebpushConfig(
+                        notification=fcm_messaging.WebpushNotification(
+                            title=title,
+                            body=body,
+                            icon='https://your-domain.com/icons/icon-192x192.png',  # Use full URL
+                            badge='https://your-domain.com/icons/icon-192x192.png',
+                            tag=notification_type,
+                            require_interaction=notification_type == 'call',  # Keep call notifications
+                            vibrate=[200, 100, 200] if notification_type == 'call' else None,
+                            actions=[
+                                fcm_messaging.WebpushNotificationAction(
+                                    action='open',
+                                    title='Open'
+                                )
+                            ] if notification_type == 'call' else None
+                        ),
+                        fcm_options=fcm_messaging.WebpushFCMOptions(
+                            link=notification_data.get('url', 'https://your-domain.com/')
+                        )
+                    ),
+                    # Android config (for future mobile app)
+                    android=fcm_messaging.AndroidConfig(
+                        priority='high',
+                        notification=fcm_messaging.AndroidNotification(
+                            sound='default',
+                            channel_id='high_importance_channel'
+                        )
+                    )
+                )
+                
+                # Send message
+                response = fcm_messaging.send(message)
+                print(f"✅ Notification sent: {response}")
+                
+                # Update last_used timestamp
+                token_obj.last_used = datetime.utcnow()
+                successful_sends += 1
+                
+            except fcm_messaging.UnregisteredError:
+                print(f"❌ Invalid token, marking inactive: {token_obj.id}")
+                invalid_tokens.append(token_obj)
+            except fcm_messaging.SenderIdMismatchError:
+                print(f"❌ Token belongs to different project: {token_obj.id}")
+                invalid_tokens.append(token_obj)
+            except Exception as e:
+                print(f"❌ Error sending to token {token_obj.id}: {e}")
+        
+        # Mark invalid tokens as inactive
+        for invalid_token in invalid_tokens:
+            invalid_token.is_active = False
+        
+        db.session.commit()
+        
+        print(f"📊 Notification results: {successful_sends}/{len(tokens)} successful")
+        return successful_sends > 0
+        
+    except Exception as e:
+        print(f"❌ Error sending FCM notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
+def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
+    """Send call notification to receiver"""
+    try:
+        caller = User.query.get(caller_id)
+        if not caller:
+            return False
+        
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"📞 Incoming Call from {caller.full_name}",
+            body="Tap to answer",
+            data={
+                'type': 'call',
+                'caller_id': str(caller_id),
+                'caller_name': caller.full_name,
+                'meeting_id': meeting_id,
+                'join_url': join_url,
+                'url': f"/video-call?meetingId={meeting_id}"
+            },
+            notification_type='call'
+        )
+    except Exception as e:
+        print(f"❌ Error sending call notification: {e}")
+        return False
+
+
+def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
+    """Send new message notification"""
+    try:
+        sender = User.query.get(sender_id)
+        if not sender:
+            return False
+        
+        # Truncate long messages
+        preview = message_text[:50] + '...' if len(message_text) > 50 else message_text
+        
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"💬 New message from {sender.full_name}",
+            body=preview,
+            data={
+                'type': 'message',
+                'sender_id': str(sender_id),
+                'sender_name': sender.full_name,
+                'conversation_id': str(conversation_id),
+                'url': f"/messages/{conversation_id}"
+            },
+            notification_type='message'
+        )
+    except Exception as e:
+        print(f"❌ Error sending message notification: {e}")
+        return False
+
+
+@app.route('/api/notifications/register-token', methods=['POST'])
+@jwt_required()
+def register_fcm_token():
+    """Register or update FCM token for user"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        
+        data = request.get_json()
+        token = data.get('token')
+        device_type = data.get('device_type', 'web')
+        
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        print(f"[FCM] Registering token for user {user_id}")
+        
+        # Check if token already exists
+        existing_token = FCMToken.query.filter_by(token=token).first()
+        
+        if existing_token:
+            # Update existing token
+            existing_token.user_id = user_id
+            existing_token.device_type = device_type
+            existing_token.last_used = datetime.utcnow()
+            existing_token.is_active = True
+            print(f"[FCM] Updated existing token")
+        else:
+            # Create new token
+            new_token = FCMToken(
+                user_id=user_id,
+                token=token,
+                device_type=device_type
+            )
+            db.session.add(new_token)
+            print(f"[FCM] Created new token")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Token registered successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [FCM] Error registering token: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to register token'}), 500
+
+
+@app.route('/api/notifications/unregister-token', methods=['POST'])
+@jwt_required()
+def unregister_fcm_token():
+    """Unregister FCM token (on logout)"""
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        token_obj = FCMToken.query.filter_by(token=token).first()
+        
+        if token_obj:
+            token_obj.is_active = False
+            db.session.commit()
+            print(f"[FCM] Token unregistered successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Token unregistered successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [FCM] Error unregistering token: {e}")
+        return jsonify({'error': 'Failed to unregister token'}), 500
 
 
 
@@ -340,9 +626,10 @@ class Booking(db.Model):
 # This version keeps your existing connect/disconnect handlers
 
 # Replace ONLY the initiate_video_call handler
+
 @socketio.on('initiate_video_call')
-def handle_initiate_video_call(data):
-    """Handle video call initiation - FIXED VERSION (works with existing connect/disconnect)"""
+def handle_initiate_video_call_with_notification(data):
+    """Handle video call initiation with FCM notification"""
     try:
         meeting_id = data.get('meetingId')
         caller_id = data.get('callerId')
@@ -351,52 +638,48 @@ def handle_initiate_video_call(data):
         join_url = data.get('joinUrl')
         
         print(f"\n{'='*70}")
-        print(f"📞 [VIDEO] Call initiated")
+        print(f"📞 [VIDEO] Call initiated with notification")
         print(f"📞 [VIDEO] Caller: {caller_id} ({caller_name})")
         print(f"📞 [VIDEO] Receiver: {receiver_id}")
-        print(f"📞 [VIDEO] Meeting ID: {meeting_id}")
-        print(f"📞 [VIDEO] Join URL: {join_url}")
         print(f"{'='*70}")
         
-        # Check if receiver is online using existing active_connections
+        # Send Socket.IO event (for users currently online)
         receiver_sid = active_connections.get(receiver_id)
         
-        if not receiver_sid:
-            print(f"❌ [VIDEO] Receiver {receiver_id} is not online")
-            print(f"📋 [VIDEO] Currently online users: {list(active_connections.keys())}")
-            emit('call_failed', {
-                'error': 'User is offline',
-                'receiverId': receiver_id
-            }, room=request.sid)
-            return
+        if receiver_sid:
+            emit('incoming_video_call', {
+                'meetingId': meeting_id,
+                'callerId': caller_id,
+                'callerName': caller_name,
+                'joinUrl': join_url
+            }, room=receiver_sid)
+            print(f"✅ [VIDEO] Socket notification sent")
         
-        print(f"✅ [VIDEO] Receiver is online with sid: {receiver_sid}")
+        # ALWAYS send FCM notification (works even when app is closed)
+        fcm_success = send_call_notification(
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+            meeting_id=meeting_id,
+            join_url=join_url
+        )
         
-        # 🔥 FIX: Emit directly to receiver's socket ID
-        # This works with your existing connection setup
-        emit('incoming_video_call', {
-            'meetingId': meeting_id,
-            'callerId': caller_id,
-            'callerName': caller_name,
-            'joinUrl': join_url
-        }, room=receiver_sid)
-        
-        print(f"✅ [VIDEO] Call notification sent directly to sid: {receiver_sid}")
+        if fcm_success:
+            print(f"✅ [VIDEO] FCM notification sent")
+        else:
+            print(f"⚠️ [VIDEO] FCM notification failed (user may not have notifications enabled)")
         
         # Confirm to caller
         emit('call_initiated', {
             'meetingId': meeting_id,
-            'status': 'sent'
+            'status': 'sent',
+            'fcm_sent': fcm_success
         }, room=request.sid)
         
     except Exception as e:
-        print(f"❌ [VIDEO] Error initiating call: {e}")
+        print(f"❌ [VIDEO] Error: {e}")
         import traceback
         traceback.print_exc()
-        
-        emit('call_failed', {
-            'error': str(e)
-        }, room=request.sid)
+        emit('call_failed', {'error': str(e)}, room=request.sid)
 
 
 # Update call_accepted handler
@@ -663,6 +946,96 @@ def handle_disconnect():
             'status': 'offline'
         }, broadcast=True)
 
+@socketio.on('send_message')
+def handle_send_message_with_notification(data):
+    """Handle message sending with FCM notification"""
+    try:
+        conversation_id = data.get('conversationId')
+        sender_id = data.get('sender_id')
+        receiver_id = data.get('receiver_id')
+        text = data.get('text')
+        timestamp = data.get('timestamp')
+        message_id = data.get('messageId')
+        file_url = data.get('file_url')
+        file_type = data.get('file_type')
+        file_name = data.get('file_name')
+        
+        print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
+        
+        # Get or create conversation
+        conversation = Conversation.query.filter(
+            ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
+            ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
+        ).first()
+        
+        if not conversation:
+            conversation = Conversation(
+                participant1_id=sender_id,
+                participant2_id=receiver_id,
+                last_message=text,
+                last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            )
+            db.session.add(conversation)
+            db.session.flush()
+        else:
+            conversation.last_message = text
+            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        
+        # Save message
+        message = Message(
+            conversation_id=conversation.id,
+            sender_id=sender_id,
+            text=text,
+            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
+            file_url=file_url,
+            file_type=file_type,
+            file_name=file_name
+        )
+        db.session.add(message)
+        db.session.commit()
+        
+        # Broadcast via Socket.IO (for online users)
+        message_data = {
+            'id': message.id,
+            'conversationId': conversation_id,
+            'sender_id': sender_id,
+            'receiver_id': receiver_id,
+            'text': text,
+            'timestamp': timestamp,
+            'status': 'delivered',
+            'file_url': file_url,
+            'file_type': file_type,
+            'file_name': file_name
+        }
+        
+        emit('receive_message', message_data, room=conversation_id)
+        
+        # Send FCM notification (for offline users or background tabs)
+        send_message_notification(
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            message_text=text or 'Sent a file',
+            conversation_id=conversation.id
+        )
+        
+        # Send delivery confirmation to sender
+        emit('message_delivered', {
+            'messageId': message_id,
+            'dbMessageId': message.id,
+            'status': 'delivered'
+        }, room=request.sid)
+        
+    except Exception as e:
+        print(f"❌ [MESSAGE] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        db.session.rollback()
+        
+        emit('message_error', {
+            'error': str(e),
+            'messageId': data.get('messageId')
+        }, room=request.sid)
 
 @socketio.on('join_conversation')
 def handle_join_conversation(data):
@@ -702,109 +1075,6 @@ def handle_leave_conversation(data):
         print(f"👋 [SOCKET] User {user_id} left conversation {conversation_id}")
 
 
-@socketio.on('send_message')
-def handle_send_message(data):
-    """Handle real-time message sending with database persistence"""
-    try:
-        conversation_id = data.get('conversationId')
-        sender_id = data.get('sender_id')
-        receiver_id = data.get('receiver_id')
-        text = data.get('text')
-        timestamp = data.get('timestamp')
-        message_id = data.get('messageId')
-
-        file_url = data.get('file_url')
-        file_type = data.get('file_type')
-        file_name = data.get('file_name')
-        
-        print(f"📤 [SOCKET] Message from {sender_id} to {receiver_id}")
-        print(f"📤 [SOCKET] Conversation ID: {conversation_id}")
-        
-        # Get or create conversation in database
-        conversation = Conversation.query.filter(
-            ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
-            ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
-        ).first()
-        
-        if not conversation:
-            # Create new conversation
-            conversation = Conversation(
-                participant1_id=sender_id,
-                participant2_id=receiver_id,
-                last_message=text,
-                last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            )
-            db.session.add(conversation)
-            db.session.flush()
-            print(f"📝 [SOCKET] Created new conversation: {conversation.id}")
-        else:
-            # Update existing conversation
-            conversation.last_message = text
-            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            print(f"📝 [SOCKET] Updated conversation: {conversation.id}")
-        
-        # Save message to database
-        message = Message(
-            conversation_id=conversation.id,
-            sender_id=sender_id,
-            text=text,
-            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
-            file_url=file_url,      # 🔥 ADD THIS
-            file_type=file_type,    # 🔥 ADD THIS
-            file_name=file_name  
-        )
-        db.session.add(message)
-        db.session.commit()
-        
-        print(f"✅ [SOCKET] Message saved to database with ID: {message.id}")
-        
-        # Create message object for real-time broadcast
-        message_data = {
-            'id': message.id,
-            'conversationId': conversation_id,
-            'sender_id': sender_id,
-            'receiver_id': receiver_id,
-            'text': text,
-            'timestamp': timestamp,
-            'status': 'delivered',
-            'file_url': file_url,      # 🔥 ADD THIS
-            'file_type': file_type,    # 🔥 ADD THIS
-            'file_name': file_name 
-        }
-        
-        # 🔥 FIX: Broadcast to BOTH possible conversation ID formats
-        # This ensures both student and tutor receive the message
-        
-        # Original conversation ID (from client)
-        emit('receive_message', message_data, room=conversation_id)
-        print(f"📡 [SOCKET] Broadcast to room: {conversation_id}")
-        
-        # Also try broadcasting using user IDs format (for compatibility)
-        alt_conv_id_1 = f"conversation:{sender_id}:{receiver_id}"
-        alt_conv_id_2 = f"conversation:{receiver_id}:{sender_id}"
-        
-        emit('receive_message', message_data, room=alt_conv_id_1)
-        emit('receive_message', message_data, room=alt_conv_id_2)
-        print(f"📡 [SOCKET] Also broadcast to: {alt_conv_id_1}, {alt_conv_id_2}")
-        
-        # Send delivery confirmation to sender
-        emit('message_delivered', {
-            'messageId': message_id,
-            'dbMessageId': message.id,
-            'status': 'delivered'
-        }, room=request.sid)
-        
-    except Exception as e:
-        print(f"❌ [SOCKET] Error sending message: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        db.session.rollback()
-        
-        emit('message_error', {
-            'error': str(e),
-            'messageId': data.get('messageId')
-        }, room=request.sid)
 
 
 @socketio.on('join_conversation')

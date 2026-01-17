@@ -1,8 +1,8 @@
-"""fresh database
+"""fcm test
 
-Revision ID: b88b3c36f63d
+Revision ID: c79ea061f423
 Revises: 
-Create Date: 2026-01-05 13:50:13.227908
+Create Date: 2026-01-17 14:01:57.605873
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'b88b3c36f63d'
+revision = 'c79ea061f423'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -63,6 +63,18 @@ def upgrade():
     sa.ForeignKeyConstraint(['participant1_id'], ['user.id'], ),
     sa.ForeignKeyConstraint(['participant2_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('fcm_token',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('token', sa.String(length=500), nullable=False),
+    sa.Column('device_type', sa.String(length=50), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('last_used', sa.DateTime(), nullable=True),
+    sa.Column('is_active', sa.Boolean(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('token')
     )
     op.create_table('student_profile',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -186,6 +198,7 @@ def downgrade():
     op.drop_table('course')
     op.drop_table('tutor_profile')
     op.drop_table('student_profile')
+    op.drop_table('fcm_token')
     op.drop_table('conversation')
     op.drop_table('booking')
     op.drop_table('user')
