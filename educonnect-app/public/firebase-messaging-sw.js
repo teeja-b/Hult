@@ -1,108 +1,151 @@
-// public/firebase-messaging-sw.js - PRODUCTION VERSION
-// This file MUST be in the public folder at the root
+// public/firebase-messaging-sw.js
+// This handles FCM notifications when your PWA is in the background
 
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-// Initialize Firebase in the service worker
+// Initialize Firebase in service worker
 firebase.initializeApp({
-  apiKey: "AIzaSyCyRnk60Muh93DtWVbrmO3jn8WsVKZDSas",
-  authDomain: "educonnect-821e7.firebaseapp.com",
-  projectId: "educonnect-821e7",
-  storageBucket: "educonnect-821e7.firebasestorage.app",
-  messagingSenderId: "1004307512502",
-  appId: "1:1004307512502:web:ff5eaae9f3a01eb5ff3a17",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 });
 
 const messaging = firebase.messaging();
 
-console.log('[SW] Firebase Messaging Service Worker loaded');
+// ============================================================================
+// BACKGROUND MESSAGE HANDLER
+// ============================================================================
 
-// Handle background messages (when app is closed or in background)
-messaging.onBackgroundMessage(function(payload) {
-  console.log('[SW] Background message received:', payload);
+messaging.onBackgroundMessage((payload) => {
+  console.log('[firebase-messaging-sw.js] Received background message:', payload);
   
   const notificationTitle = payload.notification?.title || 'EduConnect';
   const notificationOptions = {
-    body: payload.notification?.body || 'You have a new notification',
-    icon: payload.notification?.icon || 'https://hult.onrender.com/icons/icon-192x192.png',
-    badge: 'https://hult.onrender.com/icons/icon-192x192.png',
-    tag: payload.data?.type || 'default',
-    requireInteraction: payload.data?.type === 'call', // Call notifications stay visible
-    vibrate: payload.data?.type === 'call' ? [200, 100, 200] : undefined,
-    data: payload.data || {},
-    actions: payload.data?.type === 'call' ? [
-      {
-        action: 'answer',
-        title: '📞 Answer'
-      },
-      {
-        action: 'decline',
-        title: '❌ Decline'
-      }
-    ] : [
-      {
-        action: 'open',
-        title: 'Open'
-      }
-    ]
+    body: payload.notification?.body || '',
+    icon: payload.notification?.icon || '/logo192.png',
+    badge: payload.notification?.badge || '/logo192.png',
+    tag: payload.data?.type || 'general',
+    requireInteraction: payload.data?.type === 'call',
+    vibrate: payload.data?.type === 'call' ? [200, 100, 200, 100, 200] : [100, 50, 100],
+    data: payload.data,
+    
+    // ✅ ACTION BUTTONS - Different for each notification type
+    actions: getActionsForType(payload.data?.type, payload.data)
   };
 
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Handle notification clicks
-self.addEventListener('notificationclick', function(event) {
-  console.log('[SW] Notification clicked:', event);
+
+// ============================================================================
+// HELPER: GET ACTIONS BASED ON NOTIFICATION TYPE
+// ============================================================================
+
+function getActionsForType(type, data) {
+  switch (type) {
+    case 'call':
+      return [
+        { action: 'answer', title: '✅ Answer', icon: '/icons/answer.png' },
+        { action: 'decline', title: '❌ Decline', icon: '/icons/decline.png' }
+      ];
+      
+    case 'message':
+      return [
+        { action: 'view', title: '👁️ View', icon: '/icons/view.png' },
+        { action: 'reply', title: '📝 Reply', icon: '/icons/reply.png' }
+      ];
+      
+    case 'test':
+      return [
+        { action: 'open', title: '🚀 Open App', icon: '/icons/open.png' }
+      ];
+      
+    default:
+      return [
+        { action: 'open', title: '📱 Open', icon: '/icons/open.png' }
+      ];
+  }
+}
+
+
+// ============================================================================
+// NOTIFICATION CLICK HANDLER - HANDLES ACTIONS
+// ============================================================================
+
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Service Worker] Notification click received:', event);
   
   event.notification.close();
   
-  const action = event.action;
   const data = event.notification.data || {};
+  const action = event.action;
   
-  // Determine URL based on notification type and action
-  let urlToOpen = 'https://hult.onrender.com/'; // Your production URL
+  console.log('[Service Worker] Action clicked:', action);
+  console.log('[Service Worker] Notification data:', data);
   
-  if (action === 'answer' && data.type === 'call') {
-    // Open video call page
-    urlToOpen = `https://hult.onrender.com/video-call?meetingId=${data.meeting_id}`;
-  } else if (action === 'decline') {
-    // Just close notification, don't open anything
-    return;
-  } else if (data.url) {
-    // Use custom URL from notification data
-    urlToOpen = data.url.startsWith('http') 
-      ? data.url 
-      : `https://hult.onrender.com${data.url}`;
-  } else if (data.type === 'message') {
-    urlToOpen = `https://hult.onrender.com/messages/${data.conversation_id}`;
-  } else if (data.type === 'call') {
-    urlToOpen = `https://hult.onrender.com/video-call?meetingId=${data.meeting_id}`;
+  // ✅ DETERMINE WHERE TO REDIRECT
+  let urlToOpen = '/';
+  
+  // Handle different actions
+  switch (action) {
+    case 'answer':
+      // ✅ ANSWER CALL - Redirect to video call with meeting ID
+      const meetingId = data.meeting_id || data.meetingId;
+      if (meetingId) {
+        urlToOpen = `/video-call?meetingId=${meetingId}`;
+      }
+      console.log('[Service Worker] Opening video call:', urlToOpen);
+      break;
+      
+    case 'decline':
+      // ✅ DECLINE CALL - Just close notification, optionally send decline signal
+      console.log('[Service Worker] Call declined');
+      // Optional: Send API request to notify caller
+      // fetch('/api/video/decline-call', { method: 'POST', body: JSON.stringify({ meetingId: data.meeting_id }) });
+      return; // Don't open any window
+      
+    case 'view':
+    case 'reply':
+      // ✅ VIEW/REPLY MESSAGE - Open messages
+      const conversationId = data.conversation_id || data.conversationId;
+      if (conversationId) {
+        urlToOpen = `/messages/${conversationId}`;
+      } else {
+        urlToOpen = '/messages';
+      }
+      console.log('[Service Worker] Opening messages:', urlToOpen);
+      break;
+      
+    case 'open':
+    default:
+      // ✅ DEFAULT - Use the URL from notification data or click_action
+      urlToOpen = data.url || data.click_action || '/';
+      console.log('[Service Worker] Opening default URL:', urlToOpen);
+      break;
   }
   
-  console.log('[SW] Opening URL:', urlToOpen);
-  
+  // ✅ OPEN URL IN PWA
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(function(clientList) {
-        // Check if there's already a window open
+      .then((clientList) => {
+        // Check if PWA is already open
         for (let i = 0; i < clientList.length; i++) {
           const client = clientList[i];
           
-          // If same origin, focus existing window and navigate
-          if (client.url.startsWith('https://hult.onrender.com') && 'focus' in client) {
-            client.focus();
-            
-            // Navigate to the target URL
-            if (client.navigate) {
-              return client.navigate(urlToOpen);
-            }
-            
-            return client;
+          // If PWA is already open, navigate it and focus
+          if (client.url.includes(self.registration.scope) && 'focus' in client) {
+            console.log('[Service Worker] PWA already open, navigating to:', urlToOpen);
+            client.navigate(urlToOpen);
+            return client.focus();
           }
         }
         
-        // Open new window if none exists
+        // If PWA is not open, open new window
+        console.log('[Service Worker] Opening new PWA window:', urlToOpen);
         if (clients.openWindow) {
           return clients.openWindow(urlToOpen);
         }
@@ -110,47 +153,60 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-// Handle push events (alternative to onBackgroundMessage)
-self.addEventListener('push', function(event) {
-  console.log('[SW] Push event received:', event);
+
+// ============================================================================
+// NOTIFICATION CLOSE HANDLER (Optional)
+// ============================================================================
+
+self.addEventListener('notificationclose', (event) => {
+  console.log('[Service Worker] Notification closed:', event.notification.tag);
   
-  if (event.data) {
-    try {
-      const data = event.data.json();
-      console.log('[SW] Push data:', data);
-      
-      const notification = data.notification || {};
-      const title = notification.title || 'EduConnect';
-      
-      const options = {
-        body: notification.body || 'New notification',
-        icon: notification.icon || 'https://hult.onrender.com/icons/icon-192x192.png',
-        badge: 'https://hult.onrender.com/icons/icon-192x192.png',
-        tag: data.data?.type || 'default',
-        requireInteraction: data.data?.type === 'call',
-        vibrate: data.data?.type === 'call' ? [200, 100, 200] : undefined,
-        data: data.data || {}
-      };
-      
-      event.waitUntil(
-        self.registration.showNotification(title, options)
-      );
-    } catch (error) {
-      console.error('[SW] Error parsing push data:', error);
-    }
+  // Optional: Track notification dismissals
+  const data = event.notification.data || {};
+  
+  if (data.type === 'call') {
+    console.log('[Service Worker] Call notification dismissed');
+    // Optional: Send API request to notify caller
+    // fetch('/api/video/missed-call', { method: 'POST', body: JSON.stringify({ meetingId: data.meeting_id }) });
   }
 });
 
-// Log when service worker is installed
-self.addEventListener('install', function(event) {
-  console.log('[SW] Service Worker installing...');
-  self.skipWaiting(); // Activate immediately
+
+// ============================================================================
+// PUSH EVENT HANDLER (Alternative to onBackgroundMessage)
+// ============================================================================
+
+self.addEventListener('push', (event) => {
+  console.log('[Service Worker] Push received:', event);
+  
+  if (!event.data) {
+    console.log('[Service Worker] No data in push event');
+    return;
+  }
+  
+  try {
+    const payload = event.data.json();
+    console.log('[Service Worker] Push payload:', payload);
+    
+    // This is handled by onBackgroundMessage above
+    // But you can add custom logic here if needed
+    
+  } catch (e) {
+    console.error('[Service Worker] Error parsing push data:', e);
+  }
 });
 
-// Log when service worker is activated
-self.addEventListener('activate', function(event) {
-  console.log('[SW] Service Worker activating...');
-  event.waitUntil(clients.claim()); // Take control of all clients
+
+// ============================================================================
+// INSTALL & ACTIVATE HANDLERS (Optional - for PWA caching)
+// ============================================================================
+
+self.addEventListener('install', (event) => {
+  console.log('[Service Worker] Installing...');
+  self.skipWaiting();
 });
 
-console.log('[SW] Service Worker script loaded successfully');
+self.addEventListener('activate', (event) => {
+  console.log('[Service Worker] Activating...');
+  event.waitUntil(clients.claim());
+});
