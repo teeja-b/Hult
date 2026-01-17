@@ -50,6 +50,8 @@ from firebase_admin import credentials, messaging as fcm_messaging
 
 # Add this after your other imports
 import json
+
+FIREBASE_ENABLED = False
 try:
     import firebase_admin
     from firebase_admin import credentials, messaging as fcm_messaging
