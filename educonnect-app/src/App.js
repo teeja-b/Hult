@@ -19,6 +19,9 @@ import {
 import PasswordResetPage from './components/PasswordResetPage';
 import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
 import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackModal';
+import FCMDebugPanel from './components/FCMDebugPanel';
+import FCMInitializer from './components/FCMInitializer';
+
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com' ;
   const [showCourseManager, setShowCourseManager] = useState(false);
