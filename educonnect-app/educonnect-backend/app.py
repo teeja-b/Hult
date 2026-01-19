@@ -3743,14 +3743,14 @@ def get_student_profile_enhanced():
 @app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material')
 @jwt_required()
 def upload_material():
-    """Upload course material (video, PDF, document, etc.)"""
+    """Upload course material to Cloudinary"""
     
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
         print("\n" + "📤"*35)
-        print("📤 MATERIAL UPLOAD ENDPOINT HIT!")
+        print("📤 MATERIAL UPLOAD TO CLOUDINARY!")
         print("📤"*35)
         
         # Get and validate user
@@ -3799,50 +3799,50 @@ def upload_material():
         print(f"[UPLOAD] Type: {material_type}")
         print(f"[UPLOAD] Course ID: {course_id}")
         
-        # Validate file type
-        allowed_extensions = {
-            'video': {'mp4', 'mov', 'avi', 'mkv', 'webm'},
-            'document': {'pdf', 'doc', 'docx', 'txt'},
-            'presentation': {'ppt', 'pptx'},
-            'image': {'jpg', 'jpeg', 'png', 'gif', 'svg'},
-            'audio': {'mp3', 'wav', 'ogg'},
-            'archive': {'zip', 'rar'}
-        }
+        # Validate file size (500MB max)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
         
+        if file_size > 500 * 1024 * 1024:
+            return jsonify({'error': 'File too large (max 500MB)'}), 400
+        
+        # Determine Cloudinary resource type
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
         
-        # Check if extension is allowed for the material type
-        if material_type in allowed_extensions:
-            if file_ext not in allowed_extensions[material_type]:
-                return jsonify({
-                    'error': f'Invalid file type for {material_type}',
-                    'allowed': list(allowed_extensions[material_type])
-                }), 400
+        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
+            resource_type = 'video'
+        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
+            resource_type = 'raw'
+        else:
+            resource_type = 'image'
         
-        # Secure filename and create unique name
+        print(f"[UPLOAD] Resource type: {resource_type}")
+        print(f"[UPLOAD] Uploading to Cloudinary...")
+        
+        # Secure filename
         filename = secure_filename(file.filename)
-        unique_filename = f"{course_id}_{datetime.utcnow().timestamp()}_{filename}"
         
-        # Create course materials directory
-        materials_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'materials', str(course_id))
-        os.makedirs(materials_dir, exist_ok=True)
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type=resource_type,
+            folder=f'course-materials/{course_id}',
+            public_id=f"{datetime.utcnow().timestamp()}_{filename}",
+            overwrite=False
+        )
         
-        # Save file
-        file_path = os.path.join(materials_dir, unique_filename)
-        file.save(file_path)
+        cloudinary_url = upload_result['secure_url']
+        public_id = upload_result['public_id']
         
-        # Get file size
-        file_size = os.path.getsize(file_path)
+        print(f"[UPLOAD] ✅ Uploaded to Cloudinary: {cloudinary_url}")
         
-        print(f"[UPLOAD] File saved to: {file_path}")
-        print(f"[UPLOAD] File size: {file_size} bytes")
-        
-        # Create database record
+        # Create database record with Cloudinary URL
         material = CourseMaterial(
             course_id=course_id,
             title=material_title,
             material_type=material_type,
-            file_path=file_path,
+            file_path=cloudinary_url,  # ✅ Store Cloudinary URL
             file_size=file_size,
             order=order,
             duration=int(duration) if duration else None
@@ -3862,28 +3862,25 @@ def upload_material():
                 'title': material.title,
                 'type': material.material_type,
                 'file_size': material.file_size,
+                'file_url': cloudinary_url,
+                'public_id': public_id,
                 'order': material.order,
                 'duration': material.duration,
                 'created_at': material.created_at.isoformat()
             }
         }), 201
         
-    except ValueError as e:
-        print(f"❌ [UPLOAD ERROR] Validation error: {str(e)}")
-        return jsonify({'error': f'Invalid data: {str(e)}'}), 400
-    
     except Exception as e:
         db.session.rollback()
         print(f"❌ [UPLOAD ERROR] Exception: {str(e)}")
         import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         print("📤"*35 + "\n")
         
         return jsonify({
             'error': 'Failed to upload material',
             'details': str(e)
         }), 500
-
 
 @app.route('/api/courses/<int:course_id>/materials', methods=['GET'])
 def get_course_materials(course_id):
@@ -3937,7 +3934,7 @@ def get_course_materials(course_id):
 @app.route('/api/courses/<int:course_id>/download', methods=['POST'])
 @jwt_required()
 def download_course_for_offline(course_id):
-    """Record course download for offline access"""
+    """Record course download for offline access - ONLY for offline_available courses"""
     try:
         user_id_str = get_jwt_identity()
         user_id = int(user_id_str)
@@ -3954,8 +3951,12 @@ def download_course_for_offline(course_id):
         if not course:
             return jsonify({'error': 'Course not found'}), 404
         
+        # ✅ CRITICAL: Check if course is available for offline download
         if not course.offline_available:
-            return jsonify({'error': 'This course is not available for offline download'}), 400
+            return jsonify({
+                'error': 'This course is not available for offline download',
+                'reason': 'Course is online-only'
+            }), 403
         
         # Check if student is enrolled
         enrollment = Enrollment.query.filter_by(student_id=user_id, course_id=course_id).first()
@@ -3994,16 +3995,18 @@ def download_course_for_offline(course_id):
         print(f"✅ [DOWNLOAD] Course {course_id} downloaded by user {user_id}")
         
         return jsonify({
-            'message': 'Course downloaded for offline access',
+            'message': 'Course marked for offline access',
             'course_id': course_id,
-            'expires_at': expires_at.isoformat()
+            'expires_at': expires_at.isoformat(),
+            'note': 'Materials will be streamed from Cloudinary'
         }), 201
         
     except Exception as e:
         db.session.rollback()
         print(f"❌ [DOWNLOAD ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to download course'}), 500
-
 
 @app.route('/api/student/downloads', methods=['GET'])
 @jwt_required()
@@ -4090,7 +4093,7 @@ def remove_offline_download(course_id):
 @app.route('/api/materials/<int:material_id>', methods=['DELETE'])
 @jwt_required()
 def delete_material(material_id):
-    """Delete a course material"""
+    """Delete a course material from database and Cloudinary"""
     try:
         user_id_str = get_jwt_identity()
         user_id = int(user_id_str)
@@ -4108,9 +4111,39 @@ def delete_material(material_id):
         if material.course.tutor.user_id != user.id:
             return jsonify({'error': 'Not authorized to delete this material'}), 403
         
-        # Delete file from filesystem
-        if os.path.exists(material.file_path):
-            os.remove(material.file_path)
+        # ✅ Delete from Cloudinary
+        try:
+            # Extract public_id from Cloudinary URL
+            # Example URL: https://res.cloudinary.com/xxx/video/upload/v123/course-materials/1/file.mp4
+            file_path = material.file_path
+            
+            if 'cloudinary.com' in file_path:
+                # Extract public_id from URL
+                parts = file_path.split('/')
+                # Find the upload index
+                upload_index = parts.index('upload') if 'upload' in parts else -1
+                if upload_index > 0 and upload_index < len(parts) - 1:
+                    # Get everything after /upload/vXXX/
+                    public_id_parts = parts[upload_index + 2:]  # Skip version number
+                    public_id = '/'.join(public_id_parts)
+                    # Remove file extension
+                    public_id = public_id.rsplit('.', 1)[0]
+                    
+                    # Determine resource type
+                    resource_type = 'raw'
+                    if '/video/' in file_path:
+                        resource_type = 'video'
+                    elif '/image/' in file_path:
+                        resource_type = 'image'
+                    
+                    print(f"[DELETE] Deleting from Cloudinary: {public_id} (type: {resource_type})")
+                    
+                    # Delete from Cloudinary
+                    cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+                    print(f"✅ [DELETE] Deleted from Cloudinary")
+        except Exception as cloudinary_error:
+            print(f"⚠️ [DELETE] Cloudinary deletion failed (non-critical): {cloudinary_error}")
+            # Continue with database deletion even if Cloudinary fails
         
         # Delete database record
         db.session.delete(material)
@@ -4121,8 +4154,9 @@ def delete_material(material_id):
     except Exception as e:
         db.session.rollback()
         print(f"[ERROR] Failed to delete material: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Failed to delete material'}), 500
-
 
 @app.route('/api/courses/<int:course_id>', methods=['PUT'])
 @jwt_required()
@@ -4236,12 +4270,10 @@ def delete_course(course_id):
 
 @app.route('/api/materials/<int:material_id>/stream', methods=['GET', 'OPTIONS'])
 def stream_material(material_id):
-    """Stream video/audio/document file"""
+    """Stream video/audio/document file from Cloudinary"""
     
-    # Handle CORS preflight
     if request.method == 'OPTIONS':
         response = app.make_default_options_response()
-        
         response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
@@ -4258,71 +4290,47 @@ def stream_material(material_id):
             return jsonify({'error': 'Material not found'}), 404
         
         print(f"[STREAM] Material found: {material.title}")
-        print(f"[STREAM] File path: {material.file_path}")
+        print(f"[STREAM] File URL: {material.file_path}")
         
-        # Make sure path is absolute
-        file_path = material.file_path
-        if not os.path.isabs(file_path):
-            file_path = os.path.join(os.getcwd(), file_path)
-            print(f"[STREAM] Converted to absolute path: {file_path}")
-        
-        # Check if file exists
-        if not os.path.exists(file_path):
-            print(f"[STREAM ERROR] File not found on disk: {file_path}")
-            return jsonify({'error': 'File not found on server'}), 404
-        
-        print(f"[STREAM] File exists! Size: {os.path.getsize(file_path)} bytes")
-        
-        # Get file extension to determine mime type
-        file_ext = file_path.rsplit('.', 1)[1].lower() if '.' in file_path else ''
-        print(f"[STREAM] File extension: {file_ext}")
-        
-        mime_types = {
-            'mp4': 'video/mp4',
-            'webm': 'video/webm',
-            'mov': 'video/quicktime',
-            'avi': 'video/x-msvideo',
-            'mkv': 'video/x-matroska',
-            'mp3': 'audio/mpeg',
-            'wav': 'audio/wav',
-            'ogg': 'audio/ogg',
-            'pdf': 'application/pdf',
-            'doc': 'application/msword',
-            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'txt': 'text/plain',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'png': 'image/png',
-            'gif': 'image/gif'
-        }
-        
-        mimetype = mime_types.get(file_ext, 'application/octet-stream')
-        print(f"[STREAM] MIME type: {mimetype}")
-        
-        print(f"[STREAM] Sending file...")
-        
-        response = send_file(
-            file_path,
-            mimetype=mimetype,
-            as_attachment=False
-        )
-        
-        # Add CORS headers
-        
-        
-        
-        print(f"✅ [STREAM] File sent successfully!")
-        print(f"{'='*70}\n")
-        
-        return response
+        # ✅ Check if URL is from Cloudinary
+        if 'cloudinary.com' in material.file_path:
+            print(f"[STREAM] Redirecting to Cloudinary URL")
+            # Redirect to Cloudinary URL (browser will stream directly)
+            from flask import redirect
+            return redirect(material.file_path, code=302)
+        else:
+            # Fallback for legacy local files (if any)
+            print(f"[STREAM] Legacy local file detected")
+            file_path = material.file_path
+            
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(os.getcwd(), file_path)
+            
+            if not os.path.exists(file_path):
+                return jsonify({'error': 'File not found on server'}), 404
+            
+            file_ext = file_path.rsplit('.', 1)[1].lower() if '.' in file_path else ''
+            
+            mime_types = {
+                'mp4': 'video/mp4',
+                'webm': 'video/webm',
+                'mov': 'video/quicktime',
+                'mp3': 'audio/mpeg',
+                'pdf': 'application/pdf',
+                'jpg': 'image/jpeg',
+                'png': 'image/png',
+            }
+            
+            mimetype = mime_types.get(file_ext, 'application/octet-stream')
+            
+            response = send_file(file_path, mimetype=mimetype, as_attachment=False)
+            return response
         
     except Exception as e:
         print(f"❌ [STREAM ERROR] Exception: {str(e)}")
         import traceback
-        print(traceback.format_exc())
-        print(f"{'='*70}\n")
+        traceback.print_exc()
         return jsonify({'error': 'Failed to stream material', 'details': str(e)}), 500
-
 
 @app.route('/api/materials/<int:material_id>/download', methods=['GET', 'OPTIONS'])
 def download_material(material_id):

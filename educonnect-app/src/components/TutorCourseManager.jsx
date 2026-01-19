@@ -90,49 +90,51 @@ if (!response.ok) {
     }
   };
 
-  const handleUploadMaterial = async (e) => {
-    e.preventDefault();
-    if (!materialForm.file || !selectedCourse) return;
+ const handleUploadMaterial = async (e) => {
+  e.preventDefault();
+  if (!materialForm.file || !selectedCourse) return;
 
-    setUploadingMaterial(true);
+  setUploadingMaterial(true);
 
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', materialForm.file);
-      formData.append('course_id', selectedCourse.id);
-      formData.append('title', materialForm.title);
-      formData.append('type', materialForm.type);
-      formData.append('order', materialForm.order);
-      formData.append('duration', materialForm.duration);
+  try {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', materialForm.file);
+    formData.append('course_id', selectedCourse.id);
+    formData.append('title', materialForm.title);
+    formData.append('type', materialForm.type);
+    formData.append('order', materialForm.order);
+    formData.append('duration', materialForm.duration);
 
-      const response = await fetch('https://hult.onrender.com/api/upload/material', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
+    const response = await fetch('https://hult.onrender.com/api/upload/material', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
-      }
-
-      alert('✓ Material uploaded successfully!');
-      setMaterialForm({ title: '', type: 'document', file: null, order: 0, duration: 0 });
-      
-      // Refresh course materials
-      const updatedCourse = courses.find(c => c.id === selectedCourse.id);
-      if (updatedCourse) {
-        updatedCourse.material_count = (updatedCourse.material_count || 0) + 1;
-        setCourses([...courses]);
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload: ' + error.message);
-    } finally {
-      setUploadingMaterial(false);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
     }
-  };
+
+    const data = await response.json();
+
+    alert(`✓ Material uploaded successfully to Cloudinary!\n\nURL: ${data.material.file_url}`);
+    setMaterialForm({ title: '', type: 'document', file: null, order: 0, duration: 0 });
+    
+    // Refresh course materials
+    const updatedCourse = courses.find(c => c.id === selectedCourse.id);
+    if (updatedCourse) {
+      updatedCourse.material_count = (updatedCourse.material_count || 0) + 1;
+      setCourses([...courses]);
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    alert('Failed to upload: ' + error.message);
+  } finally {
+    setUploadingMaterial(false);
+  }
+};
 
   const handleDeleteCourse = async (courseId) => {
     if (!window.confirm('Are you sure you want to delete this course? All materials will be removed.')) {

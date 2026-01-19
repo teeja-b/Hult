@@ -217,86 +217,78 @@ const EduConnectApp = () => {
   };
 
   // Download Course Handler
-  const downloadCourse = async (course) => {
-    if (!isAuthenticated) {
-      alert('Please log in to download courses!');
-      setShowLogin(true);
-      return;
+const downloadCourse = async (course) => {
+  if (!isAuthenticated) {
+    alert('Please log in to download courses!');
+    setShowLogin(true);
+    return;
+  }
+
+  // ✅ Check if course is available for offline download
+  if (!course.offline_available) {
+    alert('❌ This course is not available for offline download. It can only be accessed online.');
+    return;
+  }
+
+  if (offlineCourses.find(c => c.id === course.id)) {
+    alert('Course already downloaded!');
+    return;
+  }
+
+  setDownloading(course.id);
+
+  try {
+    const token = localStorage.getItem('token');
+    
+    // Step 1: Record the download
+    const response = await fetch(`${API_URL}/api/courses/${course.id}/download`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Download failed');
     }
 
-    if (offlineCourses.find(c => c.id === course.id)) {
-      alert('Course already downloaded!');
-      return;
-    }
+    const data = await response.json();
+    
+    // Step 2: Fetch course materials
+    const materialsResponse = await fetch(`${API_URL}/api/courses/${course.id}/materials`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    const materialsData = await materialsResponse.json();
+    
+    // ✅ Step 3: Store offline course info (no actual downloading - streaming from Cloudinary)
+    const offlineCourse = {
+      ...course,
+      downloadedAt: new Date().toISOString(),
+      expiresAt: data.expires_at,
+      materials: materialsData.materials || [],
+      isCloudinary: true // ✅ Flag to indicate streaming from Cloudinary
+    };
+    
+    const updated = [...offlineCourses, offlineCourse];
+    setOfflineCourses(updated);
+    localStorage.setItem('offlineCourses', JSON.stringify(updated));
 
-    setDownloading(course.id);
-
-    try {
-      const token = localStorage.getItem('token');
-      
-      // Step 1: Record the download
-      const response = await fetch(`${API_URL}/api/courses/${course.id}/download`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Download failed');
-      }
-
-      const data = await response.json();
-      
-      // Step 2: Fetch all course materials
-      const materialsResponse = await fetch(`${API_URL}/api/courses/${course.id}/materials`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      const materialsData = await materialsResponse.json();
-      
-      // Step 3: Download each material file
-      for (const material of materialsData.materials || []) {
-        try {
-          const fileResponse = await fetch(`${API_URL}/api/materials/${material.id}/stream`);
-          const blob = await fileResponse.blob();
-          
-          // Create download link
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${material.title}.${material.type}`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        } catch (err) {
-          console.error(`Failed to download ${material.title}:`, err);
-        }
-      }
-      
-      // Step 4: Store offline access info
-      const offlineCourse = {
-        ...course,
-        downloadedAt: new Date().toISOString(),
-        expiresAt: data.expires_at,
-        materials: materialsData.materials || []
-      };
-      
-      const updated = [...offlineCourses, offlineCourse];
-      setOfflineCourses(updated);
-      localStorage.setItem('offlineCourses', JSON.stringify(updated));
-
-      alert(`✓ ${course.title} downloaded! ${materialsData.materials?.length || 0} files saved.`);
-    } catch (error) {
-      console.error('Download error:', error);
+    alert(`✓ ${course.title} added to offline library!\n\n${materialsData.materials?.length || 0} materials available.\n\n📡 Note: Materials will stream from cloud when accessed.`);
+  } catch (error) {
+    console.error('Download error:', error);
+    
+    if (error.message.includes('online-only')) {
+      alert('❌ This course is only available online and cannot be downloaded.');
+    } else {
       alert(`Failed to download course: ${error.message}`);
-    } finally {
-      setDownloading(null);
     }
-  };
+  } finally {
+    setDownloading(null);
+  }
+};
 
   // Fetch Tutor Stats
   const fetchTutorStats = async () => {
@@ -1050,110 +1042,123 @@ const EduConnectApp = () => {
     );
   };
 
-  // Courses View Component
-  const CoursesView = () => {
-    const [allCourses, setAllCourses] = useState([]);
-    const [loading, setLoading] = useState(true);
+const CoursesView = () => {
+  const [allCourses, setAllCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-      fetchAllCourses();
-    }, []);
+  useEffect(() => {
+    fetchAllCourses();
+  }, []);
 
-    const fetchAllCourses = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/courses`);
-        const data = await response.json();
-        setAllCourses(data.courses || []);
-      } catch (error) {
-        console.error('Error fetching courses:', error);
-        setAllCourses(courses);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (loading) {
-      return (
-        <div className="p-4 text-center">
-          <p>Loading courses...</p>
-        </div>
-      );
+  const fetchAllCourses = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/courses`);
+      const data = await response.json();
+      setAllCourses(data.courses || []);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      setAllCourses(courses);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  if (loading) {
     return (
-      <div className="p-4">
-        <div className="mb-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search courses..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {allCourses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase())).map(course => (
-            <div key={course.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-bold text-gray-800">{course.title}</h3>
-                  <p className="text-sm text-gray-600">by {course.tutor || course.tutor_name || 'Unknown'}</p>
-                </div>
-                {course.offline_available && (
-                  <button 
-                    onClick={() => downloadCourse(course)}
-                    className="text-purple-600 hover:text-purple-800"
-                  >
-                    <Download size={20} />
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex gap-2 text-xs text-gray-600 mb-2">
-                <span className="bg-blue-100 px-2 py-1 rounded">{course.level}</span>
-                <span className="bg-green-100 px-2 py-1 rounded">{course.duration || 'Self-paced'}</span>
-                <span className="bg-yellow-100 px-2 py-1 rounded">⭐ {course.rating || 'New'}</span>
-              </div>
-              
-              <p className="text-sm text-gray-600 mb-3">
-                {course.description || `${course.total_students || 0} students enrolled`}
-              </p>
-              
-              <div className="space-y-2">
-                <button 
-                  onClick={() => { setSelectedCourse(course); setCurrentView('course-detail'); }}
-                  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-                >
-                  View Course
-                </button>
-                
-                {/* NEW: Assignments Button */}
-                {isAuthenticated && (
-                  <button 
-                    onClick={() => handleOpenAssignments(course)}
-                    className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-2 rounded hover:bg-green-700 transition flex items-center justify-center gap-2"
-                  >
-                    <FileText size={16} />
-                    View Assignments
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {allCourses.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <p>No courses available yet.</p>
-            </div>
-          )}
-        </div>
+      <div className="p-4 text-center">
+        <p>Loading courses...</p>
       </div>
     );
-  };
+  }
+
+  return (
+    <div className="p-4">
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search courses..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {allCourses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase())).map(course => (
+          <div key={course.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h3 className="font-bold text-gray-800">{course.title}</h3>
+                <p className="text-sm text-gray-600">by {course.tutor || course.tutor_name || 'Unknown'}</p>
+              </div>
+              
+              {/* ✅ Show download button only if offline_available */}
+              {course.offline_available && (
+                <button 
+                  onClick={() => downloadCourse(course)}
+                  disabled={downloading === course.id}
+                  className="text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1"
+                  title="Download for offline access"
+                >
+                  <Download size={20} />
+                  {downloading === course.id && (
+                    <span className="text-xs">...</span>
+                  )}
+                </button>
+              )}
+              
+              {/* ✅ Show online-only badge if NOT offline_available */}
+              {!course.offline_available && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center gap-1">
+                  <Globe size={12} />
+                  Online Only
+                </span>
+              )}
+            </div>
+            
+            <div className="flex gap-2 text-xs text-gray-600 mb-2">
+              <span className="bg-blue-100 px-2 py-1 rounded">{course.level}</span>
+              <span className="bg-green-100 px-2 py-1 rounded">{course.duration || 'Self-paced'}</span>
+              <span className="bg-yellow-100 px-2 py-1 rounded">⭐ {course.rating || 'New'}</span>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-3">
+              {course.description || `${course.total_students || 0} students enrolled`}
+            </p>
+            
+            <div className="space-y-2">
+              <button 
+                onClick={() => { setSelectedCourse(course); setCurrentView('course-detail'); }}
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+              >
+                View Course
+              </button>
+              
+              {isAuthenticated && (
+                <button 
+                  onClick={() => handleOpenAssignments(course)}
+                  className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-2 rounded hover:bg-green-700 transition flex items-center justify-center gap-2"
+                >
+                  <FileText size={16} />
+                  View Assignments
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {allCourses.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <p>No courses available yet.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
   // Course Detail View Component
   const CourseDetailView = () => (
