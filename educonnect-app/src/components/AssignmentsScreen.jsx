@@ -81,6 +81,7 @@ const AssignmentsScreen = ({
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [comments, setComments] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [gradeDistribution, setGradeDistribution] = useState([]);
 
@@ -150,8 +151,17 @@ const AssignmentsScreen = ({
       return;
     }
 
+    setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
+      
+      // ✅ Check if token exists
+      if (!token) {
+        alert('Session expired. Please login again.');
+        setShowLogin(true);
+        return;
+      }
+
       const formData = new FormData();
       
       uploadedFiles.forEach(file => {
@@ -163,7 +173,10 @@ const AssignmentsScreen = ({
 
       const response = await fetch(`${API_URL}/api/assignments/${selectedAssignment.id}/submit`, {
         method: 'POST',
-
+        headers: {
+          'Authorization': `Bearer ${token}` // ✅ FIXED: Added auth header
+          // Don't set Content-Type - browser sets it automatically with boundary for FormData
+        },
         body: formData
       });
 
@@ -173,25 +186,20 @@ const AssignmentsScreen = ({
         setUploadedFiles([]);
         setComments('');
         fetchAssignments();
+      } else if (response.status === 401) {
+        alert('Session expired. Please login again.');
+        setShowLogin(true);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to submit assignment');
       }
     } catch (error) {
       console.error('Failed to submit assignment:', error);
-      alert('Failed to submit assignment');
+      alert('Failed to submit assignment: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  // Handle file upload (simplified for React Native - you might need a different approach)
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    setUploadedFiles(prev => [...prev, ...files]);
-  };
-
-  const filteredAssignments = assignments.filter(assignment => {
-    if (selectedCourse !== 'all' && assignment.courseCode !== selectedCourse) return false;
-    if (selectedStatus !== 'all' && assignment.status !== selectedStatus) return false;
-    if (searchQuery && !assignment.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
 
   return (
     <div className="p-4">
@@ -431,10 +439,10 @@ const AssignmentsScreen = ({
                   </button>
                   <button
                     onClick={handleSubmitAssignment}
-                    disabled={uploadedFiles.length === 0}
+                    disabled={uploadedFiles.length === 0 || submitting}
                     className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
                   >
-                    Submit Assignment
+                    {submitting ? 'Submitting...' : 'Submit Assignment'}
                   </button>
                 </div>
               </div>
