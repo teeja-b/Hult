@@ -215,18 +215,25 @@ const AssignmentsScreen = ({
           </div>
           <div className="flex items-center gap-4">
             <button
-              onClick={() => {
-                if (!isAuthenticated) {
-                  setShowLogin(true);
-                  return;
-                }
-                setIsSubmitModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Upload className="w-5 h-5" />
-              Submit Assignment
-            </button>
+  onClick={() => {
+    if (!isAuthenticated) {
+      setShowLogin(true);
+      return;
+    }
+    // Find first pending assignment
+    const pendingAssignment = assignments.find(a => a.status === 'pending');
+    if (pendingAssignment) {
+      setSelectedAssignment(pendingAssignment);
+      setIsSubmitModalOpen(true);
+    } else {
+      alert('No pending assignments to submit');
+    }
+  }}
+  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+>
+  <Upload className="w-5 h-5" />
+  Submit Assignment
+</button>
           </div>
         </div>
 
