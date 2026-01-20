@@ -5,6 +5,7 @@ import TutorOnboarding from './components/TutorOnboarding';
 import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
 import AssignmentsScreen from './components/AssignmentsScreen'; // NEW IMPORT
+import CourseMaterialsViewer from './components/CourseMaterialsViewer';
 import { 
   BookOpen, Users, Award, Heart, Download, Menu, X, Search, 
   Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, 
@@ -1371,6 +1372,16 @@ const MyCoursesView = () => {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
         <p className="text-gray-600">Loading your courses...</p>
       </div>
+    );
+  }
+
+    if (viewingMaterials) {
+    return (
+      <CourseMaterialsViewer
+        course={viewingMaterials}
+        onClose={() => setViewingMaterials(null)}
+        API_URL={API_URL}
+      />
     );
   }
 
