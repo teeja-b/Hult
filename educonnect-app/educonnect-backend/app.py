@@ -3904,13 +3904,14 @@ def get_course_materials(course_id):
                 'id': material.id,
                 'title': material.title,
                 'type': material.material_type,
+                'file_path': material.file_path,  # ✅ ADD THIS LINE - The Cloudinary URL
                 'file_size': material.file_size,
                 'order': material.order,
                 'duration': material.duration,
                 'created_at': material.created_at.isoformat()
             }
             materials_list.append(material_data)
-            print(f"[MATERIALS] - {material.title} ({material.material_type})")
+            print(f"[MATERIALS] - {material.title} ({material.material_type}) URL: {material.file_path}")
         
         response_data = {
             'course_id': course_id,
@@ -3925,8 +3926,9 @@ def get_course_materials(course_id):
     except Exception as e:
         print(f"[ERROR] Failed to get materials: {str(e)}")
         import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({'error': 'Failed to retrieve materials'}), 500
+        
 #================
 # OFFLINE DOWNLOAD ENDPOINTS
 # ============================================================================
