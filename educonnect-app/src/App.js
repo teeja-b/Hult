@@ -1292,6 +1292,8 @@ const MyCoursesView = () => {
   const [selectedCourseForMaterials, setSelectedCourseForMaterials] = useState(null);
   const [courseMaterials, setCourseMaterials] = useState([]);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
+  
+  const [viewingMaterials, setViewingMaterials] = useState(null); 
 
   useEffect(() => {
     fetchEnrolledCourses();
@@ -1450,9 +1452,8 @@ const MyCoursesView = () => {
 
               {/* Action Buttons */}
               <div className="space-y-2">
-                {/* ✅ NEW: View Materials Button */}
-                <button
-                  onClick={() => handleViewMaterials(enrollment)}
+                              <button
+                  onClick={() => setViewingMaterials(enrollment)} // Changed this line
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded hover:bg-purple-700 transition flex items-center justify-center gap-2"
                 >
                   <Video size={16} />
