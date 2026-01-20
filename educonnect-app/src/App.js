@@ -5,7 +5,7 @@ import TutorOnboarding from './components/TutorOnboarding';
 import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
 import AssignmentsScreen from './components/AssignmentsScreen'; // NEW IMPORT
-import CourseMaterialsViewer from './components/CourseMaterialsViewer';
+import CourseMaterialsViewer from './components/CourseMaterialViewer';
 import { 
   BookOpen, Users, Award, Heart, Download, Menu, X, Search, 
   Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, 
