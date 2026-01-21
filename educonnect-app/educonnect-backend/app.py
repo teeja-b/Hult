@@ -339,11 +339,33 @@ class TutorProfile(db.Model):
     max_students = db.Column(db.String(10))
     preferred_age_groups = db.Column(db.Text)  # JSON array
 
+# Add these new models to your app.py (around line 200, after existing models)
+
+class CourseSection(db.Model):
+    """Main sections/modules within a course"""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    materials = db.relationship('CourseMaterial', backref='section', cascade='all, delete-orphan')
+
+# Update the Course model to include new fields
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tutor_id = db.Column(db.Integer, db.ForeignKey('tutor_profile.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
+    
+    # NEW FIELDS for detailed course info
+    overview = db.Column(db.Text)  # Course Overview
+    learning_outcomes = db.Column(db.Text)  # What You'll Learn (JSON array)
+    prerequisites = db.Column(db.Text)  # Prerequisites (JSON array)
+    target_audience = db.Column(db.Text)  # Who is this course for
+    
     category = db.Column(db.String(50))
     level = db.Column(db.String(50))
     duration = db.Column(db.String(50))
@@ -354,13 +376,18 @@ class Course(db.Model):
     published = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Relationships
+    sections = db.relationship('CourseSection', backref='course', cascade='all, delete-orphan')
     materials = db.relationship('CourseMaterial', backref='course', cascade='all, delete-orphan')
     enrollments = db.relationship('Enrollment', backref='course', cascade='all, delete-orphan')
 
+# Update CourseMaterial model to include section_id
 class CourseMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('course_section.id'), nullable=True)  # NEW
     title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)  # NEW - Description for each material
     material_type = db.Column(db.String(50))
     file_path = db.Column(db.String(500))
     file_size = db.Column(db.Integer)
@@ -3740,147 +3767,6 @@ def get_student_profile_enhanced():
     }), 200
 
 
-@app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material')
-@jwt_required()
-def upload_material():
-    """Upload course material to Cloudinary"""
-    
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    try:
-        print("\n" + "📤"*35)
-        print("📤 MATERIAL UPLOAD TO CLOUDINARY!")
-        print("📤"*35)
-        
-        # Get and validate user
-        user_id_str = get_jwt_identity()
-        if not user_id_str:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-        
-        if not user or user.user_type != 'tutor':
-            return jsonify({'error': 'Only tutors can upload materials'}), 403
-        
-        # Validate course_id
-        course_id = request.form.get('course_id')
-        if not course_id:
-            return jsonify({'error': 'Course ID is required'}), 400
-        
-        course_id = int(course_id)
-        course = Course.query.get(course_id)
-        
-        if not course:
-            return jsonify({'error': 'Course not found'}), 404
-        
-        # Check ownership
-        if course.tutor.user_id != user.id:
-            return jsonify({'error': 'Not authorized to upload to this course'}), 403
-        
-        # Validate file
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        # Get material metadata
-        material_title = request.form.get('title', file.filename)
-        material_type = request.form.get('type', 'document')
-        order = int(request.form.get('order', 0))
-        duration = request.form.get('duration', 0)
-        
-        print(f"[UPLOAD] File: {file.filename}")
-        print(f"[UPLOAD] Title: {material_title}")
-        print(f"[UPLOAD] Type: {material_type}")
-        print(f"[UPLOAD] Course ID: {course_id}")
-        
-        # Validate file size (500MB max)
-        file.seek(0, os.SEEK_END)
-        file_size = file.tell()
-        file.seek(0)
-        
-        if file_size > 500 * 1024 * 1024:
-            return jsonify({'error': 'File too large (max 500MB)'}), 400
-        
-        # Determine Cloudinary resource type
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
-        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
-            resource_type = 'video'
-        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
-            resource_type = 'raw'
-        else:
-            resource_type = 'image'
-        
-        print(f"[UPLOAD] Resource type: {resource_type}")
-        print(f"[UPLOAD] Uploading to Cloudinary...")
-        
-        # Secure filename
-        filename = secure_filename(file.filename)
-        
-        # Upload to Cloudinary
-        upload_result = cloudinary.uploader.upload(
-            file,
-            resource_type=resource_type,
-            folder=f'course-materials/{course_id}',
-            public_id=f"{datetime.utcnow().timestamp()}_{filename}",
-            overwrite=False
-        )
-        
-        cloudinary_url = upload_result['secure_url']
-        public_id = upload_result['public_id']
-        
-        print(f"[UPLOAD] ✅ Uploaded to Cloudinary: {cloudinary_url}")
-        
-        # Create database record with Cloudinary URL
-        material = CourseMaterial(
-            course_id=course_id,
-            title=material_title,
-            material_type=material_type,
-            file_path=cloudinary_url,  # ✅ Store Cloudinary URL
-            file_size=file_size,
-            order=order,
-            duration=int(duration) if duration else None
-        )
-        
-        db.session.add(material)
-        db.session.commit()
-        
-        print(f"✅ [UPLOAD] Material uploaded successfully with ID: {material.id}")
-        print("📤"*35 + "\n")
-        
-        return jsonify({
-            'message': 'Material uploaded successfully',
-            'material': {
-                'id': material.id,
-                'course_id': course_id,
-                'title': material.title,
-                'type': material.material_type,
-                'file_size': material.file_size,
-                'file_url': cloudinary_url,
-                'public_id': public_id,
-                'order': material.order,
-                'duration': material.duration,
-                'created_at': material.created_at.isoformat()
-            }
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ [UPLOAD ERROR] Exception: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        print("📤"*35 + "\n")
-        
-        return jsonify({
-            'error': 'Failed to upload material',
-            'details': str(e)
-        }), 500
 
 @app.route('/api/courses/<int:course_id>/materials', methods=['GET'])
 def get_course_materials(course_id):
@@ -4951,43 +4837,366 @@ def debug_tutors():
         })
     
     return jsonify({'tutors': debug_info}), 200
-@app.route('/api/courses/create', methods=['POST', 'OPTIONS'], endpoint = "courses_create")
+
+# Add these endpoints to your app.py (around line 1800, after course endpoints)
+
+# ============================================================================
+# COURSE SECTION ENDPOINTS
+# ============================================================================
+
+@app.route('/api/courses/<int:course_id>/sections', methods=['POST'])
 @jwt_required()
-def create_course():
-    """Create a new course (tutor only)"""
+def create_course_section(course_id):
+    """Create a new section/module within a course"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can create sections'}), 403
+        
+        course = Course.query.get(course_id)
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Check ownership
+        if course.tutor.user_id != user.id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        data = request.get_json()
+        
+        section = CourseSection(
+            course_id=course_id,
+            title=data.get('title', '').strip(),
+            description=data.get('description', '').strip(),
+            order=data.get('order', 0)
+        )
+        
+        db.session.add(section)
+        db.session.commit()
+        
+        print(f"✅ [SECTION] Created section {section.id} for course {course_id}")
+        
+        return jsonify({
+            'message': 'Section created successfully',
+            'section': {
+                'id': section.id,
+                'course_id': section.course_id,
+                'title': section.title,
+                'description': section.description,
+                'order': section.order,
+                'created_at': section.created_at.isoformat()
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [SECTION ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create section'}), 500
+
+
+@app.route('/api/courses/<int:course_id>/sections', methods=['GET'])
+def get_course_sections(course_id):
+    """Get all sections for a course with their materials"""
+    try:
+        course = Course.query.get(course_id)
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        sections = CourseSection.query.filter_by(
+            course_id=course_id
+        ).order_by(CourseSection.order).all()
+        
+        sections_list = []
+        for section in sections:
+            materials = CourseMaterial.query.filter_by(
+                section_id=section.id
+            ).order_by(CourseMaterial.order).all()
+            
+            materials_list = []
+            for material in materials:
+                materials_list.append({
+                    'id': material.id,
+                    'title': material.title,
+                    'description': material.description,
+                    'type': material.material_type,
+                    'file_path': material.file_path,
+                    'file_size': material.file_size,
+                    'duration': material.duration,
+                    'order': material.order,
+                    'created_at': material.created_at.isoformat()
+                })
+            
+            sections_list.append({
+                'id': section.id,
+                'title': section.title,
+                'description': section.description,
+                'order': section.order,
+                'materials': materials_list,
+                'material_count': len(materials_list),
+                'created_at': section.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'course_id': course_id,
+            'sections': sections_list,
+            'total_sections': len(sections_list)
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [GET SECTIONS ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get sections'}), 500
+
+
+@app.route('/api/sections/<int:section_id>', methods=['PUT'])
+@jwt_required()
+def update_section(section_id):
+    """Update a course section"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can update sections'}), 403
+        
+        section = CourseSection.query.get(section_id)
+        if not section:
+            return jsonify({'error': 'Section not found'}), 404
+        
+        # Check ownership
+        if section.course.tutor.user_id != user.id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        data = request.get_json()
+        
+        if 'title' in data:
+            section.title = data['title'].strip()
+        if 'description' in data:
+            section.description = data['description'].strip()
+        if 'order' in data:
+            section.order = int(data['order'])
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Section updated successfully',
+            'section': {
+                'id': section.id,
+                'title': section.title,
+                'description': section.description,
+                'order': section.order
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [UPDATE SECTION ERROR] {str(e)}")
+        return jsonify({'error': 'Failed to update section'}), 500
+
+
+@app.route('/api/sections/<int:section_id>', methods=['DELETE'])
+@jwt_required()
+def delete_section(section_id):
+    """Delete a course section and all its materials"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can delete sections'}), 403
+        
+        section = CourseSection.query.get(section_id)
+        if not section:
+            return jsonify({'error': 'Section not found'}), 404
+        
+        # Check ownership
+        if section.course.tutor.user_id != user.id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Delete all materials in section from Cloudinary
+        materials = CourseMaterial.query.filter_by(section_id=section_id).all()
+        for material in materials:
+            try:
+                # Delete from Cloudinary (same logic as before)
+                if 'cloudinary.com' in material.file_path:
+                    # Extract and delete from Cloudinary
+                    pass  # Add Cloudinary deletion logic here
+            except Exception as e:
+                print(f"⚠️ Error deleting material from Cloudinary: {e}")
+        
+        db.session.delete(section)
+        db.session.commit()
+        
+        return jsonify({'message': 'Section deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [DELETE SECTION ERROR] {str(e)}")
+        return jsonify({'error': 'Failed to delete section'}), 500
+
+
+# ============================================================================
+# UPDATE MATERIAL UPLOAD TO SUPPORT SECTIONS
+# ============================================================================
+
+@app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material_v2')
+@jwt_required()
+def upload_material_with_section():
+    """Upload course material to a specific section"""
     
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
-        print("\n" + "📚"*35)
-        print("📚 COURSE CREATION ENDPOINT HIT!")
-        print("📚"*35)
-        
-        # Get and validate user
         user_id_str = get_jwt_identity()
-        if not user_id_str:
-            return jsonify({'error': 'Authentication required'}), 401
-        
         user_id = int(user_id_str)
         user = User.query.get(user_id)
         
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can upload materials'}), 403
         
-        if user.user_type != 'tutor':
+        course_id = request.form.get('course_id')
+        section_id = request.form.get('section_id')  # NEW - Optional
+        
+        if not course_id:
+            return jsonify({'error': 'Course ID is required'}), 400
+        
+        course_id = int(course_id)
+        course = Course.query.get(course_id)
+        
+        if not course or course.tutor.user_id != user.id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Validate section if provided
+        if section_id:
+            section_id = int(section_id)
+            section = CourseSection.query.get(section_id)
+            if not section or section.course_id != course_id:
+                return jsonify({'error': 'Invalid section'}), 400
+        
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Get metadata
+        material_title = request.form.get('title', file.filename)
+        material_description = request.form.get('description', '')  # NEW
+        material_type = request.form.get('type', 'document')
+        order = int(request.form.get('order', 0))
+        duration = request.form.get('duration', 0)
+        
+        # Validate file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > 500 * 1024 * 1024:
+            return jsonify({'error': 'File too large (max 500MB)'}), 400
+        
+        # Determine resource type
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
+            resource_type = 'video'
+        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
+            resource_type = 'raw'
+        else:
+            resource_type = 'image'
+        
+        # Upload to Cloudinary
+        filename = secure_filename(file.filename)
+        
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type=resource_type,
+            folder=f'course-materials/{course_id}',
+            public_id=f"{datetime.utcnow().timestamp()}_{filename}",
+            overwrite=False
+        )
+        
+        cloudinary_url = upload_result['secure_url']
+        public_id = upload_result['public_id']
+        
+        # Create database record
+        material = CourseMaterial(
+            course_id=course_id,
+            section_id=section_id if section_id else None,  # NEW
+            title=material_title,
+            description=material_description,  # NEW
+            material_type=material_type,
+            file_path=cloudinary_url,
+            file_size=file_size,
+            order=order,
+            duration=int(duration) if duration else None
+        )
+        
+        db.session.add(material)
+        db.session.commit()
+        
+        print(f"✅ [UPLOAD] Material {material.id} uploaded to section {section_id or 'none'}")
+        
+        return jsonify({
+            'message': 'Material uploaded successfully',
+            'material': {
+                'id': material.id,
+                'course_id': course_id,
+                'section_id': section_id,
+                'title': material.title,
+                'description': material.description,
+                'type': material.material_type,
+                'file_size': material.file_size,
+                'file_url': cloudinary_url,
+                'public_id': public_id,
+                'order': material.order,
+                'duration': material.duration,
+                'created_at': material.created_at.isoformat()
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [UPLOAD ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to upload material'}), 500
+
+
+# ============================================================================
+# UPDATE COURSE CREATION TO INCLUDE NEW FIELDS
+# ============================================================================
+
+@app.route('/api/courses/create', methods=['POST', 'OPTIONS'], endpoint='courses_create_v2')
+@jwt_required()
+def create_course_enhanced():
+    """Create a new course with detailed information"""
+    
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
             return jsonify({'error': 'Only tutors can create courses'}), 403
         
-        # Get tutor profile
         tutor_profile = user.tutor_profile
         if not tutor_profile:
             return jsonify({'error': 'Tutor profile not found'}), 404
         
-        print(f"[COURSE] Creating course for tutor: {user.full_name} (ID: {tutor_profile.id})")
-        
-        # Get request data
         data = request.get_json()
-        print(f"[COURSE] Received data: {json.dumps(data, indent=2)}")
         
         # Validate required fields
         required_fields = ['title', 'description', 'category', 'level']
@@ -4999,11 +5208,15 @@ def create_course():
                 'missing': missing_fields
             }), 400
         
-        # Create course
+        # Create course with new fields
         course = Course(
             tutor_id=tutor_profile.id,
             title=data['title'].strip(),
             description=data['description'].strip(),
+            overview=data.get('overview', '').strip(),  # NEW
+            learning_outcomes=json.dumps(data.get('learning_outcomes', [])),  # NEW
+            prerequisites=json.dumps(data.get('prerequisites', [])),  # NEW
+            target_audience=data.get('target_audience', '').strip(),  # NEW
             category=data['category'],
             level=data['level'],
             duration=data.get('duration', ''),
@@ -5015,8 +5228,7 @@ def create_course():
         db.session.add(course)
         db.session.commit()
         
-        print(f"✅ [COURSE] Course created successfully with ID: {course.id}")
-        print("📚"*35 + "\n")
+        print(f"✅ [COURSE] Enhanced course created with ID: {course.id}")
         
         return jsonify({
             'message': 'Course created successfully',
@@ -5024,6 +5236,10 @@ def create_course():
                 'id': course.id,
                 'title': course.title,
                 'description': course.description,
+                'overview': course.overview,
+                'learning_outcomes': json.loads(course.learning_outcomes),
+                'prerequisites': json.loads(course.prerequisites),
+                'target_audience': course.target_audience,
                 'category': course.category,
                 'level': course.level,
                 'duration': course.duration,
@@ -5034,21 +5250,13 @@ def create_course():
             }
         }), 201
         
-    except ValueError as e:
-        print(f"❌ [COURSE ERROR] Validation error: {str(e)}")
-        return jsonify({'error': f'Invalid data: {str(e)}'}), 400
-    
     except Exception as e:
         db.session.rollback()
-        print(f"❌ [COURSE ERROR] Exception: {str(e)}")
+        print(f"❌ [COURSE ERROR] {str(e)}")
         import traceback
-        print(traceback.format_exc())
-        print("📚"*35 + "\n")
-        
-        return jsonify({
-            'error': 'Failed to create course',
-            'details': str(e)
-        }), 500
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to create course'}), 500
+
 @app.route('/api/debug/users-and-tutors', methods=['GET'])
 def debug_users_and_tutors():
     """Comprehensive debug endpoint"""
