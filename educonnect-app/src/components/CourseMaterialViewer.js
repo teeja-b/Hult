@@ -126,16 +126,35 @@ const handleDownloadMaterial = async (material, courseOfflineAvailable) => {
           />
         ) : selectedMaterial.type === 'document' ? (
         fileUrl.toLowerCase().endsWith('.pdf') ? (
-  <div className="w-full h-[600px] bg-gray-900">
-    <iframe
-      src={`https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true`}
-      className="w-full h-full"
-      title={selectedMaterial.title}
-      style={{ border: 'none' }}
-      allow="fullscreen"
-    />
-  </div> 
-        )
+  <div className="p-8 text-center bg-gray-900">
+    <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+    <p className="text-white mb-2 text-lg font-semibold">PDF Document</p>
+    <p className="text-gray-400 mb-6 text-sm">{selectedMaterial.title}</p>
+
+    <div className="flex gap-3 justify-center">
+      <a
+        href={fileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
+      >
+        <Eye size={18} />
+        Open PDF
+      </a>
+
+      {course.offline_available && (
+        <a
+          href={fileUrl}
+          download
+          className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition"
+        >
+          <Download size={18} />
+          Download PDF
+        </a>
+      )}
+    </div>
+  </div>
+)
 
    
            : (

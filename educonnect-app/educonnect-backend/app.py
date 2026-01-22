@@ -5148,14 +5148,17 @@ def upload_material_with_section():
             return jsonify({'error': 'File too large (max 500MB)'}), 400
         
         # Determine resource type
+        # Determine resource type
+
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
+
         if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
             resource_type = 'video'
-        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
-            resource_type = 'raw'
+        elif file_ext in ['pdf','doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
+            resource_type = 'auto'  # ✅ Let Cloudinary decide (usually allows public access)
         else:
             resource_type = 'image'
+
         
         # Upload to Cloudinary
         filename = secure_filename(file.filename)
