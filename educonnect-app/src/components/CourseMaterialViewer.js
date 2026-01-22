@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, CheckCircle, Clock, Users, Award, BookOpen, PlayCircle } from 'lucide-react';
+import { X, Video, FileText, Download, Play, BookOpen, Clock, User, Award, FileImage, Presentation, Eye, Lock } from 'lucide-react';
 
-const CourseMaterialsViewer = ({ course, onBack, onEnroll, API_URL }) => {
+const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
   const [sections, setSections] = useState([]);
-  const [expandedSections, setExpandedSections] = useState(new Set([0])); // First section expanded by default
   const [loading, setLoading] = useState(true);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const [playingVideo, setPlayingVideo] = useState(null);
 
   useEffect(() => {
-    if (course?.id) {
-      fetchCourseSections();
-    }
-  }, [course]);
+    fetchSections();
+  }, [course?.course_id]);
 
-  const fetchCourseSections = async () => {
+  const fetchSections = async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/courses/${course.id}/sections`);
+      const response = await fetch(`${API_URL}/api/courses/${course.course_id}/sections`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch sections');
+      }
+      
       const data = await response.json();
+      console.log('📚 Fetched sections:', data);
       setSections(data.sections || []);
     } catch (error) {
       console.error('Error fetching sections:', error);
@@ -25,183 +31,377 @@ const CourseMaterialsViewer = ({ course, onBack, onEnroll, API_URL }) => {
     }
   };
 
-  const toggleSection = (index) => {
-    const newExpanded = new Set(expandedSections);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
+  const handlePlayMaterial = (material) => {
+    console.log('🎬 Playing material:', material);
+    setSelectedMaterial(material);
+    
+    if (material.type === 'video') {
+      setPlayingVideo(material);
     }
-    setExpandedSections(newExpanded);
   };
 
-  const totalMaterials = sections.reduce((sum, section) => sum + (section.material_count || 0), 0);
-  const totalDuration = sections.reduce((sum, section) => {
-    return sum + (section.materials || []).reduce((matSum, mat) => matSum + (mat.duration || 0), 0);
-  }, 0);
+  const handleDownloadMaterial = async (material, sectionOfflineAvailable) => {
+    if (!sectionOfflineAvailable) {
+      alert('This material is not available for offline download');
+      return;
+    }
 
-  // Parse learning outcomes and prerequisites
-  const learningOutcomes = course.learning_outcomes ? JSON.parse(course.learning_outcomes) : [];
-  const prerequisites = course.prerequisites ? JSON.parse(course.prerequisites) : [];
+    try {
+      // Open material in new tab for download
+      window.open(material.file_path, '_blank');
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download material');
+    }
+  };
+
+  const getMaterialIcon = (type) => {
+    switch(type) {
+      case 'video':
+        return <Video size={24} className="text-red-600" />;
+      case 'image':
+        return <FileImage size={24} className="text-blue-600" />;
+      case 'presentation':
+        return <Presentation size={24} className="text-orange-600" />;
+      case 'document':
+        return <FileText size={24} className="text-green-600" />;
+      default:
+        return <FileText size={24} className="text-gray-600" />;
+    }
+  };
+
+  const getMaterialBgColor = (type) => {
+    switch(type) {
+      case 'video': return 'bg-red-100';
+      case 'image': return 'bg-blue-100';
+      case 'presentation': return 'bg-orange-100';
+      case 'document': return 'bg-green-100';
+      default: return 'bg-gray-100';
+    }
+  };
+
+  const renderMaterialPlayer = () => {
+    if (!selectedMaterial) return null;
+
+    const fileUrl = selectedMaterial.file_path;
+
+    return (
+      <div className="bg-gray-900 rounded-lg overflow-hidden mb-4">
+        <div className="bg-gray-800 p-3 flex justify-between items-center">
+          <div className="flex-1">
+            <h3 className="text-white font-semibold">{selectedMaterial.title}</h3>
+            {selectedMaterial.description && (
+              <p className="text-gray-400 text-sm mt-1">{selectedMaterial.description}</p>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setSelectedMaterial(null);
+              setPlayingVideo(null);
+            }}
+            className="text-gray-400 hover:text-white ml-4"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="bg-black">
+          {selectedMaterial.type === 'video' ? (
+            <video
+              key={fileUrl}
+              controls
+              autoPlay
+              className="w-full max-h-[400px]"
+              controlsList="nodownload"
+            >
+              <source src={fileUrl} type="video/mp4" />
+              <source src={fileUrl} type="video/webm" />
+              Your browser does not support the video tag.
+            </video>
+          ) : selectedMaterial.type === 'image' ? (
+            <img 
+              src={fileUrl} 
+              alt={selectedMaterial.title}
+              className="w-full max-h-[400px] object-contain"
+            />
+          ) : selectedMaterial.type === 'presentation' || selectedMaterial.type === 'document' ? (
+            <div className="p-8 text-center">
+              {getMaterialIcon(selectedMaterial.type)}
+              <div className="mx-auto mb-4" />
+              <p className="text-white mb-4">
+                {selectedMaterial.type === 'presentation' ? 'Presentation' : 'Document'} preview
+              </p>
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                <Eye size={16} />
+                Open {selectedMaterial.type === 'presentation' ? 'Presentation' : 'Document'}
+              </a>
+            </div>
+          ) : (
+            <div className="p-8 text-center">
+              <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+              <p className="text-white mb-4">Preview not available for this file type</p>
+              <a
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                <Eye size={16} />
+                Open File
+              </a>
+            </div>
+          )}
+        </div>
+        
+        <div className="bg-gray-800 p-3 text-sm text-gray-300">
+          <div className="flex gap-4">
+            {selectedMaterial.duration && (
+              <span className="flex items-center gap-1">
+                <Clock size={14} />
+                {selectedMaterial.duration} min
+              </span>
+            )}
+            <span className="capitalize">{selectedMaterial.type}</span>
+            {selectedMaterial.file_size && (
+              <span>{(selectedMaterial.file_size / 1024 / 1024).toFixed(1)} MB</span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const totalMaterials = sections.reduce((sum, section) => 
+    sum + (section.materials?.length || 0), 0
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Back Button */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <button 
-            onClick={onBack}
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
-            ← Back to Courses
-          </button>
+    <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+      {/* Header */}
+      <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg z-10">
+        <div className="p-4">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold mb-1">{course.course_title}</h1>
+              <p className="text-purple-100 text-sm flex items-center gap-2">
+                <User size={14} />
+                by {course.tutor_name}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          
+          {/* Course Stats */}
+          <div className="flex gap-3 text-sm">
+            <span className="bg-white/20 px-3 py-1 rounded-full flex items-center gap-1">
+              <BookOpen size={14} />
+              {sections.length} Sections
+            </span>
+            <span className="bg-white/20 px-3 py-1 rounded-full">
+              {totalMaterials} Materials
+            </span>
+            <span className="bg-white/20 px-3 py-1 rounded-full">
+              Progress: {course.progress}%
+            </span>
+            {course.completed && (
+              <span className="bg-green-400 text-green-900 px-3 py-1 rounded-full flex items-center gap-1">
+                <Award size={14} />
+                Completed
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-full bg-white/20 h-1">
+          <div
+            className="bg-white h-1 transition-all duration-300"
+            style={{ width: `${course.progress}%` }}
+          ></div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* Hero Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl p-8 shadow-lg">
-          <div className="flex gap-2 mb-3">
-            <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{course.level}</span>
-            <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{course.category}</span>
-          </div>
-          <h1 className="text-3xl font-bold mb-3">{course.title}</h1>
-          <p className="text-blue-100 text-lg mb-4">{course.description}</p>
-          
-          {/* Course Stats */}
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Users size={16} />
-              <span>{course.total_students || 0} students</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <BookOpen size={16} />
-              <span>{totalMaterials} materials</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock size={16} />
-              <span>{totalDuration > 60 ? `${Math.floor(totalDuration / 60)}h ${totalDuration % 60}m` : `${totalDuration}m`}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Award size={16} />
-              <span>⭐ {course.rating || 'New'}</span>
-            </div>
-          </div>
-        </div>
+      {/* Content */}
+      <div className="max-w-4xl mx-auto p-4">
+        {/* Material Player */}
+        {renderMaterialPlayer()}
 
-        {/* Course Overview */}
-        {course.overview && (
-          <div className="bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-2xl font-bold mb-4">Course Overview</h2>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-line">{course.overview}</p>
+        {/* Course Description */}
+        {course.description && (
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 shadow-sm border border-purple-200 mb-6">
+            <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <BookOpen size={20} className="text-purple-600" />
+              About This Course
+            </h3>
+            <p className="text-gray-700 leading-relaxed">{course.description}</p>
           </div>
         )}
 
-        {/* What You'll Learn */}
-        {learningOutcomes.length > 0 && (
-          <div className="bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-2xl font-bold mb-4">What You'll Learn</h2>
-            <div className="grid md:grid-cols-2 gap-3">
-              {learningOutcomes.map((outcome, index) => (
-                <div key={index} className="flex items-start gap-3">
-                  <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                  <span className="text-gray-700">{outcome}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Course Content - Sections */}
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <h2 className="text-2xl font-bold mb-4">Course Content</h2>
+        {/* Sections and Materials */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Course Content</h2>
           
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Loading course content...</p>
             </div>
           ) : sections.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="bg-gray-50 rounded-lg p-12 text-center">
               <BookOpen size={48} className="mx-auto mb-3 text-gray-300" />
-              <p>Course content coming soon!</p>
+              <p className="text-gray-500">No content uploaded yet</p>
+              <p className="text-sm text-gray-400 mt-2">Check back later for course materials</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {sections.map((section, sectionIndex) => (
-                <div key={section.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div key={section.id} className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
                   {/* Section Header */}
-                  <button
-                    onClick={() => toggleSection(sectionIndex)}
-                    className="w-full bg-gray-50 hover:bg-gray-100 transition p-4 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3 flex-1 text-left">
-                      <div className="bg-blue-100 text-blue-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
-                        {sectionIndex + 1}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg">{section.title}</h3>
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 border-b-2 border-purple-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-gray-800">
+                            Section {sectionIndex + 1}: {section.title}
+                          </h3>
+                          {section.offline_available && (
+                            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <Download size={12} />
+                              Offline Available
+                            </span>
+                          )}
+                          {!section.offline_available && (
+                            <span className="bg-gray-400 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <Eye size={12} />
+                              Online Only
+                            </span>
+                          )}
+                        </div>
                         {section.description && (
-                          <p className="text-sm text-gray-600 mt-1">{section.description}</p>
+                          <p className="text-sm text-gray-600">{section.description}</p>
                         )}
                         <p className="text-xs text-gray-500 mt-1">
-                          {section.material_count || 0} materials
+                          {section.materials?.length || 0} materials
                         </p>
                       </div>
                     </div>
-                    {expandedSections.has(sectionIndex) ? (
-                      <ChevronUp className="text-gray-400" size={20} />
-                    ) : (
-                      <ChevronDown className="text-gray-400" size={20} />
-                    )}
-                  </button>
+                  </div>
 
-                  {/* Section Materials */}
-                  {expandedSections.has(sectionIndex) && (
-                    <div className="bg-white p-4 border-t border-gray-200">
-                      {section.materials && section.materials.length > 0 ? (
-                        <div className="space-y-2">
-                          {section.materials.map((material, matIndex) => (
-                            <div
-                              key={material.id}
-                              className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition"
-                            >
-                              <div className="flex items-center justify-center w-8 h-8 bg-purple-100 rounded-full flex-shrink-0">
-                                {material.type === 'video' ? (
-                                  <PlayCircle size={16} className="text-purple-600" />
-                                ) : (
-                                  <BookOpen size={16} className="text-purple-600" />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div>
-                                    <h4 className="font-medium text-gray-900">{material.title}</h4>
-                                    {material.description && (
-                                      <p className="text-sm text-gray-600 mt-1">{material.description}</p>
+                  {/* Materials List */}
+                  {section.materials && section.materials.length > 0 ? (
+                    <div className="p-3 space-y-2">
+                      {section.materials.map((material, materialIndex) => (
+                        <div
+                          key={material.id}
+                          className={`bg-white rounded-lg p-3 border-2 transition cursor-pointer ${
+                            selectedMaterial?.id === material.id
+                              ? 'border-purple-500 shadow-lg'
+                              : 'border-gray-200 hover:border-purple-300 shadow-sm'
+                          }`}
+                          onClick={() => handlePlayMaterial(material)}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Material Icon */}
+                            <div className={`p-2 rounded-lg ${getMaterialBgColor(material.type)}`}>
+                              {getMaterialIcon(material.type)}
+                            </div>
+
+                            {/* Material Info */}
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <h4 className="font-semibold text-gray-800 mb-1">
+                                    {sectionIndex + 1}.{materialIndex + 1} {material.title}
+                                  </h4>
+                                  {material.description && (
+                                    <p className="text-xs text-gray-600 mb-2">{material.description}</p>
+                                  )}
+                                  <div className="flex gap-3 text-xs text-gray-500">
+                                    <span className="bg-gray-100 px-2 py-1 rounded capitalize">
+                                      {material.type}
+                                    </span>
+                                    {material.duration && (
+                                      <span className="flex items-center gap-1">
+                                        <Clock size={12} />
+                                        {material.duration} min
+                                      </span>
+                                    )}
+                                    {material.file_size && (
+                                      <span>
+                                        {(material.file_size / 1024 / 1024).toFixed(1)} MB
+                                      </span>
                                     )}
                                   </div>
-                                  {material.duration && (
-                                    <span className="text-xs text-gray-500 flex items-center gap-1 flex-shrink-0">
-                                      <Clock size={12} />
-                                      {material.duration}m
-                                    </span>
-                                  )}
                                 </div>
-                                <div className="flex gap-2 mt-2">
-                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
-                                    {material.type}
-                                  </span>
-                                </div>
+                                
+                                {material.type === 'video' && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePlayMaterial(material);
+                                    }}
+                                    className="bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition"
+                                  >
+                                    <Play size={16} />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePlayMaterial(material);
+                                  }}
+                                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition flex items-center justify-center gap-1"
+                                >
+                                  <Eye size={14} />
+                                  {material.type === 'video' ? 'Watch' : 'View'} Online
+                                </button>
+                                
+                                {/* Download Button - Only if section allows offline */}
+                                {section.offline_available ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownloadMaterial(material, section.offline_available);
+                                    }}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition flex items-center gap-1"
+                                  >
+                                    <Download size={14} />
+                                    Download
+                                  </button>
+                                ) : (
+                                  <button
+                                    disabled
+                                    className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg text-sm cursor-not-allowed flex items-center gap-1"
+                                    title="This material is not available for offline download"
+                                  >
+                                    <Lock size={14} />
+                                    Online Only
+                                  </button>
+                                )}
                               </div>
                             </div>
-                          ))}
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-center text-gray-500 py-4 text-sm">
-                          No materials in this section yet
-                        </p>
-                      )}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-gray-500">
+                      <FileText size={32} className="mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">No materials in this section yet</p>
                     </div>
                   )}
                 </div>
@@ -210,60 +410,34 @@ const CourseMaterialsViewer = ({ course, onBack, onEnroll, API_URL }) => {
           )}
         </div>
 
-        {/* Prerequisites */}
-        {prerequisites.length > 0 && (
-          <div className="bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-2xl font-bold mb-4">Prerequisites</h2>
-            <ul className="space-y-2">
-              {prerequisites.map((prereq, index) => (
-                <li key={index} className="flex items-start gap-3 text-gray-700">
-                  <span className="text-blue-600 mt-1">•</span>
-                  <span>{prereq}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Target Audience */}
-        {course.target_audience && (
-          <div className="bg-white rounded-xl p-6 shadow-md">
-            <h2 className="text-2xl font-bold mb-4">Who This Course Is For</h2>
-            <p className="text-gray-700 leading-relaxed">{course.target_audience}</p>
-          </div>
-        )}
-
-        {/* Instructor Info */}
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <h2 className="text-2xl font-bold mb-4">About the Instructor</h2>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl">
-              {course.tutor_name?.charAt(0) || 'T'}
+        {/* Legend */}
+        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <h3 className="font-bold text-gray-800 mb-3">Legend</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <Download size={16} className="text-blue-500" />
+              <span className="text-gray-600">Available for offline download</span>
             </div>
-            <div>
-              <h3 className="font-bold text-lg">{course.tutor_name || 'Instructor'}</h3>
-              <p className="text-gray-600 text-sm">Course Instructor</p>
+            <div className="flex items-center gap-2">
+              <Eye size={16} className="text-gray-500" />
+              <span className="text-gray-600">Online viewing only</span>
             </div>
-          </div>
-        </div>
-
-        {/* Enroll Button */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 shadow-lg rounded-t-xl">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {course.price > 0 ? `$${course.price}` : 'Free'}
-              </p>
-              {course.offline_available && (
-                <p className="text-sm text-green-600">✓ Available offline</p>
-              )}
+            <div className="flex items-center gap-2">
+              <Video size={16} className="text-red-600" />
+              <span className="text-gray-600">Video content</span>
             </div>
-            <button
-              onClick={onEnroll}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:shadow-xl transition flex-shrink-0"
-            >
-              Enroll Now
-            </button>
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-green-600" />
+              <span className="text-gray-600">Document (PDF, DOC)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Presentation size={16} className="text-orange-600" />
+              <span className="text-gray-600">Presentation (PPT)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FileImage size={16} className="text-blue-600" />
+              <span className="text-gray-600">Image content</span>
+            </div>
           </div>
         </div>
       </div>

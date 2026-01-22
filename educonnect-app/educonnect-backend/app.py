@@ -4956,7 +4956,7 @@ def get_course_sections(course_id):
 @app.route('/api/sections/<int:section_id>', methods=['PUT'])
 @jwt_required()
 def update_section(section_id):
-    """Update a course section"""
+    """Update a course section including offline availability"""
     try:
         user_id_str = get_jwt_identity()
         user_id = int(user_id_str)
@@ -4981,6 +4981,8 @@ def update_section(section_id):
             section.description = data['description'].strip()
         if 'order' in data:
             section.order = int(data['order'])
+        if 'offline_available' in data:
+            section.offline_available = bool(data['offline_available'])
         
         db.session.commit()
         
@@ -4990,7 +4992,8 @@ def update_section(section_id):
                 'id': section.id,
                 'title': section.title,
                 'description': section.description,
-                'order': section.order
+                'order': section.order,
+                'offline_available': section.offline_available
             }
         }), 200
         
@@ -4998,7 +5001,6 @@ def update_section(section_id):
         db.session.rollback()
         print(f"❌ [UPDATE SECTION ERROR] {str(e)}")
         return jsonify({'error': 'Failed to update section'}), 500
-
 
 @app.route('/api/sections/<int:section_id>', methods=['DELETE'])
 @jwt_required()
