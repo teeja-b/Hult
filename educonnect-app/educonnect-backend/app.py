@@ -4131,28 +4131,70 @@ def delete_course(course_id):
         if course.tutor.user_id != user.id:
             return jsonify({'error': 'Not authorized to delete this course'}), 403
         
-        # Delete all course materials (files and database records)
+        # ✅ DELETE RELATED RECORDS FIRST
+        
+        # 1. Delete offline downloads
+        OfflineDownload.query.filter_by(course_id=course_id).delete()
+        print(f"[DELETE] Deleted offline downloads for course {course_id}")
+        
+        # 2. Delete enrollments
+        Enrollment.query.filter_by(course_id=course_id).delete()
+        print(f"[DELETE] Deleted enrollments for course {course_id}")
+        
+        # 3. Delete assignments and submissions
+        assignments = Assignment.query.filter_by(course_id=course_id).all()
+        for assignment in assignments:
+            AssignmentSubmission.query.filter_by(assignment_id=assignment.id).delete()
+        Assignment.query.filter_by(course_id=course_id).delete()
+        print(f"[DELETE] Deleted assignments for course {course_id}")
+        
+        # 4. Delete course materials (and their files from Cloudinary)
         materials = CourseMaterial.query.filter_by(course_id=course_id).all()
         for material in materials:
-            if os.path.exists(material.file_path):
-                os.remove(material.file_path)
+            # Try to delete from Cloudinary
+            try:
+                if material.file_path and 'cloudinary.com' in material.file_path:
+                    # Extract public_id from Cloudinary URL
+                    parts = material.file_path.split('/')
+                    upload_index = parts.index('upload') if 'upload' in parts else -1
+                    if upload_index > 0 and upload_index < len(parts) - 1:
+                        public_id_parts = parts[upload_index + 2:]
+                        public_id = '/'.join(public_id_parts).rsplit('.', 1)[0]
+                        
+                        # Determine resource type
+                        resource_type = 'raw'
+                        if '/video/' in material.file_path:
+                            resource_type = 'video'
+                        elif '/image/' in material.file_path:
+                            resource_type = 'image'
+                        
+                        cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+                        print(f"[DELETE] Deleted from Cloudinary: {public_id}")
+            except Exception as cloudinary_error:
+                print(f"⚠️ [DELETE] Cloudinary deletion failed (non-critical): {cloudinary_error}")
         
-        # Delete course materials directory
-        materials_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'materials', str(course_id))
-        if os.path.exists(materials_dir):
-            import shutil
-            shutil.rmtree(materials_dir)
+        # Delete all materials from database
+        CourseMaterial.query.filter_by(course_id=course_id).delete()
+        print(f"[DELETE] Deleted course materials for course {course_id}")
         
-        # Delete course (cascade will delete materials and enrollments)
+        # 5. Delete course sections (materials are already deleted)
+        CourseSection.query.filter_by(course_id=course_id).delete()
+        print(f"[DELETE] Deleted course sections for course {course_id}")
+        
+        # 6. Finally, delete the course itself
         db.session.delete(course)
         db.session.commit()
+        
+        print(f"✅ [DELETE] Course {course_id} deleted successfully")
         
         return jsonify({'message': 'Course deleted successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
-        print(f"[ERROR] Failed to delete course: {str(e)}")
-        return jsonify({'error': 'Failed to delete course'}), 500
+        print(f"❌ [DELETE ERROR] Failed to delete course: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to delete course', 'details': str(e)}), 500
 
 # Add these routes AFTER get_course_materials function
 
