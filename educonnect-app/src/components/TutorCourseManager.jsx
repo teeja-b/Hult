@@ -469,17 +469,28 @@ const TutorCourseManager = ({ onClose }) => {
                     </div>
                   </div>
 
+                  
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={courseForm.published}
-                        onChange={(e) => setCourseForm({...courseForm, published: e.target.checked})}
-                        className="w-4 h-4"
-                      />
-                      <span className="text-sm">Publish immediately</span>
-                    </label>
-                  </div>
+  <label className="flex items-center gap-2">
+    <input
+      type="checkbox"
+      checked={courseForm.offline_available}
+      onChange={(e) => setCourseForm({...courseForm, offline_available: e.target.checked})}
+      className="w-4 h-4"
+    />
+    <span className="text-sm">📥 Available for offline download</span>
+  </label>
+  
+  <label className="flex items-center gap-2">
+    <input
+      type="checkbox"
+      checked={courseForm.published}
+      onChange={(e) => setCourseForm({...courseForm, published: e.target.checked})}
+      className="w-4 h-4"
+    />
+    <span className="text-sm">Publish immediately</span>
+  </label>
+</div>
 
                   <div className="flex gap-2 pt-4">
                     <button

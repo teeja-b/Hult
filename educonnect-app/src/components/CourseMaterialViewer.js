@@ -80,101 +80,125 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
     }
   };
 
-  const renderMaterialPlayer = () => {
-    if (!selectedMaterial) return null;
+ const renderMaterialPlayer = () => {
+  if (!selectedMaterial) return null;
 
-    const fileUrl = selectedMaterial.file_path;
+  const fileUrl = selectedMaterial.file_path;
 
-    return (
-      <div className="bg-gray-900 rounded-lg overflow-hidden mb-4">
-        <div className="bg-gray-800 p-3 flex justify-between items-center">
-          <div className="flex-1">
-            <h3 className="text-white font-semibold">{selectedMaterial.title}</h3>
-            {selectedMaterial.description && (
-              <p className="text-gray-400 text-sm mt-1">{selectedMaterial.description}</p>
-            )}
-          </div>
-          <button
-            onClick={() => {
-              setSelectedMaterial(null);
-              setPlayingVideo(null);
-            }}
-            className="text-gray-400 hover:text-white ml-4"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        
-        <div className="bg-black">
-          {selectedMaterial.type === 'video' ? (
-            <video
-              key={fileUrl}
-              controls
-              autoPlay
-              className="w-full max-h-[400px]"
-              controlsList="nodownload"
-            >
-              <source src={fileUrl} type="video/mp4" />
-              <source src={fileUrl} type="video/webm" />
-              Your browser does not support the video tag.
-            </video>
-          ) : selectedMaterial.type === 'image' ? (
-            <img 
-              src={fileUrl} 
-              alt={selectedMaterial.title}
-              className="w-full max-h-[400px] object-contain"
-            />
-          ) : selectedMaterial.type === 'presentation' || selectedMaterial.type === 'document' ? (
-            <div className="p-8 text-center">
-              {getMaterialIcon(selectedMaterial.type)}
-              <div className="mx-auto mb-4" />
-              <p className="text-white mb-4">
-                {selectedMaterial.type === 'presentation' ? 'Presentation' : 'Document'} preview
-              </p>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
-                <Eye size={16} />
-                Open {selectedMaterial.type === 'presentation' ? 'Presentation' : 'Document'}
-              </a>
-            </div>
-          ) : (
-            <div className="p-8 text-center">
-              <FileText size={64} className="mx-auto mb-4 text-gray-400" />
-              <p className="text-white mb-4">Preview not available for this file type</p>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
-                <Eye size={16} />
-                Open File
-              </a>
-            </div>
+  return (
+    <div className="bg-gray-900 rounded-lg overflow-hidden mb-4">
+      <div className="bg-gray-800 p-3 flex justify-between items-center">
+        <div className="flex-1">
+          <h3 className="text-white font-semibold">{selectedMaterial.title}</h3>
+          {selectedMaterial.description && (
+            <p className="text-gray-400 text-sm mt-1">{selectedMaterial.description}</p>
           )}
         </div>
-        
-        <div className="bg-gray-800 p-3 text-sm text-gray-300">
-          <div className="flex gap-4">
-            {selectedMaterial.duration && (
-              <span className="flex items-center gap-1">
-                <Clock size={14} />
-                {selectedMaterial.duration} min
-              </span>
-            )}
-            <span className="capitalize">{selectedMaterial.type}</span>
-            {selectedMaterial.file_size && (
-              <span>{(selectedMaterial.file_size / 1024 / 1024).toFixed(1)} MB</span>
-            )}
+        <button
+          onClick={() => {
+            setSelectedMaterial(null);
+            setPlayingVideo(null);
+          }}
+          className="text-gray-400 hover:text-white ml-4"
+        >
+          <X size={20} />
+        </button>
+      </div>
+      
+      <div className="bg-black">
+        {selectedMaterial.type === 'video' ? (
+          <video
+            key={fileUrl}
+            controls
+            autoPlay
+            className="w-full max-h-[400px]"
+            controlsList="nodownload"
+          >
+            <source src={fileUrl} type="video/mp4" />
+            <source src={fileUrl} type="video/webm" />
+            Your browser does not support the video tag.
+          </video>
+        ) : selectedMaterial.type === 'image' ? (
+          <img 
+            src={fileUrl} 
+            alt={selectedMaterial.title}
+            className="w-full max-h-[400px] object-contain"
+          />
+        ) : selectedMaterial.type === 'document' ? (
+          // ✅ PDF PREVIEW FIX
+          fileUrl.toLowerCase().endsWith('.pdf') ? (
+            <div className="w-full h-[600px]">
+              <iframe
+                src={fileUrl}
+                className="w-full h-full"
+                title={selectedMaterial.title}
+                style={{ border: 'none' }}
+              />
+            </div>
+          ) : (
+            // Non-PDF documents (DOC, DOCX, TXT)
+            <div className="p-8 text-center">
+              <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+              <p className="text-white mb-4">Document preview</p>
+              
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                <Eye size={16} />
+                Open Document
+              </a>
+            </div>
+          )
+        ) : selectedMaterial.type === 'presentation' ? (
+          <div className="p-8 text-center">
+            <Presentation size={64} className="mx-auto mb-4 text-orange-400" />
+            <p className="text-white mb-4">Presentation preview</p>
+            
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              <Eye size={16} />
+              Open Presentation
+            </a>
           </div>
+        ) : (
+          <div className="p-8 text-center">
+            <FileText size={64} className="mx-auto mb-4 text-gray-400" />
+            <p className="text-white mb-4">Preview not available for this file type</p>
+            
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              <Eye size={16} />
+              Open File
+            </a>
+          </div>
+        )}
+      </div>
+      
+      <div className="bg-gray-800 p-3 text-sm text-gray-300">
+        <div className="flex gap-4">
+          {selectedMaterial.duration && (
+            <span className="flex items-center gap-1">
+              <Clock size={14} />
+              {selectedMaterial.duration} min
+            </span>
+          )}
+          <span className="capitalize">{selectedMaterial.type}</span>
+          {selectedMaterial.file_size && (
+            <span>{(selectedMaterial.file_size / 1024 / 1024).toFixed(1)} MB</span>
+          )}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const totalMaterials = sections.reduce((sum, section) => 
     sum + (section.materials?.length || 0), 0
