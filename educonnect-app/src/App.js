@@ -1043,6 +1043,8 @@ const downloadCourse = async (course) => {
     );
   };
 
+// Replace the CoursesView component in App.js (around line 1200)
+
 const CoursesView = () => {
   const [allCourses, setAllCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1058,7 +1060,7 @@ const CoursesView = () => {
       setAllCourses(data.courses || []);
     } catch (error) {
       console.error('Error fetching courses:', error);
-      setAllCourses(courses);
+      setAllCourses([]);
     } finally {
       setLoading(false);
     }
@@ -1067,7 +1069,8 @@ const CoursesView = () => {
   if (loading) {
     return (
       <div className="p-4 text-center">
-        <p>Loading courses...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading courses...</p>
       </div>
     );
   }
@@ -1091,48 +1094,33 @@ const CoursesView = () => {
         {allCourses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase())).map(course => (
           <div key={course.id} className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
             <div className="flex justify-between items-start mb-2">
-              <div>
+              <div className="flex-1">
                 <h3 className="font-bold text-gray-800">{course.title}</h3>
-                <p className="text-sm text-gray-600">by {course.tutor || course.tutor_name || 'Unknown'}</p>
+                <p className="text-sm text-gray-600">by {course.tutor_name || 'Unknown'}</p>
               </div>
-              
-              {/* ✅ Show download button only if offline_available */}
-              {course.offline_available && (
-                <button 
-                  onClick={() => downloadCourse(course)}
-                  disabled={downloading === course.id}
-                  className="text-purple-600 hover:text-purple-800 disabled:text-gray-400 flex items-center gap-1"
-                  title="Download for offline access"
-                >
-                  <Download size={20} />
-                  {downloading === course.id && (
-                    <span className="text-xs">...</span>
-                  )}
-                </button>
-              )}
-              
-              {/* ✅ Show online-only badge if NOT offline_available */}
-              {!course.offline_available && (
-                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                  <Globe size={12} />
-                  Online Only
-                </span>
-              )}
             </div>
             
-            <div className="flex gap-2 text-xs text-gray-600 mb-2">
+            <div className="flex gap-2 text-xs text-gray-600 mb-2 flex-wrap">
               <span className="bg-blue-100 px-2 py-1 rounded">{course.level}</span>
-              <span className="bg-green-100 px-2 py-1 rounded">{course.duration || 'Self-paced'}</span>
-              <span className="bg-yellow-100 px-2 py-1 rounded">⭐ {course.rating || 'New'}</span>
+              {course.duration && (
+                <span className="bg-green-100 px-2 py-1 rounded">{course.duration}</span>
+              )}
+              <span className="bg-gray-100 px-2 py-1 rounded">
+                {course.total_students || 0} students
+              </span>
             </div>
             
+            {/* Use actual course description/overview from tutor */}
             <p className="text-sm text-gray-600 mb-3">
-              {course.description || `${course.total_students || 0} students enrolled`}
+              {course.description || course.overview || 'No description available'}
             </p>
             
             <div className="space-y-2">
               <button 
-                onClick={() => { setSelectedCourse(course); setCurrentView('course-detail'); }}
+                onClick={() => { 
+                  setSelectedCourse(course); 
+                  setCurrentView('course-detail'); 
+                }}
                 className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
               >
                 View Course
@@ -1153,6 +1141,7 @@ const CoursesView = () => {
 
         {allCourses.length === 0 && (
           <div className="text-center py-8 text-gray-500">
+            <BookOpen size={48} className="mx-auto mb-3 text-gray-300" />
             <p>No courses available yet.</p>
           </div>
         )}
@@ -1160,7 +1149,6 @@ const CoursesView = () => {
     </div>
   );
 };
-
   // Course Detail View Component
   const CourseDetailView = () => (
     <div className="p-4">
@@ -1776,7 +1764,13 @@ const MyCoursesView = () => {
                   <GraduationCap size={24} />
                   <span className="text-xs mt-1">My Courses</span>
                 </button>
+                <button onClick={() => setCurrentView('chat')} className={`flex flex-col items-center p-2 ${currentView === 'chat' ? 'text-blue-600' : 'text-gray-600'}`}>
+            <MessageSquare size={24} />
+            <span className="text-xs mt-1">Messages</span>
+          </button>
               </>
+              
+              
             )}
             
             {userType === 'tutor' && (
