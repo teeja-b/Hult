@@ -91,7 +91,9 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
         <div className="flex-1">
           <h3 className="text-white font-semibold">{selectedMaterial.title}</h3>
           {selectedMaterial.description && (
-            <p className="text-gray-400 text-sm mt-1">{selectedMaterial.description}</p>
+            <p className="text-gray-400 text-sm mt-1">
+              {selectedMaterial.description}
+            </p>
           )}
         </div>
         <button
@@ -104,7 +106,7 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           <X size={20} />
         </button>
       </div>
-      
+
       <div className="bg-black">
         {selectedMaterial.type === 'video' ? (
           <video
@@ -119,13 +121,12 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
             Your browser does not support the video tag.
           </video>
         ) : selectedMaterial.type === 'image' ? (
-          <img 
-            src={fileUrl} 
+          <img
+            src={fileUrl}
             alt={selectedMaterial.title}
             className="w-full max-h-[400px] object-contain"
           />
         ) : selectedMaterial.type === 'document' ? (
-          // ✅ PDF PREVIEW FIX
           fileUrl.toLowerCase().endsWith('.pdf') ? (
             <div className="w-full h-[600px]">
               <iframe
@@ -136,11 +137,11 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
               />
             </div>
           ) : (
-            // Non-PDF documents (DOC, DOCX, TXT)
             <div className="p-8 text-center">
               <FileText size={64} className="mx-auto mb-4 text-gray-400" />
               <p className="text-white mb-4">Document preview</p>
-              
+
+              <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -155,7 +156,8 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           <div className="p-8 text-center">
             <Presentation size={64} className="mx-auto mb-4 text-orange-400" />
             <p className="text-white mb-4">Presentation preview</p>
-            
+
+            <a
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -168,8 +170,11 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
         ) : (
           <div className="p-8 text-center">
             <FileText size={64} className="mx-auto mb-4 text-gray-400" />
-            <p className="text-white mb-4">Preview not available for this file type</p>
-            
+            <p className="text-white mb-4">
+              Preview not available for this file type
+            </p>
+
+            <a
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -181,7 +186,7 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           </div>
         )}
       </div>
-      
+
       <div className="bg-gray-800 p-3 text-sm text-gray-300">
         <div className="flex gap-4">
           {selectedMaterial.duration && (
@@ -192,13 +197,16 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           )}
           <span className="capitalize">{selectedMaterial.type}</span>
           {selectedMaterial.file_size && (
-            <span>{(selectedMaterial.file_size / 1024 / 1024).toFixed(1)} MB</span>
+            <span>
+              {(selectedMaterial.file_size / 1024 / 1024).toFixed(1)} MB
+            </span>
           )}
         </div>
       </div>
     </div>
   );
 };
+
 
   const totalMaterials = sections.reduce((sum, section) => 
     sum + (section.materials?.length || 0), 0
