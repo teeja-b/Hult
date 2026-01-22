@@ -1441,19 +1441,7 @@ const MyCoursesView = () => {
                 )}
               </div>
 
-              {/* Progress Bar */}
-              <div className="mb-3">
-                <div className="flex justify-between text-xs text-gray-600 mb-1">
-                  <span>Progress</span>
-                  <span>{enrollment.progress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${enrollment.progress}%` }}
-                  ></div>
-                </div>
-              </div>
+             
 
               {/* Enrollment Info */}
               <div className="flex gap-2 text-xs text-gray-500 mb-3">
@@ -1643,10 +1631,7 @@ const MyCoursesView = () => {
                   <FileText size={24} />
                   <span className="text-xs mt-1">Assignments</span>
                 </button>
-                <button onClick={() => setCurrentView('offline')} className={`flex flex-col items-center p-2 ${currentView === 'offline' ? 'text-blue-600' : 'text-gray-600'}`}>
-                  <Download size={24} />
-                  <span className="text-xs mt-1">Offline</span>
-                </button>
+
                 <button onClick={() => setCurrentView('my-courses')} className={`flex flex-col items-center p-2 ${currentView === 'my-courses' ? 'text-blue-600' : 'text-gray-600'}`}>
                   <GraduationCap size={24} />
                   <span className="text-xs mt-1">My Courses</span>

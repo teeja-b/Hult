@@ -414,28 +414,18 @@ const handleDownloadMaterial = async (material, courseOfflineAvailable) => {
                                 </button>
                                 
                                 
-                               {/* Download Button - Only if COURSE allows offline */}
-                                {course.offline_available ? (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDownloadMaterial(material, course.offline_available);
-                                    }}
-                                    className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition flex items-center gap-1"
-                                  >
-                                    <Download size={14} />
-                                    Download
-                                  </button>
-                                ) : (
-                                  <button
-                                    disabled
-                                    className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg text-sm cursor-not-allowed flex items-center gap-1"
-                                    title="This course is not available for offline download"
-                                  >
-                                    <Lock size={14} />
-                                    Online Only
-                                  </button>
-                                )}
+                             {course.offline_available && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownloadMaterial(material, course.offline_available);
+                                  }}
+                                  className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition flex items-center gap-1"
+                                >
+                                  <Download size={14} />
+                                  Download
+                                </button>
+                              )}
                               </div>
                             </div>
                           </div>
