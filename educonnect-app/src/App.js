@@ -540,13 +540,7 @@ const downloadCourse = async (course) => {
                     <span className="font-medium">Find Tutors</span>
                   </button>
                   
-                  <button 
-                    onClick={() => { setCurrentView('offline'); setMenuOpen(false); }} 
-                    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-                  >
-                    <Download size={20} />
-                    <span className="font-medium">Offline Library</span>
-                  </button>
+           
                 </>
               )}
 
@@ -885,11 +879,7 @@ const downloadCourse = async (course) => {
                 <h4 className="font-semibold text-sm">Tutors</h4>
                 <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-                <Download className="text-purple-500 mb-2" />
-                <h4 className="font-semibold text-sm">Offline</h4>
-                <p className="text-2xl font-bold text-gray-800">{offlineCourses.length}</p>
-              </div>
+          
               <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
                 <FileText className="text-orange-500 mb-2" />
                 <h4 className="font-semibold text-sm">Assignments</h4>
@@ -1149,7 +1139,6 @@ const CoursesView = () => {
     </div>
   );
 };
-  // Course Detail View Component
 // Course Detail View Component
 const CourseDetailView = () => {
   const [courseDetails, setCourseDetails] = useState(null);
@@ -1222,7 +1211,7 @@ const CourseDetailView = () => {
           )}
         </div>
 
-        {/* Course Overview */}
+        {/* Course Overview - REMOVED RATING */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <h3 className="font-bold mb-3">Course Overview</h3>
           <div className="space-y-2 text-sm">
@@ -1236,10 +1225,6 @@ const CourseDetailView = () => {
                 <span className="font-semibold">{courseDetails.duration}</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-gray-600">Rating:</span>
-              <span className="font-semibold">⭐ {courseDetails.rating || 'Not rated yet'}</span>
-            </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Students:</span>
               <span className="font-semibold">{courseDetails.total_students || 0}</span>
@@ -1255,23 +1240,31 @@ const CourseDetailView = () => {
           </div>
         </div>
 
-        {/* Description */}
+        {/* Description - PRESERVES FORMATTING */}
         {courseDetails.description && (
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-bold mb-3">Description</h3>
-            <p className="text-sm text-gray-700 whitespace-pre-line">
-              {courseDetails.description}
-            </p>
+            <div className="text-sm text-gray-700">
+              {courseDetails.description.split('\n').map((paragraph, index) => (
+                <p key={index} className="mb-2 last:mb-0">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Detailed Overview */}
+        {/* Detailed Overview - PRESERVES FORMATTING */}
         {courseDetails.overview && (
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-bold mb-3">About This Course</h3>
-            <p className="text-sm text-gray-700 whitespace-pre-line">
-              {courseDetails.overview}
-            </p>
+            <div className="text-sm text-gray-700">
+              {courseDetails.overview.split('\n').map((paragraph, index) => (
+                <p key={index} className="mb-2 last:mb-0">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1315,37 +1308,8 @@ const CourseDetailView = () => {
           </div>
         )}
 
-        {/* Offline Download Button */}
-        {courseDetails.offline_available && (
-          <button 
-            onClick={() => downloadCourse(courseDetails)}
-            disabled={downloading === courseDetails.id}
-            className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:bg-gray-400"
-          >
-            {downloading === courseDetails.id ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Downloading...
-              </>
-            ) : (
-              <>
-                <Download size={20} />
-                Download for Offline Access
-              </>
-            )}
-          </button>
-        )}
-
-        {/* Assignments Button */}
-        {isAuthenticated && (
-          <button 
-            onClick={() => handleOpenAssignments(courseDetails)}
-            className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-3 rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
-          >
-            <FileText size={20} />
-            View Course Assignments
-          </button>
-        )}
+        {/* REMOVED: Offline Download Button */}
+        {/* REMOVED: Assignments Button */}
 
         {/* Enroll Button */}
         <button 
@@ -1394,10 +1358,6 @@ const CourseDetailView = () => {
 const MyCoursesView = () => {
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCourseForMaterials, setSelectedCourseForMaterials] = useState(null);
-  const [courseMaterials, setCourseMaterials] = useState([]);
-  const [loadingMaterials, setLoadingMaterials] = useState(false);
-  
   const [viewingMaterials, setViewingMaterials] = useState(null); 
 
   useEffect(() => {
@@ -1425,54 +1385,6 @@ const MyCoursesView = () => {
     }
   };
 
-  const fetchCourseMaterials = async (courseId) => {
-    setLoadingMaterials(true);
-    try {
-      const response = await fetch(`${API_URL}/api/courses/${courseId}/materials`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch materials');
-      }
-      
-      const data = await response.json();
-      setCourseMaterials(data.materials || []);
-    } catch (error) {
-      console.error('Error fetching course materials:', error);
-      setCourseMaterials([]);
-    } finally {
-      setLoadingMaterials(false);
-    }
-  };
-
-  const handleViewMaterials = (enrollment) => {
-    setSelectedCourseForMaterials(enrollment);
-    fetchCourseMaterials(enrollment.course_id);
-  };
-
-  const handleUpdateProgress = async (enrollmentId, newProgress) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/enrollments/${enrollmentId}/progress`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ progress: newProgress })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update progress');
-      }
-
-      fetchEnrolledCourses();
-      alert('✅ Progress updated!');
-    } catch (error) {
-      console.error('Error updating progress:', error);
-      alert('Failed to update progress');
-    }
-  };
-
   if (loading) {
     return (
       <div className="p-4 text-center">
@@ -1482,7 +1394,7 @@ const MyCoursesView = () => {
     );
   }
 
-    if (viewingMaterials) {
+  if (viewingMaterials) {
     return (
       <CourseMaterialsViewer
         course={viewingMaterials}
@@ -1497,7 +1409,7 @@ const MyCoursesView = () => {
       <div className="mb-4">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">My Courses</h2>
         <p className="text-sm text-gray-600">
-          Track your learning progress and access course materials
+          Access your enrolled courses and materials
         </p>
       </div>
 
@@ -1548,86 +1460,19 @@ const MyCoursesView = () => {
                 <span className="bg-gray-100 px-2 py-1 rounded">
                   📅 Enrolled: {new Date(enrollment.enrolled_at).toLocaleDateString()}
                 </span>
-                {enrollment.offline_available && (
-                  <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                    📥 Offline Available
-                  </span>
-                )}
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons - REMOVED: Assignments, Continue Learning, Update Progress */}
               <div className="space-y-2">
-                              <button
-                  onClick={() => setViewingMaterials(enrollment)} // Changed this line
+                <button
+                  onClick={() => setViewingMaterials(enrollment)}
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 rounded hover:bg-purple-700 transition flex items-center justify-center gap-2"
                 >
                   <Video size={16} />
                   View Course Materials
                 </button>
 
-                <button
-                  onClick={() => {
-                    setSelectedCourse({
-                      id: enrollment.course_id,
-                      title: enrollment.course_title,
-                      tutor_name: enrollment.tutor_name
-                    });
-                    setCurrentView('course-detail');
-                  }}
-                  className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-                >
-                  Continue Learning
-                </button>
-
-                {/* View Assignments Button */}
-                <button
-                  onClick={() => handleOpenAssignments({
-                    id: enrollment.course_id,
-                    title: enrollment.course_title
-                  })}
-                  className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-2 rounded hover:bg-green-700 transition flex items-center justify-center gap-2"
-                >
-                  <FileText size={16} />
-                  View Assignments
-                </button>
-
-                {/* Update Progress */}
-                {!enrollment.completed && (
-                  <details className="bg-gray-50 rounded-lg">
-                    <summary className="p-2 cursor-pointer text-sm text-gray-700 hover:bg-gray-100 rounded">
-                      Update Progress
-                    </summary>
-                    <div className="p-3 space-y-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        defaultValue={enrollment.progress}
-                        className="w-full"
-                        onChange={(e) => {
-                          const progressDisplay = e.target.parentElement.querySelector('.progress-display');
-                          progressDisplay.textContent = `${e.target.value}%`;
-                        }}
-                      />
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600 progress-display">
-                          {enrollment.progress}%
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            const input = e.target.parentElement.parentElement.querySelector('input[type="range"]');
-                            handleUpdateProgress(enrollment.id, parseInt(input.value));
-                          }}
-                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </details>
-                )}
-
-                {/* Certificate */}
+                {/* Certificate Download - Only if certificate is issued */}
                 {enrollment.certificate_issued && (
                   <button
                     onClick={() => {
@@ -1642,81 +1487,6 @@ const MyCoursesView = () => {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ✅ Materials Modal */}
-      {selectedCourseForMaterials && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white p-4 rounded-t-lg flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-bold">{selectedCourseForMaterials.course_title}</h2>
-                <p className="text-sm text-purple-100">Course Materials</p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedCourseForMaterials(null);
-                  setCourseMaterials([]);
-                }}
-                className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-4">
-              {loadingMaterials ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading materials...</p>
-                </div>
-              ) : courseMaterials.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText size={48} className="mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500">No materials uploaded yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Check back later for course content</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {courseMaterials.map((material, index) => (
-                    <div key={material.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-purple-300 transition">
-                      <div className="flex items-start gap-3">
-                        <div className="bg-purple-100 p-2 rounded-lg">
-                          {material.type === 'video' ? (
-                            <Video size={20} className="text-purple-600" />
-                          ) : (
-                            <FileText size={20} className="text-purple-600" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-800">{material.title}</h4>
-                          <div className="flex gap-2 text-xs text-gray-500 mt-1">
-                            <span className="bg-gray-200 px-2 py-1 rounded capitalize">{material.type}</span>
-                            {material.duration && (
-                              <span className="bg-gray-200 px-2 py-1 rounded">{material.duration} min</span>
-                            )}
-                            <span className="bg-gray-200 px-2 py-1 rounded">
-                              {(material.file_size / 1024 / 1024).toFixed(1)} MB
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              // Open material in new tab (streams from Cloudinary)
-                              window.open(`${API_URL}/api/materials/${material.id}/stream`, '_blank');
-                            }}
-                            className="mt-2 bg-purple-600 text-white px-4 py-1 rounded text-sm hover:bg-purple-700 transition"
-                          >
-                            {material.type === 'video' ? 'Watch' : 'View'} Material
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>
