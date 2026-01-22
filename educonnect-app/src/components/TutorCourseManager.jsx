@@ -30,7 +30,7 @@ const TutorCourseManager = ({ onClose }) => {
     title: '',
     description: '',
     order: 0,
-    offline_available: false
+    
   });
 
   const [materialForm, setMaterialForm] = useState({
@@ -210,33 +210,7 @@ const TutorCourseManager = ({ onClose }) => {
     }
   };
 
-  const handleToggleSectionOffline = async (section) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/sections/${section.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          offline_available: !section.offline_available 
-        })
-      });
-
-      if (!response.ok) throw new Error('Update failed');
-
-      alert(section.offline_available 
-        ? '✓ Section set to online-only' 
-        : '✓ Section available for offline download'
-      );
-      
-      await fetchSections(selectedCourse.id);
-    } catch (error) {
-      console.error('Update error:', error);
-      alert('Failed to update section');
-    }
-  };
+ 
 
   const handleDeleteSection = async (sectionId) => {
     if (!window.confirm('Delete this section and all its materials?')) return;
@@ -642,15 +616,7 @@ const TutorCourseManager = ({ onClose }) => {
                             placeholder="Order"
                             min="0"
                           />
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={sectionForm.offline_available}
-                              onChange={(e) => setSectionForm({...sectionForm, offline_available: e.target.checked})}
-                              className="w-4 h-4"
-                            />
-                            <span className="text-sm">Available for offline download</span>
-                          </label>
+                        
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -685,12 +651,7 @@ const TutorCourseManager = ({ onClose }) => {
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-bold text-gray-800">{section.title}</h4>
-                                {section.offline_available && (
-                                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center gap-1">
-                                    <Download size={12} />
-                                    Offline
-                                  </span>
-                                )}
+                             
                               </div>
                               {section.description && (
                                 <p className="text-sm text-gray-600 mb-2">{section.description}</p>
@@ -700,17 +661,7 @@ const TutorCourseManager = ({ onClose }) => {
                               </p>
                             </div>
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => handleToggleSectionOffline(section)}
-                                className={`p-2 rounded transition ${
-                                  section.offline_available
-                                    ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                                }`}
-                                title={section.offline_available ? 'Disable offline' : 'Enable offline'}
-                              >
-                                {section.offline_available ? <Download size={16} /> : <Eye size={16} />}
-                              </button>
+                            
                               <button
                                 onClick={() => handleDeleteSection(section.id)}
                                 className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
@@ -859,19 +810,6 @@ const TutorCourseManager = ({ onClose }) => {
                     </div>
                   </div>
 
-                  {selectedSection.offline_available && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <div className="flex items-start gap-2">
-                        <Download size={16} className="text-blue-600 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-900">Offline Section</p>
-                          <p className="text-xs text-blue-700">
-                            Students can download this material for offline viewing
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex gap-2 pt-4">
                     <button

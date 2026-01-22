@@ -40,12 +40,10 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
     }
   };
 
-  const handleDownloadMaterial = async (material, sectionOfflineAvailable) => {
-    if (!sectionOfflineAvailable) {
-      alert('This material is not available for offline download');
-      return;
-    }
-
+const handleDownloadMaterial = async (material, courseOfflineAvailable) => {
+  if (!courseOfflineAvailable) {
+    alert('This course is not available for offline download');
+  }
     try {
       // Open material in new tab for download
       window.open(material.file_path, '_blank');
@@ -128,14 +126,16 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           />
         ) : selectedMaterial.type === 'document' ? (
           fileUrl.toLowerCase().endsWith('.pdf') ? (
-            <div className="w-full h-[600px]">
-              <iframe
-                src={fileUrl}
-                className="w-full h-full"
-                title={selectedMaterial.title}
-                style={{ border: 'none' }}
-              />
-            </div>
+  <div className="w-full h-[600px] bg-gray-900">
+    <iframe
+      src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+      className="w-full h-full"
+      title={selectedMaterial.title}
+      style={{ border: 'none' }}
+      allow="fullscreen"
+    />
+  </div>
+   
           ) : (
             <div className="p-8 text-center">
               <FileText size={64} className="mx-auto mb-4 text-gray-400" />
@@ -306,18 +306,8 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
                           <h3 className="font-bold text-gray-800">
                             Section {sectionIndex + 1}: {section.title}
                           </h3>
-                          {section.offline_available && (
-                            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                              <Download size={12} />
-                              Offline Available
-                            </span>
-                          )}
-                          {!section.offline_available && (
-                            <span className="bg-gray-400 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                              <Eye size={12} />
-                              Online Only
-                            </span>
-                          )}
+                       
+                         
                         </div>
                         {section.description && (
                           <p className="text-sm text-gray-600">{section.description}</p>
@@ -402,12 +392,13 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
                                   {material.type === 'video' ? 'Watch' : 'View'} Online
                                 </button>
                                 
-                                {/* Download Button - Only if section allows offline */}
-                                {section.offline_available ? (
+                                
+                               {/* Download Button - Only if COURSE allows offline */}
+                                {course.offline_available ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleDownloadMaterial(material, section.offline_available);
+                                      handleDownloadMaterial(material, course.offline_available);
                                     }}
                                     className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition flex items-center gap-1"
                                   >
@@ -418,7 +409,7 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
                                   <button
                                     disabled
                                     className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg text-sm cursor-not-allowed flex items-center gap-1"
-                                    title="This material is not available for offline download"
+                                    title="This course is not available for offline download"
                                   >
                                     <Lock size={14} />
                                     Online Only
@@ -442,36 +433,41 @@ const CourseMaterialsViewer = ({ course, onClose, API_URL }) => {
           )}
         </div>
 
-        {/* Legend */}
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-3">Legend</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Download size={16} className="text-blue-500" />
-              <span className="text-gray-600">Available for offline download</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Eye size={16} className="text-gray-500" />
-              <span className="text-gray-600">Online viewing only</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Video size={16} className="text-red-600" />
-              <span className="text-gray-600">Video content</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FileText size={16} className="text-green-600" />
-              <span className="text-gray-600">Document (PDF, DOC)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Presentation size={16} className="text-orange-600" />
-              <span className="text-gray-600">Presentation (PPT)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FileImage size={16} className="text-blue-600" />
-              <span className="text-gray-600">Image content</span>
-            </div>
-          </div>
-        </div>
+                <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                  <h3 className="font-bold text-gray-800 mb-3">Legend</h3>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Video size={16} className="text-red-600" />
+                      <span className="text-gray-600">Video content</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} className="text-green-600" />
+                      <span className="text-gray-600">Document (PDF, DOC)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Presentation size={16} className="text-orange-600" />
+                      <span className="text-gray-600">Presentation (PPT)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileImage size={16} className="text-blue-600" />
+                      <span className="text-gray-600">Image content</span>
+                    </div>
+                  </div>
+                  
+                  {course.offline_available && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <Download size={16} className="text-blue-600 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-blue-900">Offline Available</p>
+                          <p className="text-xs text-blue-700">
+                            All materials in this course can be downloaded for offline viewing
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
       </div>
     </div>
   );

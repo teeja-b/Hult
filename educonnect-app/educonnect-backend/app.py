@@ -5023,8 +5023,7 @@ def update_section(section_id):
             section.description = data['description'].strip()
         if 'order' in data:
             section.order = int(data['order'])
-        if 'offline_available' in data:
-            section.offline_available = bool(data['offline_available'])
+
         
         db.session.commit()
         
