@@ -1150,7 +1150,58 @@ const CoursesView = () => {
   );
 };
   // Course Detail View Component
-  const CourseDetailView = () => (
+// Course Detail View Component
+const CourseDetailView = () => {
+  const [courseDetails, setCourseDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (selectedCourse?.id) {
+      fetchCourseDetails(selectedCourse.id);
+    }
+  }, [selectedCourse]);
+
+  const fetchCourseDetails = async (courseId) => {
+    try {
+      const response = await fetch(`${API_URL}/api/courses/${courseId}`);
+      const data = await response.json();
+      setCourseDetails(data.course);
+    } catch (error) {
+      console.error('Error fetching course details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-4 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading course details...</p>
+      </div>
+    );
+  }
+
+  if (!courseDetails) {
+    return (
+      <div className="p-4">
+        <button onClick={() => setCurrentView('courses')} className="text-blue-600 mb-4">
+          ← Back to Courses
+        </button>
+        <p className="text-gray-600">Course not found.</p>
+      </div>
+    );
+  }
+
+  // Parse learning outcomes and prerequisites
+  const learningOutcomes = courseDetails.learning_outcomes 
+    ? JSON.parse(courseDetails.learning_outcomes) 
+    : [];
+  const prerequisites = courseDetails.prerequisites 
+    ? JSON.parse(courseDetails.prerequisites) 
+    : [];
+
+  return (
     <div className="p-4">
       <button 
         onClick={() => setCurrentView('courses')}
@@ -1159,117 +1210,183 @@ const CoursesView = () => {
         ← Back to Courses
       </button>
       
-      {selectedCourse && (
-        <div className="space-y-4">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 rounded-lg">
-            <h2 className="text-2xl font-bold mb-2">{selectedCourse.title}</h2>
-            <p className="text-blue-100">by {selectedCourse.tutor}</p>
-          </div>
+      <div className="space-y-4">
+        {/* Course Header */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-6 rounded-lg">
+          <h2 className="text-2xl font-bold mb-2">{courseDetails.title}</h2>
+          <p className="text-blue-100">by {courseDetails.tutor_name}</p>
+          {courseDetails.category && (
+            <span className="inline-block bg-white/20 px-3 py-1 rounded-full text-sm mt-2">
+              {courseDetails.category}
+            </span>
+          )}
+        </div>
 
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <h3 className="font-bold mb-3">Course Overview</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Level:</span>
-                <span className="font-semibold">{selectedCourse.level}</span>
-              </div>
+        {/* Course Overview */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <h3 className="font-bold mb-3">Course Overview</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Level:</span>
+              <span className="font-semibold">{courseDetails.level}</span>
+            </div>
+            {courseDetails.duration && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Duration:</span>
-                <span className="font-semibold">{selectedCourse.duration}</span>
+                <span className="font-semibold">{courseDetails.duration}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Rating:</span>
-                <span className="font-semibold">⭐ {selectedCourse.rating}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Students:</span>
-                <span className="font-semibold">{selectedCourse.students}</span>
-              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-600">Rating:</span>
+              <span className="font-semibold">⭐ {courseDetails.rating || 'Not rated yet'}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Students:</span>
+              <span className="font-semibold">{courseDetails.total_students || 0}</span>
+            </div>
+            {courseDetails.price !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Price:</span>
+                <span className="font-semibold">
+                  {courseDetails.price === 0 ? 'Free' : `$${courseDetails.price}`}
+                </span>
+              </div>
+            )}
           </div>
+        </div>
 
+        {/* Description */}
+        {courseDetails.description && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-bold mb-3">Description</h3>
+            <p className="text-sm text-gray-700 whitespace-pre-line">
+              {courseDetails.description}
+            </p>
+          </div>
+        )}
+
+        {/* Detailed Overview */}
+        {courseDetails.overview && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-bold mb-3">About This Course</h3>
+            <p className="text-sm text-gray-700 whitespace-pre-line">
+              {courseDetails.overview}
+            </p>
+          </div>
+        )}
+
+        {/* What You'll Learn */}
+        {learningOutcomes.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-bold mb-3">What You'll Learn</h3>
             <ul className="space-y-2 text-sm">
-              <li className="flex items-start gap-2">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
-                <span>Master fundamental concepts and principles</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
-                <span>Apply knowledge through practical exercises</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
-                <span>Receive personalized AI-powered feedback</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
-                <span>Earn a verified certificate upon completion</span>
-              </li>
+              {learningOutcomes.map((outcome, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={16} />
+                  <span>{outcome}</span>
+                </li>
+              ))}
             </ul>
           </div>
+        )}
 
-          {selectedCourse.offline && (
-            <button 
-              onClick={() => downloadCourse(selectedCourse)}
-              className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2"
-            >
-              <Download size={20} />
-              Download for Offline Access
-            </button>
-          )}
+        {/* Prerequisites */}
+        {prerequisites.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-bold mb-3">Prerequisites</h3>
+            <ul className="space-y-2 text-sm">
+              {prerequisites.map((prereq, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <AlertCircle className="text-blue-500 flex-shrink-0 mt-0.5" size={16} />
+                  <span>{prereq}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-          {/* NEW: Assignments Button in Course Detail */}
-          {isAuthenticated && (
-            <button 
-              onClick={() => handleOpenAssignments(selectedCourse)}
-              className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-3 rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
-            >
-              <FileText size={20} />
-              View Course Assignments
-            </button>
-          )}
+        {/* Target Audience */}
+        {courseDetails.target_audience && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-bold mb-3">Who This Course Is For</h3>
+            <p className="text-sm text-gray-700">
+              {courseDetails.target_audience}
+            </p>
+          </div>
+        )}
 
+        {/* Offline Download Button */}
+        {courseDetails.offline_available && (
           <button 
-            onClick={async () => {
-              if (!isAuthenticated) {
-                alert('Please log in to enroll!');
-                setShowLogin(true);
-                return;
-              }
-              
-              try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`${API_URL}/api/courses/${selectedCourse.id}/enroll`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                  alert('✅ Enrolled successfully! Check "My Courses" to start learning.');
-                  setCurrentView('my-courses');
-                } else {
-                  alert(data.error || 'Enrollment failed');
-                }
-              } catch (error) {
-                console.error('Enrollment error:', error);
-                alert('Failed to enroll. Please try again.');
-              }
-            }}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg hover:shadow-lg transition"
+            onClick={() => downloadCourse(courseDetails)}
+            disabled={downloading === courseDetails.id}
+            className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:bg-gray-400"
           >
-            Enroll Now
+            {downloading === courseDetails.id ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                Downloading...
+              </>
+            ) : (
+              <>
+                <Download size={20} />
+                Download for Offline Access
+              </>
+            )}
           </button>
-        </div>
-      )}
+        )}
+
+        {/* Assignments Button */}
+        {isAuthenticated && (
+          <button 
+            onClick={() => handleOpenAssignments(courseDetails)}
+            className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-3 rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+          >
+            <FileText size={20} />
+            View Course Assignments
+          </button>
+        )}
+
+        {/* Enroll Button */}
+        <button 
+          onClick={async () => {
+            if (!isAuthenticated) {
+              alert('Please log in to enroll!');
+              setShowLogin(true);
+              return;
+            }
+            
+            try {
+              const token = localStorage.getItem('token');
+              const response = await fetch(`${API_URL}/api/courses/${courseDetails.id}/enroll`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              const data = await response.json();
+              
+              if (response.ok) {
+                alert('✅ Enrolled successfully! Check "My Courses" to start learning.');
+                setCurrentView('my-courses');
+              } else {
+                alert(data.error || 'Enrollment failed');
+              }
+            } catch (error) {
+              console.error('Enrollment error:', error);
+              alert('Failed to enroll. Please try again.');
+            }
+          }}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg hover:shadow-lg transition font-bold"
+        >
+          Enroll Now
+        </button>
+      </div>
     </div>
   );
+};
 
   // My Courses View Component
 // In App.js - Update MyCoursesView component
