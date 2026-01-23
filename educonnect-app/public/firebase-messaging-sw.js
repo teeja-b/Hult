@@ -1,10 +1,10 @@
 // public/firebase-messaging-sw.js
-// COMPLETE FIXED VERSION with Professional Styling
+// COMPLETE FIXED VERSION - Handles video call notifications properly
 
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-// ⚠️ REPLACE WITH YOUR FIREBASE CONFIG
+// ⚠️ YOUR FIREBASE CONFIG
 firebase.initializeApp({
   apiKey: "AIzaSyCyRnk60Muh93DtWVbrmO3jn8WsVKZDSas",
   authDomain: "educonnect-821e7.firebaseapp.com",
@@ -12,13 +12,12 @@ firebase.initializeApp({
   storageBucket: "educonnect-821e7.firebasestorage.app",
   messagingSenderId: "1004307512502",
   appId: "1:1004307512502:web:ff5eaae9f3a01eb5ff3a17",
-
 });
 
 const messaging = firebase.messaging();
 
 // ============================================================================
-// BACKGROUND MESSAGE HANDLER - CREATES PROFESSIONAL NOTIFICATIONS
+// BACKGROUND MESSAGE HANDLER
 // ============================================================================
 
 messaging.onBackgroundMessage((payload) => {
@@ -28,45 +27,29 @@ messaging.onBackgroundMessage((payload) => {
   const notificationBody = payload.notification?.body || '';
   const data = payload.data || {};
   
-  // ✅ PROFESSIONAL NOTIFICATION OPTIONS
   const notificationOptions = {
     body: notificationBody,
     icon: payload.notification?.icon || '/logo192.png',
     badge: '/logo192.png',
-    
-    // ✅ VISUAL ENHANCEMENTS
-    image: payload.notification?.image || null, // Large image (optional)
-    
-    // ✅ BEHAVIOR
+    image: payload.notification?.image || null,
     tag: data.type || 'general',
     renotify: true,
     requireInteraction: data.type === 'call',
     silent: false,
-    
-    // ✅ VIBRATION PATTERN
     vibrate: data.type === 'call' 
-      ? [200, 100, 200, 100, 200]  // Urgent pattern for calls
-      : [100, 50, 100],              // Gentle pattern for messages
-    
-    // ✅ TIMESTAMP
+      ? [200, 100, 200, 100, 200]
+      : [100, 50, 100],
     timestamp: Date.now(),
-    
-    // ✅ DIRECTION (for RTL languages)
     dir: 'ltr',
-    
-    // ✅ LANGUAGE
     lang: 'en',
-    
-    // ✅ CUSTOM DATA - CRITICAL FOR CLICK HANDLING
     data: {
       url: data.url || data.click_action || '/',
       meeting_id: data.meeting_id || data.meetingId || '',
+      join_url: data.join_url || data.joinUrl || '',  // ✅ Critical for video calls
       conversation_id: data.conversation_id || data.conversationId || '',
       type: data.type || 'general',
       timestamp: data.timestamp || new Date().toISOString()
     },
-    
-    // ✅ ACTION BUTTONS (different for each type)
     actions: getActionsForType(data.type, data)
   };
 
@@ -75,9 +58,8 @@ messaging.onBackgroundMessage((payload) => {
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-
 // ============================================================================
-// HELPER: GET ACTION BUTTONS BASED ON TYPE
+// ACTION BUTTONS BASED ON TYPE
 // ============================================================================
 
 function getActionsForType(type, data) {
@@ -89,12 +71,12 @@ function getActionsForType(type, data) {
         { 
           action: 'answer', 
           title: '✅ Answer Call',
-          icon: '/icons/answer.png'  // Optional
+          icon: '/icons/answer.png'
         },
         { 
           action: 'decline', 
           title: '❌ Decline',
-          icon: '/icons/decline.png'  // Optional
+          icon: '/icons/decline.png'
         }
       ];
       
@@ -103,7 +85,7 @@ function getActionsForType(type, data) {
         { 
           action: 'open', 
           title: '👁️ View Message',
-          icon: '/icons/view.png'  // Optional
+          icon: '/icons/view.png'
         }
       ];
       
@@ -112,7 +94,7 @@ function getActionsForType(type, data) {
         { 
           action: 'open', 
           title: '🚀 Open App',
-          icon: '/icons/open.png'  // Optional
+          icon: '/icons/open.png'
         }
       ];
       
@@ -121,15 +103,14 @@ function getActionsForType(type, data) {
         { 
           action: 'open', 
           title: '📱 Open',
-          icon: '/icons/open.png'  // Optional
+          icon: '/icons/open.png'
         }
       ];
   }
 }
 
-
 // ============================================================================
-// NOTIFICATION CLICK HANDLER - HANDLES ALL CLICKS AND ACTIONS
+// NOTIFICATION CLICK HANDLER - CRITICAL FOR VIDEO CALLS
 // ============================================================================
 
 self.addEventListener('notificationclick', (event) => {
@@ -146,26 +127,27 @@ self.addEventListener('notificationclick', (event) => {
   
   // ✅ DETERMINE URL BASED ON ACTION
   if (action === 'answer') {
-    // ✅ ANSWER CALL - GO TO VIDEO CALL
+    // ✅ ANSWER CALL - GO TO VIDEO CALL WITH BOTH PARAMS
     console.log('[SW] 📞 Answer clicked!');
     const meetingId = data.meeting_id || data.meetingId;
+    const joinUrl = data.join_url || data.joinUrl;
     
-    if (meetingId) {
-      urlToOpen = `/video-call?meetingId=${meetingId}`;
+    if (meetingId && joinUrl) {
+      // ✅ PASS BOTH PARAMETERS - This is critical!
+      urlToOpen = `/?meetingId=${meetingId}&joinUrl=${encodeURIComponent(joinUrl)}`;
       console.log('[SW] 🎥 Opening video call:', urlToOpen);
     } else {
-      console.error('[SW] ❌ No meeting ID found!');
-      urlToOpen = '/video-call';
+      console.error('[SW] ❌ Missing meeting ID or join URL!', { meetingId, joinUrl });
+      urlToOpen = '/';
     }
     
   } else if (action === 'decline') {
     // ✅ DECLINE CALL - JUST CLOSE
     console.log('[SW] ❌ Call declined');
     
-    // Optional: Send decline notification to backend
     const meetingId = data.meeting_id || data.meetingId;
     if (meetingId) {
-      fetch('https://your-backend.onrender.com/api/video/decline-call', {
+      fetch('https://hult.onrender.com/api/video/decline-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
@@ -179,25 +161,28 @@ self.addEventListener('notificationclick', (event) => {
     console.log('[SW] 📱 Open clicked!');
     
     if (data.type === 'call') {
-      // If "Open" on call notification
       const meetingId = data.meeting_id || data.meetingId;
-      urlToOpen = meetingId ? `/video-call?meetingId=${meetingId}` : '/video-call';
+      const joinUrl = data.join_url || data.joinUrl;
+      urlToOpen = (meetingId && joinUrl) 
+        ? `/?meetingId=${meetingId}&joinUrl=${encodeURIComponent(joinUrl)}` 
+        : '/';
     } else if (data.type === 'message') {
-      // If "Open" on message notification
       const conversationId = data.conversation_id || data.conversationId;
       urlToOpen = conversationId ? `/messages/${conversationId}` : '/messages';
     } else {
-      // General notification
       urlToOpen = data.url || data.click_action || '/';
     }
     
   } else {
-    // ✅ DEFAULT CLICK (clicked on notification body, not button)
+    // ✅ DEFAULT CLICK (notification body)
     console.log('[SW] 📲 Notification body clicked');
     
     if (data.type === 'call') {
       const meetingId = data.meeting_id || data.meetingId;
-      urlToOpen = meetingId ? `/video-call?meetingId=${meetingId}` : '/video-call';
+      const joinUrl = data.join_url || data.joinUrl;
+      urlToOpen = (meetingId && joinUrl) 
+        ? `/?meetingId=${meetingId}&joinUrl=${encodeURIComponent(joinUrl)}` 
+        : '/';
     } else if (data.type === 'message') {
       const conversationId = data.conversation_id || data.conversationId;
       urlToOpen = conversationId ? `/messages/${conversationId}` : '/messages';
@@ -236,7 +221,6 @@ self.addEventListener('notificationclick', (event) => {
       if (clients.openWindow) {
         console.log('[SW] 🪟 Opening new window:', urlToOpen);
         
-        // Construct full URL
         const fullUrl = urlToOpen.startsWith('http') 
           ? urlToOpen 
           : self.location.origin + urlToOpen;
@@ -253,9 +237,8 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-
 // ============================================================================
-// NOTIFICATION CLOSE HANDLER (Optional - track dismissals)
+// NOTIFICATION CLOSE HANDLER
 // ============================================================================
 
 self.addEventListener('notificationclose', (event) => {
@@ -263,13 +246,12 @@ self.addEventListener('notificationclose', (event) => {
   
   const data = event.notification.data || {};
   
-  // Track missed calls
   if (data.type === 'call') {
     console.log('[SW] 📞 Call notification dismissed');
     
     const meetingId = data.meeting_id || data.meetingId;
     if (meetingId) {
-      fetch('https://your-backend.onrender.com/api/video/missed-call', {
+      fetch('https://hult.onrender.com/api/video/missed-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
@@ -277,7 +259,6 @@ self.addEventListener('notificationclose', (event) => {
     }
   }
 });
-
 
 // ============================================================================
 // SERVICE WORKER LIFECYCLE
@@ -292,7 +273,6 @@ self.addEventListener('activate', (event) => {
   console.log('[SW] ✅ Service worker activated');
   event.waitUntil(clients.claim());
 });
-
 
 // ============================================================================
 // PUSH EVENT (backup handler)

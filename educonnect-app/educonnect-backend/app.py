@@ -713,9 +713,6 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
         
         frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
         
-        # ✅ Build the video call URL
-        video_call_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
-        
         return send_fcm_notification(
             user_id=receiver_id,
             title=f"Incoming Call from {caller.full_name}",
@@ -724,11 +721,12 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                 'type': 'call',
                 'caller_id': str(caller_id),
                 'caller_name': caller.full_name,
-                'meeting_id': meeting_id,  # ✅ Important for service worker
-                'meetingId': meeting_id,   # ✅ Alternative format
-                'join_url': join_url,
-                'url': video_call_url,     # ✅ This is used by default click
-                'click_action': video_call_url  # ✅ Fallback
+                'meeting_id': meeting_id,     # ✅ Meeting ID
+                'meetingId': meeting_id,      # ✅ Alternative format
+                'join_url': join_url,          # ✅ CRITICAL - Add this
+                'joinUrl': join_url,           # ✅ Alternative format
+                'url': f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}",
+                'click_action': f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}"
             },
             notification_type='call'
         )
