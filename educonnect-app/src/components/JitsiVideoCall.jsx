@@ -35,21 +35,7 @@ const DailyVideoCall = ({
   // Detect if mobile
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // Auto-join call from notification
-useEffect(() => {
-  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded && containerReady) {
-    console.log('📞 [VIDEO] Auto-joining call from notification');
-    setCurrentMeetingId(autoJoinMeetingId);
-    setCurrentMeetingUrl(autoJoinUrl);
-    setIsVideoCallOpen(true);
-    
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        initializeDailyCall(autoJoinUrl);
-      }
-    }, 200);
-  }
-}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded, containerReady]);
+
 
   // Track component mount status
   useEffect(() => {
@@ -195,6 +181,21 @@ useEffect(() => {
     };
   }, []);
 
+    // Auto-join call from notification
+useEffect(() => {
+  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded && containerReady) {
+    console.log('📞 [VIDEO] Auto-joining call from notification');
+    setCurrentMeetingId(autoJoinMeetingId);
+    setCurrentMeetingUrl(autoJoinUrl);
+    setIsVideoCallOpen(true);
+    
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        initializeDailyCall(autoJoinUrl);
+      }
+    }, 200);
+  }
+}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded, containerReady]);
   const startVideoCall = async () => {
     if (!selectedTutor) {
       alert('Please select a tutor first');
