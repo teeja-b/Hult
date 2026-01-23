@@ -4,7 +4,14 @@ import io from 'socket.io-client';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
-const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Student' }) => {
+const DailyVideoCall = ({ 
+  currentUserId, 
+  selectedTutor, 
+  currentUserName = 'Student',
+  autoJoinMeetingId = null,
+  autoJoinUrl = null,
+  onCallEnded = null
+ }) => {
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [currentMeetingUrl, setCurrentMeetingUrl] = useState('');
   const [currentMeetingId, setCurrentMeetingId] = useState('');
@@ -27,6 +34,22 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
 
   // Detect if mobile
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  // Auto-join call from notification
+useEffect(() => {
+  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded && containerReady) {
+    console.log('📞 [VIDEO] Auto-joining call from notification');
+    setCurrentMeetingId(autoJoinMeetingId);
+    setCurrentMeetingUrl(autoJoinUrl);
+    setIsVideoCallOpen(true);
+    
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        initializeDailyCall(autoJoinUrl);
+      }
+    }, 200);
+  }
+}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded, containerReady]);
 
   // Track component mount status
   useEffect(() => {
@@ -80,7 +103,11 @@ const DailyVideoCall = ({ currentUserId, selectedTutor, currentUserName = 'Stude
     if (currentMeetingId === meetingId) {
       endVideoCall();
     }
-  }, [currentMeetingId]);
+
+  if (onCallEnded) {
+    onCallEnded();
+  }
+}, [currentMeetingId, selectedTutor, incomingCall, currentUserId, onCallEnded]);
 
   const handleCallDeclined = useCallback(() => {
     console.log('❌ [VIDEO] Call declined');

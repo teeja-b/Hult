@@ -7,7 +7,14 @@ import DailyVideoCall from './JitsiVideoCall';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
-const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
+const MessagingVideoChat = ({ 
+  currentUserId = 'user123',
+  openConversationId = null,
+  onConversationOpened = null,
+  autoJoinMeetingId = null,
+  autoJoinUrl = null,
+  onCallEnded = null
+}) => {
   const [tutors, setTutors] = useState([]);
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -33,6 +40,32 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
   const fileInputRef = useRef(null);
+// Auto-open conversation from notification
+useEffect(() => {
+  if (openConversationId && tutors.length > 0 && !selectedTutor) {
+    console.log('📨 [STUDENT] Auto-opening conversation:', openConversationId);
+    
+    // Parse conversation ID (format: conversation:studentId:tutorProfileId)
+    const parts = openConversationId.split(':');
+    if (parts.length === 3) {
+      const tutorProfileId = parts[2];
+      
+      // Find the tutor
+      const tutor = tutors.find(t => 
+        String(t.tutor_profile_id || t.id) === String(tutorProfileId)
+      );
+      
+      if (tutor) {
+        console.log('✅ [STUDENT] Found tutor, opening conversation:', tutor.name);
+        openConversation(tutor);
+        
+        if (onConversationOpened) {
+          onConversationOpened();
+        }
+      }
+    }
+  }
+}, [openConversationId, tutors, selectedTutor, onConversationOpened]);
 
   useEffect(() => {
     scrollToBottom();
@@ -628,8 +661,10 @@ const MessagingVideoChat = ({ currentUserId = 'user123' }) => {
     name: selectedTutor.name
   }}
   currentUserName="Student"
+  autoJoinMeetingId={autoJoinMeetingId}
+  autoJoinUrl={autoJoinUrl}
+  onCallEnded={onCallEnded}
 />
-
               <button 
                 onClick={() => setShowMessages(false)}
                 className="hover:bg-blue-700 p-1 rounded transition-colors"

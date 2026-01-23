@@ -67,7 +67,9 @@ const EduConnectApp = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackTutor, setFeedbackTutor] = useState(null);
   const [downloading, setDownloading] = useState(null);
-  
+  // ADD THESE NEW STATES (after line 30)
+const [incomingCallData, setIncomingCallData] = useState(null);
+const [openConversationId, setOpenConversationId] = useState(null);
   const [bookingData, setBookingData] = useState({
     subject: '',
     date: '',
@@ -325,6 +327,60 @@ const downloadCourse = async (course) => {
   };
 
   // ================ USE EFFECTS ================
+  // ================ NOTIFICATION HANDLER ================
+// ADD THIS ENTIRE SECTION
+
+useEffect(() => {
+  const checkUrlForNotifications = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = window.location.pathname;
+    
+    // Check for video call notification
+    const meetingId = urlParams.get('meetingId');
+    if (meetingId && isAuthenticated) {
+      console.log('📞 [APP] Detected video call from notification:', meetingId);
+      
+      // Store call data
+      setIncomingCallData({
+        meetingId: meetingId,
+        joinUrl: `https://your-daily-domain.daily.co/${meetingId}` // Replace with your Daily.co domain
+      });
+      
+      // Switch to chat view (where DailyVideoCall component is)
+      setCurrentView('chat');
+      
+      // Clean URL
+      window.history.replaceState({}, '', '/');
+      return;
+    }
+    
+    // Check for message notification
+    const conversationMatch = path.match(/\/messages\/(.+)/);
+    if (conversationMatch && isAuthenticated) {
+      const conversationId = conversationMatch[1];
+      console.log('📨 [APP] Detected message notification:', conversationId);
+      
+      // Store conversation ID to auto-open
+      setOpenConversationId(conversationId);
+      
+      // Switch to chat view
+      setCurrentView('chat');
+      
+      // Clean URL
+      window.history.replaceState({}, '', '/');
+      return;
+    }
+  };
+  
+  // Check on mount and when authentication changes
+  if (isAuthenticated) {
+    checkUrlForNotifications();
+  }
+  
+  // Listen for URL changes (back/forward buttons)
+  window.addEventListener('popstate', checkUrlForNotifications);
+  return () => window.removeEventListener('popstate', checkUrlForNotifications);
+}, [isAuthenticated]);
 
   // Initial mount effect
   useEffect(() => {
@@ -1527,32 +1583,46 @@ const MyCoursesView = () => {
         }}
       />
 
-      {/* Chat view */}
-      {isAuthenticated && currentView === 'chat' && (
-        (() => {
-          const userStr = localStorage.getItem('user');
-          const user = userStr ? JSON.parse(userStr) : null;
-          const userId = user?.id || Number(localStorage.getItem('userId'));
-          const userName = user?.full_name || localStorage.getItem('userName') || 'User';
-          const userType = user?.user_type || localStorage.getItem('userType');
-          const tutorProfileId = user?.tutor_profile_id || Number(localStorage.getItem('tutorProfileId')) || null;
-          
-          console.log('🔍 Chat View Debug:', { userId, userType, tutorProfileId });
-          
-          if (userType === 'student') {
-            return <MessagingVideoChat currentUserId={userId} />;
-          } else if (userType === 'tutor') {
-            return (
-              <TutorMessagingView 
-                currentTutorUserId={userId}
-                tutorProfileId={tutorProfileId}
-                tutorName={userName}
-              />
-            );
-          }
-          return null;
-        })()
-      )}
+     {/* Chat view */}
+{isAuthenticated && currentView === 'chat' && (
+  (() => {
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const userId = user?.id || Number(localStorage.getItem('userId'));
+    const userName = user?.full_name || localStorage.getItem('userName') || 'User';
+    const userType = user?.user_type || localStorage.getItem('userType');
+    const tutorProfileId = user?.tutor_profile_id || Number(localStorage.getItem('tutorProfileId')) || null;
+    
+    console.log('🔍 Chat View Debug:', { userId, userType, tutorProfileId });
+    
+    if (userType === 'student') {
+      return (
+        <MessagingVideoChat 
+          currentUserId={userId}
+          openConversationId={openConversationId}
+          onConversationOpened={() => setOpenConversationId(null)}
+          autoJoinMeetingId={incomingCallData?.meetingId}
+          autoJoinUrl={incomingCallData?.joinUrl}
+          onCallEnded={() => setIncomingCallData(null)}
+        />
+      );
+    } else if (userType === 'tutor') {
+      return (
+        <TutorMessagingView 
+          currentTutorUserId={userId}
+          tutorProfileId={tutorProfileId}
+          tutorName={userName}
+          openConversationId={openConversationId}
+          onConversationOpened={() => setOpenConversationId(null)}
+          autoJoinMeetingId={incomingCallData?.meetingId}
+          autoJoinUrl={incomingCallData?.joinUrl}
+          onCallEnded={() => setIncomingCallData(null)}
+        />
+      );
+    }
+    return null;
+  })()
+)}
 
       {/* Modals */}
       {showTutorOnboarding && (

@@ -8,7 +8,12 @@ const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 const TutorMessagingView = ({ 
   currentTutorUserId,  
   tutorProfileId,
-  tutorName = 'Dr. Sarah Johnson' 
+  tutorName = 'Dr. Sarah Johnson',
+  openConversationId = null,
+  onConversationOpened = null,
+  autoJoinMeetingId = null,
+  autoJoinUrl = null,
+  onCallEnded = null
 }) => {
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -325,6 +330,42 @@ const sendMessage = async () => {
         return <CheckCheck size={14} className="text-gray-400" />;
     }
   };
+// Auto-open conversation from notification
+useEffect(() => {
+  if (openConversationId && conversations.length > 0 && !selectedConversation) {
+    console.log('📨 [TUTOR] Auto-opening conversation:', openConversationId);
+    
+    // Find the conversation by ID
+    const conversation = conversations.find(conv => conv.id === openConversationId);
+    
+    if (conversation) {
+      console.log('✅ [TUTOR] Found conversation, opening:', conversation.studentName);
+      openConversation(conversation);
+      
+      if (onConversationOpened) {
+        onConversationOpened();
+      }
+    } else {
+      // Try parsing the ID if it's in format conversation:studentId:tutorProfileId
+      const parts = openConversationId.split(':');
+      if (parts.length === 3) {
+        const studentId = parts[1];
+        const conv = conversations.find(c => 
+          String(c.studentId || c.partnerId) === String(studentId)
+        );
+        
+        if (conv) {
+          console.log('✅ [TUTOR] Found conversation by student ID, opening:', conv.studentName);
+          openConversation(conv);
+          
+          if (onConversationOpened) {
+            onConversationOpened();
+          }
+        }
+      }
+    }
+  }
+}, [openConversationId, conversations, selectedConversation, onConversationOpened]);
 
   useEffect(() => {
     scrollToBottom();
@@ -759,11 +800,14 @@ const sendMessage = async () => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
-  <DailyVideoCall
-    currentUserId={currentTutorUserId}   // tutor (you)
-    selectedTutor={selectedTutorForJitsi} // student (other side)
-    currentUserName={tutorName}
-  />
+<DailyVideoCall
+  currentUserId={currentTutorUserId}
+  selectedTutor={selectedTutorForJitsi}
+  currentUserName={tutorName}
+  autoJoinMeetingId={autoJoinMeetingId}
+  autoJoinUrl={autoJoinUrl}
+  onCallEnded={onCallEnded}
+/>
  
             </div>
           </div>
