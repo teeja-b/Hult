@@ -84,16 +84,21 @@ const DailyVideoCall = ({
     setCallRinging(true);
   }, []);
 
-  const handleCallEnded = useCallback(({ meetingId }) => {
-    console.log(`🔴 [VIDEO] Call ended: ${meetingId}`);
-    if (currentMeetingId === meetingId) {
-      endVideoCall();
+const handleCallEnded = useCallback(({ meetingId }) => {
+  console.log(`🔴 [VIDEO] Call ended: ${meetingId}`);
+  if (currentMeetingId === meetingId) {
+    // Don't call endVideoCall here - it's defined later
+    // Just reset the state
+    setIsVideoCallOpen(false);
+    setCurrentMeetingUrl('');
+    setCurrentMeetingId('');
+    setCallError(null);
+    
+    if (onCallEnded) {
+      onCallEnded();
     }
-
-  if (onCallEnded) {
-    onCallEnded();
   }
-}, [currentMeetingId, selectedTutor, incomingCall, currentUserId, onCallEnded]);
+}, [currentMeetingId, onCallEnded]);
 
   const handleCallDeclined = useCallback(() => {
     console.log('❌ [VIDEO] Call declined');
@@ -182,20 +187,40 @@ const DailyVideoCall = ({
   }, []);
 
     // Auto-join call from notification
+// Auto-join call from notification
 useEffect(() => {
-  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded && containerReady) {
+  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded) {
     console.log('📞 [VIDEO] Auto-joining call from notification');
+    console.log('📞 [VIDEO] Meeting ID:', autoJoinMeetingId);
+    console.log('📞 [VIDEO] Join URL:', autoJoinUrl);
+    
+    // Validate URL
+    if (!autoJoinUrl.startsWith('http')) {
+      console.error('❌ [VIDEO] Invalid join URL:', autoJoinUrl);
+      setCallError('Invalid video call link');
+      return;
+    }
+    
     setCurrentMeetingId(autoJoinMeetingId);
     setCurrentMeetingUrl(autoJoinUrl);
     setIsVideoCallOpen(true);
     
-    setTimeout(() => {
-      if (isMountedRef.current) {
+    // Wait for container to be ready, then join
+    const checkAndJoin = () => {
+      if (dailyContainerRef.current && isMountedRef.current) {
+        console.log('✅ [VIDEO] Container ready, joining call...');
         initializeDailyCall(autoJoinUrl);
+      } else {
+        console.log('⏳ [VIDEO] Container not ready yet, retrying...');
+        setTimeout(checkAndJoin, 200);
       }
-    }, 200);
+    };
+    
+    // Start checking after a small delay
+    setTimeout(checkAndJoin, 100);
   }
-}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded, containerReady]);
+}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded]); // ✅ REMOVED containerReady dependency
+
   const startVideoCall = async () => {
     if (!selectedTutor) {
       alert('Please select a tutor first');
