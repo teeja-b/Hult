@@ -25,7 +25,7 @@ import ProfileCompletionPrompt from './components/ProfileCompletionPrompt';
 import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackModal';
 import FCMDebugPanel from './components/FCMDebugPanel';
 import FCMInitializer from './components/FCMInitializer';
-
+import DailyVideoCall from './components/JitsiVideoCall';
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
   
@@ -331,37 +331,49 @@ const downloadCourse = async (course) => {
 // ADD THIS ENTIRE SECTION
 
 // Auto-join call from notification
+// ================ NOTIFICATION HANDLER ================
 useEffect(() => {
-  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded) {
-    console.log('📞 [VIDEO] Auto-joining call from notification');
-    console.log('📞 [VIDEO] Meeting ID:', autoJoinMeetingId);
-    console.log('📞 [VIDEO] Join URL:', autoJoinUrl);
+  const checkUrlForNotifications = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = window.location.pathname;
     
-    // Validate URL
-    if (!autoJoinUrl.startsWith('http')) {
-      console.error('❌ [VIDEO] Invalid join URL:', autoJoinUrl);
-      setCallError('Invalid video call link');
+    // Check for video call notification
+    const meetingId = urlParams.get('meetingId');
+    const joinUrl = urlParams.get('joinUrl');
+    if (meetingId && isAuthenticated) {
+      console.log('📞 [APP] Detected video call from notification:', meetingId);
+      console.log('📞 [APP] Join URL:', joinUrl);
+      
+      setIncomingCallData({
+        meetingId: meetingId,
+        joinUrl: joinUrl ? decodeURIComponent(joinUrl) : null
+      });
+      
+      setCurrentView('chat');
+      window.history.replaceState({}, '', '/');
       return;
     }
     
-    setCurrentMeetingId(autoJoinMeetingId);
-    setCurrentMeetingUrl(autoJoinUrl);
-    setIsVideoCallOpen(true);
-    
-    // Wait for container to be ready
-    const checkAndJoin = () => {
-      if (dailyContainerRef.current && isMountedRef.current) {
-        console.log('✅ [VIDEO] Container ready, joining call...');
-        initializeDailyCall(autoJoinUrl);
-      } else {
-        console.log('⏳ [VIDEO] Container not ready, waiting...');
-        setTimeout(checkAndJoin, 200);
-      }
-    };
-    
-    setTimeout(checkAndJoin, 100);
+    // Check for message notification
+    const conversationMatch = path.match(/\/messages\/(.+)/);
+    if (conversationMatch && isAuthenticated) {
+      const conversationId = conversationMatch[1];
+      console.log('📨 [APP] Detected message notification:', conversationId);
+      
+      setOpenConversationId(conversationId);
+      setCurrentView('chat');
+      window.history.replaceState({}, '', '/');
+      return;
+    }
+  };
+  
+  if (isAuthenticated) {
+    checkUrlForNotifications();
   }
-}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded]);
+  
+  window.addEventListener('popstate', checkUrlForNotifications);
+  return () => window.removeEventListener('popstate', checkUrlForNotifications);
+}, [isAuthenticated]);
 
   // Initial mount effect
   useEffect(() => {
