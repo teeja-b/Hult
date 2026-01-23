@@ -330,57 +330,38 @@ const downloadCourse = async (course) => {
   // ================ NOTIFICATION HANDLER ================
 // ADD THIS ENTIRE SECTION
 
+// Auto-join call from notification
 useEffect(() => {
-  const checkUrlForNotifications = () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const path = window.location.pathname;
+  if (autoJoinMeetingId && autoJoinUrl && !isVideoCallOpen && dailyLoaded) {
+    console.log('📞 [VIDEO] Auto-joining call from notification');
+    console.log('📞 [VIDEO] Meeting ID:', autoJoinMeetingId);
+    console.log('📞 [VIDEO] Join URL:', autoJoinUrl);
     
-    // Check for video call notification
-    const meetingId = urlParams.get('meetingId');
-    if (meetingId && isAuthenticated) {
-      console.log('📞 [APP] Detected video call from notification:', meetingId);
-      
-      // Store call data
-      setIncomingCallData({
-        meetingId: meetingId,
-        joinUrl: `https://your-daily-domain.daily.co/${meetingId}` // Replace with your Daily.co domain
-      });
-      
-      // Switch to chat view (where DailyVideoCall component is)
-      setCurrentView('chat');
-      
-      // Clean URL
-      window.history.replaceState({}, '', '/');
+    // Validate URL
+    if (!autoJoinUrl.startsWith('http')) {
+      console.error('❌ [VIDEO] Invalid join URL:', autoJoinUrl);
+      setCallError('Invalid video call link');
       return;
     }
     
-    // Check for message notification
-    const conversationMatch = path.match(/\/messages\/(.+)/);
-    if (conversationMatch && isAuthenticated) {
-      const conversationId = conversationMatch[1];
-      console.log('📨 [APP] Detected message notification:', conversationId);
-      
-      // Store conversation ID to auto-open
-      setOpenConversationId(conversationId);
-      
-      // Switch to chat view
-      setCurrentView('chat');
-      
-      // Clean URL
-      window.history.replaceState({}, '', '/');
-      return;
-    }
-  };
-  
-  // Check on mount and when authentication changes
-  if (isAuthenticated) {
-    checkUrlForNotifications();
+    setCurrentMeetingId(autoJoinMeetingId);
+    setCurrentMeetingUrl(autoJoinUrl);
+    setIsVideoCallOpen(true);
+    
+    // Wait for container to be ready
+    const checkAndJoin = () => {
+      if (dailyContainerRef.current && isMountedRef.current) {
+        console.log('✅ [VIDEO] Container ready, joining call...');
+        initializeDailyCall(autoJoinUrl);
+      } else {
+        console.log('⏳ [VIDEO] Container not ready, waiting...');
+        setTimeout(checkAndJoin, 200);
+      }
+    };
+    
+    setTimeout(checkAndJoin, 100);
   }
-  
-  // Listen for URL changes (back/forward buttons)
-  window.addEventListener('popstate', checkUrlForNotifications);
-  return () => window.removeEventListener('popstate', checkUrlForNotifications);
-}, [isAuthenticated]);
+}, [autoJoinMeetingId, autoJoinUrl, dailyLoaded]);
 
   // Initial mount effect
   useEffect(() => {
