@@ -9,7 +9,7 @@ import CourseMaterialsViewer from './components/CourseMaterialViewer';
 import { 
   BookOpen, Users, Award, Heart, Download, Menu, X, Search, 
   Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, 
-  Video, FileText, CheckCircle, MapPin, Shield, AlertCircle, Lock, LogOut 
+  Video, FileText, CheckCircle, MapPin, Shield, AlertCircle, Lock, LogOut,Phone,PhoneOff
 } from 'lucide-react';
 import TutorCourseManager from './components/TutorCourseManager';
 import MessagingVideoChat from './components/MessagingVideoChat';
@@ -913,40 +913,7 @@ useEffect(() => {
 
     // Add this component inside App.js, before the main return statement (around line 800)
 
-const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 z-[9999] flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg p-6 sm:p-8 max-w-md w-full text-center">
-        <div className="mb-6">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Video className="text-blue-600" size={isMobile ? 40 : 48} />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
-            Incoming Video Call
-          </h2>
-          <p className="text-gray-600">{callData.callerName} is calling...</p>
-        </div>
 
-        <div className="flex gap-3 sm:gap-4 justify-center">
-          <button
-            onClick={onDecline}
-            className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
-          >
-            <PhoneOff size={18} /> Decline
-          </button>
-          <button
-            onClick={onAccept}
-            className="flex items-center gap-2 bg-green-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
-          >
-            <Phone size={18} /> Accept
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
     // Logged-in Dashboard
     const LoggedInDashboard = () => (
@@ -1579,6 +1546,41 @@ const MyCoursesView = () => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg p-6 sm:p-8 max-w-md w-full text-center">
+        <div className="mb-6">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Video className="text-blue-600" size={isMobile ? 40 : 48} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+            Incoming Video Call
+          </h2>
+          <p className="text-gray-600">{callData.callerName} is calling...</p>
+        </div>
+
+        <div className="flex gap-3 sm:gap-4 justify-center">
+          <button
+            onClick={onDecline}
+            className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
+          >
+            <PhoneOff size={18} /> Decline
+          </button>
+          <button
+            onClick={onAccept}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
+          >
+            <Phone size={18} /> Accept
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
