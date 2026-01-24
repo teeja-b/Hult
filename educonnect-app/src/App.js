@@ -343,6 +343,8 @@ useEffect(() => {
     
     console.log('🔍 [APP] Checking URL for notifications...');
     console.log('🔍 [APP] URL:', window.location.href);
+    console.log('🔍 [APP] Current view:', currentView);
+    console.log('🔍 [APP] Is authenticated:', isAuthenticated);
     
     // Check for video call notification
     const meetingId = urlParams.get('meetingId');
@@ -360,10 +362,15 @@ useEffect(() => {
         callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller'
       };
       
-      console.log('📞 [APP] Call data:', callData);
+      console.log('📞 [APP] Setting call data:', callData);
       
       // ✅ Set the call data to show modal immediately
       setIncomingCallData(callData);
+      
+      // Log to confirm state was set
+      setTimeout(() => {
+        console.log('📞 [APP] incomingCallData state after set:', callData);
+      }, 100);
       
       // Clear URL params
       window.history.replaceState({}, '', '/');
@@ -1605,19 +1612,25 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
 
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
       {incomingCallData && (
-        <GlobalIncomingCallModal
-          callData={incomingCallData}
-          onAccept={() => {
-            console.log('✅ [APP] Call accepted - navigating to chat');
-            setCurrentView('chat');
-            // Keep incomingCallData so it auto-joins
-          }}
-          onDecline={() => {
-            console.log('❌ [APP] Call declined');
-            setIncomingCallData(null);
-          }}
-        />
-      )}
+  <GlobalIncomingCallModal
+    callData={incomingCallData}
+    onAccept={() => {
+      console.log('✅ [APP] Call accepted - navigating to chat');
+      console.log('📞 [APP] Auto-join data:', incomingCallData);
+      
+      // Force navigate to chat view
+      setCurrentView('chat');
+      setMenuOpen(false); // Close menu if open
+      
+      // DON'T clear incomingCallData yet - let the chat component use it
+      // It will be cleared after the call ends via onCallEnded
+    }}
+    onDecline={() => {
+      console.log('❌ [APP] Call declined');
+      setIncomingCallData(null);
+    }}
+  />
+)}
 
       {/* Main Content Views */}
       {/* Main Content Views */}
@@ -1657,7 +1670,13 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
     const userType = user?.user_type || localStorage.getItem('userType');
     const tutorProfileId = user?.tutor_profile_id || Number(localStorage.getItem('tutorProfileId')) || null;
     
-    console.log('🔍 Chat View Debug:', { userId, userType, tutorProfileId });
+    console.log('🔍 [APP] Chat View Debug:', { 
+      userId, 
+      userType, 
+      tutorProfileId,
+      hasIncomingCall: !!incomingCallData,
+      incomingCallData 
+    });
     
     if (userType === 'student') {
       return (
@@ -1667,8 +1686,11 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
           onConversationOpened={() => setOpenConversationId(null)}
           autoJoinMeetingId={incomingCallData?.meetingId}
           autoJoinUrl={incomingCallData?.joinUrl}
-          callerName={incomingCallData?.callerName} // ✅ ADD THIS
-          onCallEnded={() => setIncomingCallData(null)}
+          callerName={incomingCallData?.callerName}
+          onCallEnded={() => {
+            console.log('📞 [APP] Call ended - clearing incoming call data');
+            setIncomingCallData(null);
+          }}
         />
       );
     } else if (userType === 'tutor') {
@@ -1681,8 +1703,11 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
           onConversationOpened={() => setOpenConversationId(null)}
           autoJoinMeetingId={incomingCallData?.meetingId}
           autoJoinUrl={incomingCallData?.joinUrl}
-          callerName={incomingCallData?.callerName} // ✅ ADD THIS
-          onCallEnded={() => setIncomingCallData(null)}
+          callerName={incomingCallData?.callerName}
+          onCallEnded={() => {
+            console.log('📞 [APP] Call ended - clearing incoming call data');
+            setIncomingCallData(null);
+          }}
         />
       );
     }
