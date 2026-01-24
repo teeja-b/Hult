@@ -335,38 +335,48 @@ const downloadCourse = async (course) => {
 
 
 
-// Auto-join call from notification
-// ================ NOTIFICATION HANDLER ================
 // ================ NOTIFICATION HANDLER ================
 useEffect(() => {
   const checkUrlForNotifications = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const path = window.location.pathname;
     
+    console.log('🔍 [APP] Checking URL for notifications...');
+    console.log('🔍 [APP] URL:', window.location.href);
+    
     // Check for video call notification
     const meetingId = urlParams.get('meetingId');
     const joinUrl = urlParams.get('joinUrl');
-    const callerName = urlParams.get('callerName'); // ✅ ADD THIS
+    const callerName = urlParams.get('callerName');
     
-    if (meetingId && isAuthenticated) {
-      console.log('📞 [APP] Detected video call from notification:', meetingId);
-      console.log('📞 [APP] Join URL:', joinUrl);
-      console.log('📞 [APP] Caller Name:', callerName); // ✅ ADD THIS
+    console.log('🔍 [APP] Extracted params:', { meetingId, joinUrl, callerName });
+    
+    // ✅ Removed isAuthenticated check - works immediately
+    if (meetingId && joinUrl) {
+      console.log('✅ [APP] Video call detected! Auto-navigating to chat and joining call');
       
-      setIncomingCallData({
+      const callData = {
         meetingId: meetingId,
         joinUrl: joinUrl ? decodeURIComponent(joinUrl) : null,
-        callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller' // ✅ ADD THIS
-      });
+        callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller'
+      };
       
+      console.log('📞 [APP] Call data:', callData);
+      
+      // ✅ Set the call data FIRST
+      setIncomingCallData(callData);
+      
+      // ✅ Then navigate to chat - this will trigger the auto-join
       setCurrentView('chat');
+      
+      // Clear URL params
       window.history.replaceState({}, '', '/');
       return;
     }
     
     // Check for message notification
     const conversationMatch = path.match(/\/messages\/(.+)/);
-    if (conversationMatch && isAuthenticated) {
+    if (conversationMatch) {
       const conversationId = conversationMatch[1];
       console.log('📨 [APP] Detected message notification:', conversationId);
       
@@ -377,13 +387,14 @@ useEffect(() => {
     }
   };
   
-  if (isAuthenticated) {
-    checkUrlForNotifications();
-  }
+  console.log('🔄 [APP] Running notification check');
+  
+  // ✅ Run immediately on mount - no authentication check
+  checkUrlForNotifications();
   
   window.addEventListener('popstate', checkUrlForNotifications);
   return () => window.removeEventListener('popstate', checkUrlForNotifications);
-}, [isAuthenticated]);
+}, []); // ✅ Empty dependency array - runs once on mount
 
 
   // Initial mount effect
