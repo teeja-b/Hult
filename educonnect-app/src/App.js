@@ -43,7 +43,15 @@ const EduConnectApp = () => {
   const [showTutorProfile, setShowTutorProfile] = useState(false);
   const [showTutorOnboarding, setShowTutorOnboarding] = useState(false);
   const [currentView, setCurrentView] = useState('home');
-  const [userType, setUserType] = useState(null);
+const [isAuthenticated, setIsAuthenticated] = useState(() => {
+  const token = localStorage.getItem('token');
+  const storedUserType = localStorage.getItem('userType');
+  return !!(token && storedUserType);
+});
+
+const [userType, setUserType] = useState(() => {
+  return localStorage.getItem('userType');
+});
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedCourseForAssignments, setSelectedCourseForAssignments] = useState(null); // NEW
@@ -61,7 +69,7 @@ const EduConnectApp = () => {
   const [courses, setCourses] = useState([]);
   const [tutors, setTutors] = useState([]);
   const [showProfileCompletionPrompt, setShowProfileCompletionPrompt] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
@@ -1615,15 +1623,13 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
   <GlobalIncomingCallModal
     callData={incomingCallData}
     onAccept={() => {
-      console.log('✅ [APP] Call accepted - navigating to chat');
-      console.log('📞 [APP] Auto-join data:', incomingCallData);
-      
-      // Force navigate to chat view
-      setCurrentView('chat');
-      setMenuOpen(false); // Close menu if open
-      
-      // DON'T clear incomingCallData yet - let the chat component use it
-      // It will be cleared after the call ends via onCallEnded
+       console.log('✅ [APP] Call accepted - navigating to chat');
+  console.log('📞 [APP] Auto-join data:', incomingCallData);
+  console.log('📞 [APP] Current auth state:', { isAuthenticated, userType });
+  
+  // Force navigate to chat view
+  setCurrentView('chat');
+  setMenuOpen(false);
     }}
     onDecline={() => {
       console.log('❌ [APP] Call declined');
