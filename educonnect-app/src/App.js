@@ -351,9 +351,8 @@ useEffect(() => {
     
     console.log('🔍 [APP] Extracted params:', { meetingId, joinUrl, callerName });
     
-    // ✅ Removed isAuthenticated check - works immediately
     if (meetingId && joinUrl) {
-      console.log('✅ [APP] Video call detected! Auto-navigating to chat and joining call');
+      console.log('✅ [APP] Video call detected! Showing incoming call modal');
       
       const callData = {
         meetingId: meetingId,
@@ -363,11 +362,8 @@ useEffect(() => {
       
       console.log('📞 [APP] Call data:', callData);
       
-      // ✅ Set the call data FIRST
+      // ✅ Set the call data to show modal immediately
       setIncomingCallData(callData);
-      
-      // ✅ Then navigate to chat - this will trigger the auto-join
-      setCurrentView('chat');
       
       // Clear URL params
       window.history.replaceState({}, '', '/');
@@ -388,13 +384,11 @@ useEffect(() => {
   };
   
   console.log('🔄 [APP] Running notification check');
-  
-  // ✅ Run immediately on mount - no authentication check
   checkUrlForNotifications();
   
   window.addEventListener('popstate', checkUrlForNotifications);
   return () => window.removeEventListener('popstate', checkUrlForNotifications);
-}, []); // ✅ Empty dependency array - runs once on mount
+}, []);
 
 
   // Initial mount effect
@@ -916,6 +910,43 @@ useEffect(() => {
         </div>
       </div>
     );
+
+    // Add this component inside App.js, before the main return statement (around line 800)
+
+const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 z-[9999] flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg p-6 sm:p-8 max-w-md w-full text-center">
+        <div className="mb-6">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Video className="text-blue-600" size={isMobile ? 40 : 48} />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+            Incoming Video Call
+          </h2>
+          <p className="text-gray-600">{callData.callerName} is calling...</p>
+        </div>
+
+        <div className="flex gap-3 sm:gap-4 justify-center">
+          <button
+            onClick={onDecline}
+            className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
+          >
+            <PhoneOff size={18} /> Decline
+          </button>
+          <button
+            onClick={onAccept}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
+          >
+            <Phone size={18} /> Accept
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
     // Logged-in Dashboard
     const LoggedInDashboard = () => (
@@ -1569,6 +1600,22 @@ const MyCoursesView = () => {
         setShowTutorProfile={setShowTutorProfile}
         setShowCourseManager={setShowCourseManager}
       />
+
+            {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
+      {incomingCallData && (
+        <GlobalIncomingCallModal
+          callData={incomingCallData}
+          onAccept={() => {
+            console.log('✅ [APP] Call accepted - navigating to chat');
+            setCurrentView('chat');
+            // Keep incomingCallData so it auto-joins
+          }}
+          onDecline={() => {
+            console.log('❌ [APP] Call declined');
+            setIncomingCallData(null);
+          }}
+        />
+      )}
 
       {/* Main Content Views */}
       {/* Main Content Views */}
