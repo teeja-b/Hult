@@ -26,8 +26,10 @@ import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackMo
 import FCMDebugPanel from './components/FCMDebugPanel';
 import FCMInitializer from './components/FCMInitializer';
 import DailyVideoCall from './components/JitsiVideoCall';
+
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+  
   
   // ================ STATE DECLARATIONS ================
   const [showCourseManager, setShowCourseManager] = useState(false);
@@ -78,6 +80,11 @@ const [openConversationId, setOpenConversationId] = useState(null);
     notes: ''
   });
   const [messageText, setMessageText] = useState('');
+const [autoJoinParams, setAutoJoinParams] = useState({
+  meetingId: null,
+  joinUrl: null,
+  callerName: null
+});
 
   // ================ HANDLER FUNCTIONS ================
   
@@ -326,11 +333,10 @@ const downloadCourse = async (course) => {
     }
   };
 
-  // ================ USE EFFECTS ================
-  // ================ NOTIFICATION HANDLER ================
-// ADD THIS ENTIRE SECTION
+
 
 // Auto-join call from notification
+// ================ NOTIFICATION HANDLER ================
 // ================ NOTIFICATION HANDLER ================
 useEffect(() => {
   const checkUrlForNotifications = () => {
@@ -340,13 +346,17 @@ useEffect(() => {
     // Check for video call notification
     const meetingId = urlParams.get('meetingId');
     const joinUrl = urlParams.get('joinUrl');
+    const callerName = urlParams.get('callerName'); // ✅ ADD THIS
+    
     if (meetingId && isAuthenticated) {
       console.log('📞 [APP] Detected video call from notification:', meetingId);
       console.log('📞 [APP] Join URL:', joinUrl);
+      console.log('📞 [APP] Caller Name:', callerName); // ✅ ADD THIS
       
       setIncomingCallData({
         meetingId: meetingId,
-        joinUrl: joinUrl ? decodeURIComponent(joinUrl) : null
+        joinUrl: joinUrl ? decodeURIComponent(joinUrl) : null,
+        callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller' // ✅ ADD THIS
       });
       
       setCurrentView('chat');
@@ -374,6 +384,7 @@ useEffect(() => {
   window.addEventListener('popstate', checkUrlForNotifications);
   return () => window.removeEventListener('popstate', checkUrlForNotifications);
 }, [isAuthenticated]);
+
 
   // Initial mount effect
   useEffect(() => {
@@ -1576,7 +1587,7 @@ const MyCoursesView = () => {
         }}
       />
 
-     {/* Chat view */}
+{/* Chat view */}
 {isAuthenticated && currentView === 'chat' && (
   (() => {
     const userStr = localStorage.getItem('user');
@@ -1596,6 +1607,7 @@ const MyCoursesView = () => {
           onConversationOpened={() => setOpenConversationId(null)}
           autoJoinMeetingId={incomingCallData?.meetingId}
           autoJoinUrl={incomingCallData?.joinUrl}
+          callerName={incomingCallData?.callerName} // ✅ ADD THIS
           onCallEnded={() => setIncomingCallData(null)}
         />
       );
@@ -1609,6 +1621,7 @@ const MyCoursesView = () => {
           onConversationOpened={() => setOpenConversationId(null)}
           autoJoinMeetingId={incomingCallData?.meetingId}
           autoJoinUrl={incomingCallData?.joinUrl}
+          callerName={incomingCallData?.callerName} // ✅ ADD THIS
           onCallEnded={() => setIncomingCallData(null)}
         />
       );

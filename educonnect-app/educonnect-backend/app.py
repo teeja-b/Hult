@@ -704,14 +704,19 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
 # UPDATE HELPER FUNCTIONS WITH BETTER MESSAGES
 # ============================================================================
 
+# In your Flask backend (app.py)
+
 def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    """Send incoming call notification with proper action handling"""
+    """Send incoming call notification with caller name in URL"""
     try:
         caller = User.query.get(caller_id)
         if not caller:
             return False
         
         frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        # ✅ Add callerName to URL
+        notification_url = f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}&callerName={urllib.parse.quote(caller.full_name)}"
         
         return send_fcm_notification(
             user_id=receiver_id,
@@ -721,12 +726,12 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                 'type': 'call',
                 'caller_id': str(caller_id),
                 'caller_name': caller.full_name,
-                'meeting_id': meeting_id,     # ✅ Meeting ID
-                'meetingId': meeting_id,      # ✅ Alternative format
-                'join_url': join_url,          # ✅ CRITICAL - Add this
-                'joinUrl': join_url,           # ✅ Alternative format
-                'url': f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}",
-                'click_action': f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}"
+                'meeting_id': meeting_id,
+                'meetingId': meeting_id,
+                'join_url': join_url,
+                'joinUrl': join_url,
+                'url': notification_url,
+                'click_action': notification_url
             },
             notification_type='call'
         )
