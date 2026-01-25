@@ -843,19 +843,7 @@ useEffect(() => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
-{/* Show join status for debugging */}
-{autoJoinMeetingId && (
-  <div className="fixed top-16 left-0 right-0 bg-yellow-500 text-white p-2 text-center text-sm z-40">
-    📞 Auto-joining call: {autoJoinMeetingId.substring(0, 20)}...
-  </div>
-)}
 
-{/* Show join status for debugging */}
-{autoJoinMeetingId && (
-  <div className="fixed top-16 left-0 right-0 bg-yellow-500 text-white p-2 text-center text-sm z-40">
-    📞 Auto-joining call: {autoJoinMeetingId.substring(0, 20)}...
-  </div>
-)}
 
 <DailyVideoCall
   currentUserId={currentTutorUserId}

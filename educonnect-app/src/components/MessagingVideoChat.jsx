@@ -682,12 +682,7 @@ useEffect(() => {
             <div className="flex items-center gap-2">
              
             
-{/* Show call data in header for debugging */}
-{autoJoinMeetingId && (
-  <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-1 text-xs text-center">
-    🔴 Auto-join ready: {autoJoinMeetingId.substring(0, 15)}
-  </div>
-)}
+
 
 {/* 👇 VIDEO CALL COMPONENT */}
 <DailyVideoCall
