@@ -26,12 +26,17 @@ import { TutorFeedbackModal, TutorMatchCard } from './components/TutorFeedbackMo
 import FCMDebugPanel from './components/FCMDebugPanel';
 import FCMInitializer from './components/FCMInitializer';
 import DailyVideoCall from './components/JitsiVideoCall';
+// Around line 17, add this import with your other component imports:
+import AITutorMatcher from './components/AITutorMatcher';
 
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
   
   
   // ================ STATE DECLARATIONS ================
+  // Around line 56, add this state with your other state declarations:
+const [showAIMatcherModal, setShowAIMatcherModal] = useState(false);
+const [studentProfileForMatching, setStudentProfileForMatching] = useState(null);
   const [showCourseManager, setShowCourseManager] = useState(false);
   const [tutorStats, setTutorStats] = useState({
     totalCourses: 0,
@@ -97,114 +102,59 @@ const [autoJoinParams, setAutoJoinParams] = useState({
   // ================ HANDLER FUNCTIONS ================
   
   // AI Matching Handler
-  const handleAIMatching = async () => {
-    if (!isAuthenticated) {
-      alert('Please log in first to use AI matching!');
-      setShowLogin(true);
-      return;
+ // Enhanced AI Matching Handler - Opens the modal instead of just showing results
+const handleAIMatching = async () => {
+  if (!isAuthenticated) {
+    alert('Please log in first to use AI matching!');
+    setShowLogin(true);
+    return;
+  }
+
+  try {
+    // Fetch the student profile from the API
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/api/student/profile`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch profile');
     }
 
-    const surveyString = localStorage.getItem('studentSurvey');
+    const data = await response.json();
     
-    if (!surveyString) {
-      alert('Please complete your survey first to enable AI matching!');
+    if (!data.profile || !data.profile.survey_completed) {
+      alert('Please complete your profile survey first to enable AI matching!');
       setShowSurvey(true);
       return;
     }
 
-    let survey;
-    try {
-      survey = JSON.parse(surveyString);
-    } catch (error) {
-      console.error('Failed to parse survey data:', error);
-      alert('Survey data is corrupted. Please complete the survey again.');
-      setShowSurvey(true);
-      return;
-    }
+    // Prepare student profile for matching
+    const profile = data.profile;
+    const studentProfile = {
+      preferred_subjects: JSON.parse(profile.preferred_subjects || '[]'),
+      skill_level: profile.skill_level || 'intermediate',
+      learning_style: profile.learning_style || 'visual',
+      available_time: profile.available_time || 'evening',
+      preferred_languages: JSON.parse(profile.preferred_languages || '["English"]'),
+      math_score: profile.math_score || 5,
+      science_score: profile.science_score || 5,
+      language_score: profile.language_score || 5,
+      tech_score: profile.tech_score || 5,
+      motivation_level: profile.motivation_level || 7
+    };
 
-    console.log('📊 Survey data for AI matching:', survey);
-
-    if (!survey.learningStyle || !survey.preferredSubjects || !survey.skillLevel || 
-        !survey.availableTime || !survey.preferredLanguages || !survey.learningGoals) {
-      console.warn('Missing survey fields');
-      alert('Please complete all survey fields.');
-      setShowSurvey(true);
-      return;
-    }
-
-    setAiMatching(true);
+    console.log('📊 Student profile for AI matching:', studentProfile);
     
-    try {
-      const token = localStorage.getItem('token');
-      
-      const studentProfile = {
-        learning_style: survey.learningStyle,
-        preferred_subjects: survey.preferredSubjects,
-        skill_level: survey.skillLevel,
-        learning_goals: survey.learningGoals,
-        available_time: survey.availableTime,
-        preferred_languages: survey.preferredLanguages,
-        math_score: survey.mathScore || 5,
-        science_score: survey.scienceScore || 5,
-        language_score: survey.languageScore || 5,
-        tech_score: survey.techScore || 5,
-        motivation_level: survey.motivationLevel || 7
-      };
-
-      console.log('🎯 Sending student profile to ML API:', studentProfile);
-
-      const response = await fetch(`${API_URL}/api/match/tutors`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          student_profile: studentProfile,
-          use_rl: true
-        })
-      });
-
-      console.log('📡 ML API Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ ML API Response data:', data);
-      
-      if (data.success && data.matches && data.matches.length > 0) {
-        console.log(`🎉 Found ${data.matches.length} matches!`);
-        setMatchedTutors(data.matches);
-        setCurrentView('matched-tutors');
-      } else {
-        console.warn('⚠️ No matches found');
-        alert('No tutors found matching your criteria. Try updating your preferences or browse all tutors.');
-        setCurrentView('tutors');
-      }
-      
-    } catch (error) {
-      console.error('❌ ML API Error:', error);
-      
-      if (error.message.includes('401')) {
-        alert('Authentication failed. Please log in again.');
-        setIsAuthenticated(false);
-        localStorage.removeItem('token');
-        setShowLogin(true);
-      } else if (error.message.includes('422')) {
-        alert('Invalid survey data. Please complete the survey again.');
-        setShowSurvey(true);
-      } else if (error.message.includes('fetch')) {
-        alert('Cannot connect to matching server. Please check your connection and try again.');
-      } else {
-        alert(`Matching failed: ${error.message}`);
-      }
-    } finally {
-      setAiMatching(false);
-    }
-  };
+    // Set the profile and show the matcher modal
+    setStudentProfileForMatching(studentProfile);
+    setShowAIMatcherModal(true);
+    
+  } catch (error) {
+    console.error('❌ Error loading profile for matching:', error);
+    alert('Failed to load your profile. Please try again.');
+  }
+};
 
   // NEW: Course Selection Handler for Assignments
   const handleOpenAssignments = (course) => {
@@ -1807,6 +1757,42 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
       {showCourseManager && (
         <TutorCourseManager onClose={() => setShowCourseManager(false)} />
       )}
+
+      {/* AI Tutor Matcher Modal */}
+{showAIMatcherModal && studentProfileForMatching && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-800">AI Tutor Matching</h2>
+        <button
+          onClick={() => {
+            setShowAIMatcherModal(false);
+            setStudentProfileForMatching(null);
+          }}
+          className="p-2 hover:bg-gray-100 rounded-full transition"
+        >
+          <X size={24} />
+        </button>
+      </div>
+      
+      <AITutorMatcher 
+        studentProfile={studentProfileForMatching}
+        onSelectTutor={(match) => {
+          console.log('Selected tutor:', match);
+          setShowAIMatcherModal(false);
+          setStudentProfileForMatching(null);
+          
+          // Navigate to chat with the selected tutor
+          setCurrentView('chat');
+          
+          // Optionally show a success message
+          alert(`Great! You can now chat with ${match.tutor_name}. They're a ${match.match_score}% match for you!`);
+        }}
+      />
+    </div>
+  </div>
+)}
+      
 
       <div className="h-16"></div>
 
