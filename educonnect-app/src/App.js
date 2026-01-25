@@ -27,7 +27,7 @@ import FCMDebugPanel from './components/FCMDebugPanel';
 import FCMInitializer from './components/FCMInitializer';
 import DailyVideoCall from './components/JitsiVideoCall';
 // Around line 17, add this import with your other component imports:
-import AITutorMatch from './components/AITutorMatcher';
+import AITutorMatcher from './components/AITutorMatch';
 
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
