@@ -1286,7 +1286,7 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification - FIXED (instant for both)"""
+    """Handle message sending with FCM notification - FIXED VERSION"""
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
@@ -1301,6 +1301,8 @@ def handle_send_message_with_notification(data):
         print(f"\n{'='*70}")
         print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
         print(f"📤 [MESSAGE] Conversation: {conversation_id}")
+        print(f"📤 [MESSAGE] Text: {text}")
+        print(f"📤 [MESSAGE] File: {file_url}")
         print(f"{'='*70}")
         
         # Get or create conversation
@@ -1321,7 +1323,7 @@ def handle_send_message_with_notification(data):
             print(f"✅ [MESSAGE] Created new conversation {conversation.id}")
         else:
             conversation.last_message = text
-            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            conversation.last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         
         # Save message
         message = Message(
@@ -1341,7 +1343,6 @@ def handle_send_message_with_notification(data):
         # Prepare message data
         message_data = {
             'id': message.id,
-            'messageId': message_id,  # ✅ Include temp ID for frontend matching
             'conversationId': conversation_id,
             'sender_id': sender_id,
             'receiver_id': receiver_id,
@@ -1353,26 +1354,27 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
         
-        # ✅ Send to BOTH sender and receiver
-        # Frontend will handle deduplication
+        # ✅ CRITICAL FIX: Emit to MULTIPLE room formats for compatibility
+        emit('receive_message', message_data, room=conversation_id)
+        print(f"📡 [MESSAGE] Emitted to room: {conversation_id}")
         
-        # Send to receiver
+        # ✅ Also emit to alternative room formats
+        alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
+        alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
+        
+        emit('receive_message', message_data, room=alt_room_1)
+        emit('receive_message', message_data, room=alt_room_2)
+        print(f"📡 [MESSAGE] Also emitted to: {alt_room_1}, {alt_room_2}")
+        
+        # ✅ ALSO emit directly to receiver's socket (if online)
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
-            print(f"📡 [MESSAGE] Sent to receiver: {receiver_sid}")
+            print(f"📡 [MESSAGE] Also sent directly to receiver SID: {receiver_sid}")
+        else:
+            print(f"⚠️ [MESSAGE] Receiver {receiver_id} not online, sent to rooms only")
         
-        # Send to sender (so they get the DB ID)
-        sender_sid = active_connections.get(sender_id)
-        if sender_sid:
-            emit('receive_message', message_data, room=sender_sid)
-            print(f"📡 [MESSAGE] Sent to sender: {sender_sid}")
-        
-        # Fallback: emit to rooms (in case active_connections is out of sync)
-        emit('receive_message', message_data, room=conversation_id)
-        print(f"📡 [MESSAGE] Also emitted to room: {conversation_id}")
-        
-        # Send FCM notification
+        # Send FCM notification (for offline users)
         send_message_notification(
             sender_id=sender_id,
             receiver_id=receiver_id,
@@ -1387,13 +1389,15 @@ def handle_send_message_with_notification(data):
             'status': 'delivered'
         }, room=request.sid)
         
-        print(f"✅ [MESSAGE] Complete\n")
+        print(f"✅ [MESSAGE] Message delivered successfully\n")
         
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
         import traceback
         traceback.print_exc()
+        
         db.session.rollback()
+        
         emit('message_error', {
             'error': str(e),
             'messageId': data.get('messageId')
