@@ -705,6 +705,12 @@ useEffect(() => {
 
   return (
     <div className="bg-gray-50 min-h-screen">
+          {/* 🟡 DEBUG: Check if auto-join props are received */}
+    {autoJoinMeetingId && (
+      <div className="fixed top-0 left-0 right-0 bg-purple-500 text-white p-3 text-center text-sm z-50">
+        📞 [TUTOR] Props received: {autoJoinMeetingId}
+      </div>
+    )}
       {/* Connection Status */}
       <div className={`px-4 py-2 text-sm ${
         connectionStatus === 'connected' ? 'bg-green-100 text-green-800' :

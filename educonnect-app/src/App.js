@@ -1638,6 +1638,12 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
   />
 )}
 
+{incomingCallData && (
+  <div className="fixed top-0 left-0 right-0 bg-orange-500 text-white p-3 text-center text-sm z-[9998]">
+    📞 [APP] Has call data: {incomingCallData.meetingId}
+  </div>
+)}
+
       {/* Main Content Views */}
       {/* Main Content Views */}
 {!isAuthenticated ? (
