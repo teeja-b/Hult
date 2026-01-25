@@ -109,37 +109,7 @@ useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize Socket.IO connection
-// Initialize Socket.IO connection - FIXED VERSION
-useEffect(() => {
-  if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
-    console.log('[STUDENT] 🚪 Auto-joining all conversation rooms...');
-    console.log('[STUDENT] 📊 Socket connected:', socketRef.current.connected);
-    console.log('[STUDENT] 👥 Number of tutors:', tutors.length);
-    
-    tutors.forEach(tutor => {
-      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-      
-      // Emit join for main room
-      socketRef.current.emit('join_conversation', {
-        conversationId: conversationKey,
-        userId: currentUserId,
-        partnerId: tutor.user_id
-      });
-      
-      console.log(`[STUDENT] ✅ Joined room: ${conversationKey} (tutor: ${tutor.name})`);
-    });
-    
-    console.log('[STUDENT] 🎉 Finished auto-joining all rooms');
-  } else {
-    console.log('[STUDENT] ⚠️ Cannot auto-join yet:', {
-      socketExists: !!socketRef.current,
-      socketConnected: socketRef.current?.connected,
-      tutorsCount: tutors.length
-    });
-  }
-}, [tutors, currentUserId, connectionStatus]); // ✅ ALSO depend on connectionStatus
+
 
 useEffect(() => {
   console.log('🔌 [STUDENT] Connecting to Socket.IO server...');
