@@ -112,6 +112,36 @@ useEffect(() => {
   // Initialize Socket.IO connection
 // Initialize Socket.IO connection - FIXED VERSION
 useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
+    console.log('[STUDENT] 🚪 Auto-joining all conversation rooms...');
+    console.log('[STUDENT] 📊 Socket connected:', socketRef.current.connected);
+    console.log('[STUDENT] 👥 Number of tutors:', tutors.length);
+    
+    tutors.forEach(tutor => {
+      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
+      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      
+      // Emit join for main room
+      socketRef.current.emit('join_conversation', {
+        conversationId: conversationKey,
+        userId: currentUserId,
+        partnerId: tutor.user_id
+      });
+      
+      console.log(`[STUDENT] ✅ Joined room: ${conversationKey} (tutor: ${tutor.name})`);
+    });
+    
+    console.log('[STUDENT] 🎉 Finished auto-joining all rooms');
+  } else {
+    console.log('[STUDENT] ⚠️ Cannot auto-join yet:', {
+      socketExists: !!socketRef.current,
+      socketConnected: socketRef.current?.connected,
+      tutorsCount: tutors.length
+    });
+  }
+}, [tutors, currentUserId, connectionStatus]); // ✅ ALSO depend on connectionStatus
+
+useEffect(() => {
   console.log('🔌 [STUDENT] Connecting to Socket.IO server...');
   console.log('🔌 [STUDENT] API URL:', API_URL);
   console.log('🔌 [STUDENT] User ID:', currentUserId);
@@ -122,7 +152,7 @@ useEffect(() => {
     reconnectionDelay: 2000,
     reconnectionAttempts: 10,
     timeout: 20000,
-    transports: ['polling', 'websocket'], // Try polling first
+    transports: ['polling', 'websocket'],
     upgrade: true
   });
 
@@ -131,13 +161,30 @@ useEffect(() => {
   socket.on('connect', () => {
     console.log('✅ [STUDENT] Socket connected:', socket.id);
     setConnectionStatus('connected');
+    
+    // ✅ AUTO-JOIN ALL ROOMS IMMEDIATELY ON CONNECT
+    if (tutors.length > 0) {
+      console.log('[STUDENT] 🚪 Auto-joining all conversation rooms on connect...');
+      
+      tutors.forEach(tutor => {
+        const tutorProfileId = tutor.tutor_profile_id || tutor.id;
+        const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+        
+        socket.emit('join_conversation', {
+          conversationId: conversationKey,
+          userId: currentUserId,
+          partnerId: tutor.user_id
+        });
+        
+        console.log(`[STUDENT] ✅ Joined room: ${conversationKey} (tutor: ${tutor.name})`);
+      });
+    }
   });
 
   socket.on('disconnect', (reason) => {
     console.log('❌ [STUDENT] Socket disconnected. Reason:', reason);
     setConnectionStatus('disconnected');
     
-    // Auto-reconnect if server disconnected us
     if (reason === 'io server disconnect') {
       socket.connect();
     }
@@ -153,43 +200,40 @@ useEffect(() => {
     setConnectionStatus('reconnecting');
   });
 
-socket.on('receive_message', (data) => {
-  console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
-  console.log('📩 [STUDENT] Data:', data);
-  
-  setMessages(prev => {
-    // ✅ Check for duplicates using BOTH temp ID and DB ID
-    const isDuplicate = prev.some(m => 
-      m.id === data.id ||                    // DB ID match
-      m.id === data.messageId ||             // Temp ID became DB ID
-      (data.messageId && m.id === data.messageId)  // Temp ID match
-    );
+  socket.on('receive_message', (data) => {
+    console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
+    console.log('📩 [STUDENT] Data:', data);
     
-    if (isDuplicate) {
-      console.log('📩 [STUDENT] Duplicate detected, updating instead');
-      // Update existing message with DB ID
-      return prev.map(m => {
-        if (m.id === data.messageId) {
-          // This is our optimistic message, update it with DB ID
-          return {
-            ...m,
-            id: data.id,  // Replace temp ID with DB ID
-            status: 'delivered'
-          };
-        }
-        return m;
-      });
-    }
-    
-    console.log('📩 [STUDENT] ✅ Adding new message');
-    
-    return [...prev, {
-      ...data,
-      id: data.id || data.messageId || Date.now(),
-      isOwn: String(data.sender_id) === String(currentUserId)
-    }];
+    setMessages(prev => {
+      const isDuplicate = prev.some(m => 
+        m.id === data.id ||
+        m.id === data.messageId ||
+        (data.messageId && m.id === data.messageId)
+      );
+      
+      if (isDuplicate) {
+        console.log('📩 [STUDENT] Duplicate detected, updating instead');
+        return prev.map(m => {
+          if (m.id === data.messageId) {
+            return {
+              ...m,
+              id: data.id,
+              status: 'delivered'
+            };
+          }
+          return m;
+        });
+      }
+      
+      console.log('📩 [STUDENT] ✅ Adding new message');
+      
+      return [...prev, {
+        ...data,
+        id: data.id || data.messageId || Date.now(),
+        isOwn: String(data.sender_id) === String(currentUserId)
+      }];
+    });
   });
-});
 
   socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
     console.log('✅ [STUDENT] Message delivered:', messageId);
@@ -201,7 +245,6 @@ socket.on('receive_message', (data) => {
   socket.on('user_typing', ({ userId }) => {
     console.log('⌨️ [STUDENT] Typing event from:', userId);
     
-    // Don't check selectedTutor here - just show typing if it's not us
     if (String(userId) !== String(currentUserId)) {
       console.log('⌨️ [STUDENT] ✅ Showing typing');
       setIsTyping(true);
@@ -239,9 +282,7 @@ socket.on('receive_message', (data) => {
       socket.disconnect();
     }
   };
-}, [currentUserId]); // ✅ ONLY currentUserId - no selectedTutor!
-
-// In MessagingVideoChat.jsx (around line 250)
+}, [currentUserId, tutors]);
 
 useEffect(() => {
   if (socketRef.current && socketRef.current.connected && selectedTutor) {
@@ -392,25 +433,7 @@ useEffect(() => {
 
   // Add this NEW useEffect in MessagingVideoChat.jsx (after line 350)
 
-// Auto-join all conversation rooms when tutors load
-useEffect(() => {
-  if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
-    console.log('[STUDENT] Auto-joining all conversation rooms...');
-    
-    tutors.forEach(tutor => {
-      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-      
-      socketRef.current.emit('join_conversation', {
-        conversationId: conversationKey,
-        userId: currentUserId,
-        partnerId: tutor.user_id
-      });
-      
-      console.log(`[STUDENT] Joined room for conversation with ${tutor.name} (tutor ID: ${tutor.user_id})`);
-    });
-  }
-}, [tutors, currentUserId]); // ✅ Runs when tutors list loads
+
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
