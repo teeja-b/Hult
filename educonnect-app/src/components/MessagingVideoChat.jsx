@@ -152,31 +152,57 @@ useEffect(() => {
     setConnectionStatus('error');
   });
 
-  socket.on('receive_message', (data) => {
-    console.log('📩 [STUDENT] Received message:', data);
-    console.log('📩 [STUDENT] Message from:', data.sender_id, '| Current tutor:', selectedTutor?.user_id);
+socket.on('receive_message', (data) => {
+  console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
+  console.log('📩 [STUDENT] Full data:', JSON.stringify(data, null, 2));
+  console.log('📩 [STUDENT] Sender ID:', data.sender_id);
+  console.log('📩 [STUDENT] Receiver ID:', data.receiver_id);
+  console.log('📩 [STUDENT] Current student ID:', currentUserId);
+  console.log('📩 [STUDENT] Selected tutor user ID:', selectedTutor?.user_id);
+  console.log('📩 [STUDENT] Conversation ID:', data.conversationId);
+  
+  // ✅ CRITICAL FIX: Use callback form to access latest state
+  setMessages(prev => {
+    console.log('📩 [STUDENT] Current messages count:', prev.length);
     
-    if (selectedTutor) {
-      // ✅ Accept message if from tutor OR from self
-      const isFromTutor = String(data.sender_id) === String(selectedTutor.user_id);
-      const isFromMe = String(data.sender_id) === String(currentUserId);
+    // Check for duplicates using both temp ID and db ID
+    const isDuplicate = prev.some(m => 
+      m.id === data.id || 
+      (data.messageId && m.id === data.messageId)
+    );
+    
+    if (isDuplicate) {
+      console.log('📩 [STUDENT] ⚠️ Duplicate message detected, skipping');
+      return prev;
+    }
+    
+    // ✅ Accept message if:
+    // 1. We're in the right conversation (checking tutor user_id)
+    // 2. Message is either FROM the tutor OR from us
+    const isFromTutor = selectedTutor && String(data.sender_id) === String(selectedTutor.user_id);
+    const isFromMe = String(data.sender_id) === String(currentUserId);
+    
+    console.log('📩 [STUDENT] Is from tutor?', isFromTutor);
+    console.log('📩 [STUDENT] Is from me?', isFromMe);
+    
+    if (isFromTutor || isFromMe) {
+      console.log('📩 [STUDENT] ✅ Adding new message to chat');
       
-      if (isFromTutor || isFromMe) {
-        setMessages(prev => {
-          if (prev.some(m => m.id === data.id)) {
-            console.log('📩 [STUDENT] ⚠️ Duplicate message, skipping');
-            return prev;
-          }
-          
-          console.log('📩 [STUDENT] ✅ Adding message to chat');
-          return [...prev, {
-            ...data,
-            isOwn: String(data.sender_id) === String(currentUserId)
-          }];
-        });
-      }
+      const newMessage = {
+        ...data,
+        id: data.id || data.messageId || Date.now(),
+        isOwn: String(data.sender_id) === String(currentUserId)
+      };
+      
+      console.log('📩 [STUDENT] New message:', newMessage);
+      
+      return [...prev, newMessage];
+    } else {
+      console.log('📩 [STUDENT] ❌ Message not for this conversation, ignoring');
+      return prev;
     }
   });
+});
 
   socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
     console.log('✅ [STUDENT] Message delivered:', messageId);
@@ -185,21 +211,45 @@ useEffect(() => {
     ));
   });
 
-  socket.on('user_typing', ({ userId, conversationId }) => {
-    console.log('⌨️ [STUDENT] Typing event:', userId, '| Tutor:', selectedTutor?.user_id);
+socket.on('user_typing', ({ userId, conversationId }) => {
+  console.log('⌨️ [STUDENT] ===== TYPING EVENT =====');
+  console.log('⌨️ [STUDENT] Typing user ID:', userId);
+  console.log('⌨️ [STUDENT] Conversation ID:', conversationId);
+  console.log('⌨️ [STUDENT] Current student ID:', currentUserId);
+  console.log('⌨️ [STUDENT] Selected tutor user ID:', selectedTutor?.user_id);
+  
+  // ✅ FIX: Show typing if it's from the tutor we're chatting with
+  const isFromCurrentTutor = selectedTutor && String(userId) === String(selectedTutor.user_id);
+  const isNotMe = String(userId) !== String(currentUserId);
+  
+  console.log('⌨️ [STUDENT] Is from current tutor?', isFromCurrentTutor);
+  console.log('⌨️ [STUDENT] Is not me?', isNotMe);
+  
+  if (isFromCurrentTutor && isNotMe) {
+    console.log('⌨️ [STUDENT] ✅ Showing typing indicator');
+    setIsTyping(true);
     
-    if (selectedTutor && String(userId) === String(selectedTutor.user_id)) {
-      console.log('⌨️ [STUDENT] ✅ Tutor is typing');
-      setIsTyping(true);
-      setTimeout(() => setIsTyping(false), 3000);
-    }
-  });
-
-  socket.on('user_stop_typing', ({ userId }) => {
-    if (selectedTutor && String(userId) === String(selectedTutor.user_id)) {
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      console.log('⌨️ [STUDENT] Auto-hiding typing indicator');
       setIsTyping(false);
-    }
-  });
+    }, 3000);
+  } else {
+    console.log('⌨️ [STUDENT] ❌ Not showing typing - conditions not met');
+  }
+});
+
+socket.on('user_stop_typing', ({ userId }) => {
+  console.log('⌨️ [STUDENT] Stop typing event:', userId);
+  const isFromCurrentTutor = selectedTutor && String(userId) === String(selectedTutor.user_id);
+  
+  if (isFromCurrentTutor) {
+    console.log('⌨️ [STUDENT] ✅ Hiding typing indicator');
+    setIsTyping(false);
+  }
+});
+
+
 
   socket.on('users_online', (userIds) => {
     setOnlineUsers(new Set(userIds));
