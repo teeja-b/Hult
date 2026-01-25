@@ -103,6 +103,8 @@ const [autoJoinParams, setAutoJoinParams] = useState({
   
   // AI Matching Handler
  // Enhanced AI Matching Handler - Opens the modal instead of just showing results
+// Replace your handleAIMatching function (around line 88) with this SAFE version:
+
 const handleAIMatching = async () => {
   if (!isAuthenticated) {
     alert('Please log in first to use AI matching!');
@@ -129,14 +131,33 @@ const handleAIMatching = async () => {
       return;
     }
 
-    // Prepare student profile for matching
+    // Prepare student profile for matching with SAFE JSON parsing
     const profile = data.profile;
+    
+    // ✅ SAFE JSON PARSING HELPER
+    const safeParseJSON = (jsonString, fallback = []) => {
+      if (!jsonString) return fallback;
+      if (Array.isArray(jsonString)) return jsonString; // Already an array
+      
+      try {
+        const parsed = JSON.parse(jsonString);
+        return Array.isArray(parsed) ? parsed : fallback;
+      } catch (e) {
+        console.warn('Failed to parse JSON:', jsonString, e);
+        // Try to extract as comma-separated string
+        if (typeof jsonString === 'string') {
+          return jsonString.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return fallback;
+      }
+    };
+    
     const studentProfile = {
-      preferred_subjects: JSON.parse(profile.preferred_subjects || '[]'),
+      preferred_subjects: safeParseJSON(profile.preferred_subjects, []),
       skill_level: profile.skill_level || 'intermediate',
       learning_style: profile.learning_style || 'visual',
       available_time: profile.available_time || 'evening',
-      preferred_languages: JSON.parse(profile.preferred_languages || '["English"]'),
+      preferred_languages: safeParseJSON(profile.preferred_languages, ['English']),
       math_score: profile.math_score || 5,
       science_score: profile.science_score || 5,
       language_score: profile.language_score || 5,
@@ -146,13 +167,21 @@ const handleAIMatching = async () => {
 
     console.log('📊 Student profile for AI matching:', studentProfile);
     
+    // Validate that we have at least some subjects
+    if (studentProfile.preferred_subjects.length === 0) {
+      alert('Please add at least one subject to your profile!');
+      setShowSurvey(true);
+      return;
+    }
+    
     // Set the profile and show the matcher modal
     setStudentProfileForMatching(studentProfile);
     setShowAIMatcherModal(true);
     
   } catch (error) {
     console.error('❌ Error loading profile for matching:', error);
-    alert('Failed to load your profile. Please try again.');
+    alert(`Failed to load your profile: ${error.message}\n\nPlease complete the survey again.`);
+    setShowSurvey(true);
   }
 };
 
