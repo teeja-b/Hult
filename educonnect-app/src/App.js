@@ -1673,39 +1673,47 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
       />
 
 {/* Chat view */}
+{/* Chat view */}
 {isAuthenticated && currentView === 'chat' && (
   (() => {
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
     const userId = user?.id || Number(localStorage.getItem('userId'));
     const userName = user?.full_name || localStorage.getItem('userName') || 'User';
-    const userType = user?.user_type || localStorage.getItem('userType');
+    const userTypeLocal = user?.user_type || localStorage.getItem('userType');
     const tutorProfileId = user?.tutor_profile_id || Number(localStorage.getItem('tutorProfileId')) || null;
+    
+    // 🔥 CRITICAL: Extract auto-join props BEFORE rendering
+    const autoJoinProps = {
+      autoJoinMeetingId: incomingCallData?.meetingId || null,
+      autoJoinUrl: incomingCallData?.joinUrl || null,
+      callerName: incomingCallData?.callerName || null
+    };
     
     console.log('🔍 [APP] Chat View Debug:', { 
       userId, 
-      userType, 
+      userType: userTypeLocal, 
       tutorProfileId,
-      hasIncomingCall: !!incomingCallData,
-      incomingCallData 
+      hasIncomingCallData: !!incomingCallData,
+      autoJoinProps
     });
     
-    if (userType === 'student') {
+    if (userTypeLocal === 'student') {
       return (
         <MessagingVideoChat 
           currentUserId={userId}
           openConversationId={openConversationId}
           onConversationOpened={() => setOpenConversationId(null)}
-          autoJoinMeetingId={incomingCallData?.meetingId}
-          autoJoinUrl={incomingCallData?.joinUrl}
-          callerName={incomingCallData?.callerName}
+          autoJoinMeetingId={autoJoinProps.autoJoinMeetingId}
+          autoJoinUrl={autoJoinProps.autoJoinUrl}
+          callerName={autoJoinProps.callerName}
           onCallEnded={() => {
             console.log('📞 [APP] Call ended - clearing incoming call data');
             setIncomingCallData(null);
           }}
         />
       );
-    } else if (userType === 'tutor') {
+    } else if (userTypeLocal === 'tutor') {
       return (
         <TutorMessagingView 
           currentTutorUserId={userId}
@@ -1713,9 +1721,9 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
           tutorName={userName}
           openConversationId={openConversationId}
           onConversationOpened={() => setOpenConversationId(null)}
-          autoJoinMeetingId={incomingCallData?.meetingId}
-          autoJoinUrl={incomingCallData?.joinUrl}
-          callerName={incomingCallData?.callerName}
+          autoJoinMeetingId={autoJoinProps.autoJoinMeetingId}
+          autoJoinUrl={autoJoinProps.autoJoinUrl}
+          callerName={autoJoinProps.callerName}
           onCallEnded={() => {
             console.log('📞 [APP] Call ended - clearing incoming call data');
             setIncomingCallData(null);
@@ -1723,6 +1731,8 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
         />
       );
     }
+    
+    console.warn('⚠️ [APP] Unknown user type:', userTypeLocal);
     return null;
   })()
 )}
