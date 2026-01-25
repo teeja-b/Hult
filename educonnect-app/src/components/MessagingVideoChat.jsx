@@ -110,15 +110,20 @@ useEffect(() => {
   }, [messages]);
 
   // Initialize Socket.IO connection
+// Initialize Socket.IO connection - FIXED VERSION
 useEffect(() => {
   console.log('🔌 [STUDENT] Connecting to Socket.IO server...');
+  console.log('🔌 [STUDENT] API URL:', API_URL);
+  console.log('🔌 [STUDENT] User ID:', currentUserId);
   
   socketRef.current = io(API_URL, {
     auth: { userId: currentUserId },
     reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
-    transports: ['websocket', 'polling']
+    reconnectionDelay: 2000,
+    reconnectionAttempts: 10,
+    timeout: 20000,
+    transports: ['polling', 'websocket'], // Try polling first
+    upgrade: true
   });
 
   const socket = socketRef.current;
@@ -126,136 +131,86 @@ useEffect(() => {
   socket.on('connect', () => {
     console.log('✅ [STUDENT] Socket connected:', socket.id);
     setConnectionStatus('connected');
-    
-    // ✅ Re-join conversation if one is selected
-    if (selectedTutor) {
-      const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-      
-      socket.emit('join_conversation', {
-        conversationId: conversationKey,
-        userId: currentUserId,
-        partnerId: selectedTutor.user_id
-      });
-      
-      console.log('🔄 [STUDENT] Re-joined conversation on reconnect:', conversationKey);
-    }
   });
 
-  socket.on('disconnect', () => {
-    console.log('❌ [STUDENT] Socket disconnected');
+  socket.on('disconnect', (reason) => {
+    console.log('❌ [STUDENT] Socket disconnected. Reason:', reason);
     setConnectionStatus('disconnected');
+    
+    // Auto-reconnect if server disconnected us
+    if (reason === 'io server disconnect') {
+      socket.connect();
+    }
   });
 
   socket.on('connect_error', (error) => {
-    console.error('[STUDENT] Socket connection error:', error);
+    console.error('❌ [STUDENT] Socket connection error:', error.message);
     setConnectionStatus('error');
   });
 
-socket.on('receive_message', (data) => {
-  console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
-  console.log('📩 [STUDENT] Full data:', JSON.stringify(data, null, 2));
-  console.log('📩 [STUDENT] Sender ID:', data.sender_id);
-  console.log('📩 [STUDENT] Receiver ID:', data.receiver_id);
-  console.log('📩 [STUDENT] Current student ID:', currentUserId);
-  console.log('📩 [STUDENT] Selected tutor user ID:', selectedTutor?.user_id);
-  console.log('📩 [STUDENT] Conversation ID:', data.conversationId);
-  
-  // ✅ CRITICAL FIX: Use callback form to access latest state
-  setMessages(prev => {
-    console.log('📩 [STUDENT] Current messages count:', prev.length);
+  socket.on('reconnect_attempt', (attemptNumber) => {
+    console.log(`🔄 [STUDENT] Reconnection attempt #${attemptNumber}`);
+    setConnectionStatus('reconnecting');
+  });
+
+  socket.on('receive_message', (data) => {
+    console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
+    console.log('📩 [STUDENT] Sender ID:', data.sender_id);
+    console.log('📩 [STUDENT] Current student ID:', currentUserId);
     
-    // Check for duplicates using both temp ID and db ID
-    const isDuplicate = prev.some(m => 
-      m.id === data.id || 
-      (data.messageId && m.id === data.messageId)
-    );
-    
-    if (isDuplicate) {
-      console.log('📩 [STUDENT] ⚠️ Duplicate message detected, skipping');
-      return prev;
-    }
-    
-    // ✅ Accept message if:
-    // 1. We're in the right conversation (checking tutor user_id)
-    // 2. Message is either FROM the tutor OR from us
-    const isFromTutor = selectedTutor && String(data.sender_id) === String(selectedTutor.user_id);
-    const isFromMe = String(data.sender_id) === String(currentUserId);
-    
-    console.log('📩 [STUDENT] Is from tutor?', isFromTutor);
-    console.log('📩 [STUDENT] Is from me?', isFromMe);
-    
-    if (isFromTutor || isFromMe) {
-      console.log('📩 [STUDENT] ✅ Adding new message to chat');
+    setMessages(prev => {
+      // Check for duplicates
+      const isDuplicate = prev.some(m => 
+        m.id === data.id || 
+        (data.messageId && m.id === data.messageId)
+      );
       
-      const newMessage = {
+      if (isDuplicate) {
+        console.log('📩 [STUDENT] ⚠️ Duplicate message, skipping');
+        return prev;
+      }
+      
+      console.log('📩 [STUDENT] ✅ Adding message');
+      
+      return [...prev, {
         ...data,
         id: data.id || data.messageId || Date.now(),
         isOwn: String(data.sender_id) === String(currentUserId)
-      };
-      
-      console.log('📩 [STUDENT] New message:', newMessage);
-      
-      return [...prev, newMessage];
-    } else {
-      console.log('📩 [STUDENT] ❌ Message not for this conversation, ignoring');
-      return prev;
-    }
+      }];
+    });
   });
-});
 
   socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
     console.log('✅ [STUDENT] Message delivered:', messageId);
     setMessages(prev => prev.map(msg => 
-      msg.id === messageId ? { ...msg, id: dbMessageId, status } : msg
+      msg.id === messageId ? { ...msg, id: dbMessageId || msg.id, status } : msg
     ));
   });
 
-socket.on('user_typing', ({ userId, conversationId }) => {
-  console.log('⌨️ [STUDENT] ===== TYPING EVENT =====');
-  console.log('⌨️ [STUDENT] Typing user ID:', userId);
-  console.log('⌨️ [STUDENT] Conversation ID:', conversationId);
-  console.log('⌨️ [STUDENT] Current student ID:', currentUserId);
-  console.log('⌨️ [STUDENT] Selected tutor user ID:', selectedTutor?.user_id);
-  
-  // ✅ FIX: Show typing if it's from the tutor we're chatting with
-  const isFromCurrentTutor = selectedTutor && String(userId) === String(selectedTutor.user_id);
-  const isNotMe = String(userId) !== String(currentUserId);
-  
-  console.log('⌨️ [STUDENT] Is from current tutor?', isFromCurrentTutor);
-  console.log('⌨️ [STUDENT] Is not me?', isNotMe);
-  
-  if (isFromCurrentTutor && isNotMe) {
-    console.log('⌨️ [STUDENT] ✅ Showing typing indicator');
-    setIsTyping(true);
+  socket.on('user_typing', ({ userId }) => {
+    console.log('⌨️ [STUDENT] Typing event from:', userId);
     
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-      console.log('⌨️ [STUDENT] Auto-hiding typing indicator');
+    // Don't check selectedTutor here - just show typing if it's not us
+    if (String(userId) !== String(currentUserId)) {
+      console.log('⌨️ [STUDENT] ✅ Showing typing');
+      setIsTyping(true);
+      setTimeout(() => setIsTyping(false), 3000);
+    }
+  });
+
+  socket.on('user_stop_typing', ({ userId }) => {
+    if (String(userId) !== String(currentUserId)) {
       setIsTyping(false);
-    }, 3000);
-  } else {
-    console.log('⌨️ [STUDENT] ❌ Not showing typing - conditions not met');
-  }
-});
-
-socket.on('user_stop_typing', ({ userId }) => {
-  console.log('⌨️ [STUDENT] Stop typing event:', userId);
-  const isFromCurrentTutor = selectedTutor && String(userId) === String(selectedTutor.user_id);
-  
-  if (isFromCurrentTutor) {
-    console.log('⌨️ [STUDENT] ✅ Hiding typing indicator');
-    setIsTyping(false);
-  }
-});
-
-
+    }
+  });
 
   socket.on('users_online', (userIds) => {
+    console.log('👥 [STUDENT] Online users:', userIds);
     setOnlineUsers(new Set(userIds));
   });
 
   socket.on('user_status', ({ userId, status }) => {
+    console.log('👤 [STUDENT] User status update:', userId, status);
     setOnlineUsers(prev => {
       const newSet = new Set(prev);
       if (status === 'online') {
@@ -268,11 +223,28 @@ socket.on('user_stop_typing', ({ userId }) => {
   });
 
   return () => {
+    console.log('🔌 [STUDENT] Cleaning up socket connection');
     if (socket) {
       socket.disconnect();
     }
   };
-}, [currentUserId, selectedTutor]);
+}, [currentUserId]); // ✅ ONLY currentUserId - no selectedTutor!
+
+// Join conversation when a tutor is selected - SEPARATE EFFECT
+useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && selectedTutor) {
+    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
+    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+    
+    console.log('🚪 [STUDENT] Joining conversation:', conversationKey);
+    
+    socketRef.current.emit('join_conversation', {
+      conversationId: conversationKey,
+      userId: currentUserId,
+      partnerId: selectedTutor.user_id
+    });
+  }
+}, [selectedTutor, currentUserId]); // ✅ This can depend on selectedTutor
 
   // Fetch tutors
   useEffect(() => {
