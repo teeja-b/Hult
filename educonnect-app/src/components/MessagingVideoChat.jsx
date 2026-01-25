@@ -390,6 +390,28 @@ useEffect(() => {
     }
   };
 
+  // Add this NEW useEffect in MessagingVideoChat.jsx (after line 350)
+
+// Auto-join all conversation rooms when tutors load
+useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
+    console.log('[STUDENT] Auto-joining all conversation rooms...');
+    
+    tutors.forEach(tutor => {
+      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
+      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      
+      socketRef.current.emit('join_conversation', {
+        conversationId: conversationKey,
+        userId: currentUserId,
+        partnerId: tutor.user_id
+      });
+      
+      console.log(`[STUDENT] Joined room for conversation with ${tutor.name} (tutor ID: ${tutor.user_id})`);
+    });
+  }
+}, [tutors, currentUserId]); // ✅ Runs when tutors list loads
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
