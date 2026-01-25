@@ -241,23 +241,46 @@ socket.on('receive_message', (data) => {
   };
 }, [currentUserId]); // ✅ ONLY currentUserId - no selectedTutor!
 
-// Join conversation when a tutor is selected - SEPARATE EFFECT
+// In MessagingVideoChat.jsx (around line 250)
+
 useEffect(() => {
   if (socketRef.current && socketRef.current.connected && selectedTutor) {
     const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
     const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
     
-    console.log('🚪 [STUDENT] Joining conversation:', conversationKey);
+    console.log('🚪 [STUDENT] Joining conversation rooms');
+    console.log('🚪 [STUDENT] Main room:', conversationKey);
+    console.log('🚪 [STUDENT] Tutor user ID:', selectedTutor.user_id);
     
+    // ✅ JOIN MULTIPLE ROOM FORMATS for cross-compatibility
     socketRef.current.emit('join_conversation', {
       conversationId: conversationKey,
       userId: currentUserId,
+      partnerId: selectedTutor.user_id  // Tutor's USER ID (not profile ID)
+    });
+    
+    // ✅ ALSO join alternative room formats
+    const altRoom1 = `conversation:${currentUserId}:${selectedTutor.user_id}`;
+    const altRoom2 = `conversation:${selectedTutor.user_id}:${currentUserId}`;
+    
+    console.log('🚪 [STUDENT] Also joining alt rooms:', altRoom1, altRoom2);
+    
+    // Join alternative formats
+    socketRef.current.emit('join_conversation', {
+      conversationId: altRoom1,
+      userId: currentUserId,
       partnerId: selectedTutor.user_id
     });
+    
+    socketRef.current.emit('join_conversation', {
+      conversationId: altRoom2,
+      userId: currentUserId,
+      partnerId: selectedTutor.user_id
+    });
+    
+    console.log('✅ [STUDENT] Joined all conversation rooms');
   }
-}, [selectedTutor, currentUserId]); // ✅ This can depend on selectedTutor
-
-  // Fetch tutors
+}, [selectedTutor, currentUserId]);
   useEffect(() => {
     const fetchTutors = async () => {
       try {
