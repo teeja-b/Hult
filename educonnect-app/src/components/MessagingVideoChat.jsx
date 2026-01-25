@@ -110,7 +110,7 @@ useEffect(() => {
   }, [messages]);
 
 
-
+// Initialize Socket.IO connection
 useEffect(() => {
   console.log('🔌 [STUDENT] Connecting to Socket.IO server...');
   console.log('🔌 [STUDENT] API URL:', API_URL);
@@ -131,24 +131,6 @@ useEffect(() => {
   socket.on('connect', () => {
     console.log('✅ [STUDENT] Socket connected:', socket.id);
     setConnectionStatus('connected');
-    
-    // ✅ AUTO-JOIN ALL ROOMS IMMEDIATELY ON CONNECT
-    if (tutors.length > 0) {
-      console.log('[STUDENT] 🚪 Auto-joining all conversation rooms on connect...');
-      
-      tutors.forEach(tutor => {
-        const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-        const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-        
-        socket.emit('join_conversation', {
-          conversationId: conversationKey,
-          userId: currentUserId,
-          partnerId: tutor.user_id
-        });
-        
-        console.log(`[STUDENT] ✅ Joined room: ${conversationKey} (tutor: ${tutor.name})`);
-      });
-    }
   });
 
   socket.on('disconnect', (reason) => {
@@ -252,7 +234,31 @@ useEffect(() => {
       socket.disconnect();
     }
   };
-}, [currentUserId, tutors]);
+}, [currentUserId]); // ✅ Only currentUserId
+
+// ✅ ADD THIS NEW EFFECT - Auto-join rooms when tutors load (JUST LIKE TUTOR DOES)
+useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
+    console.log('[STUDENT] 🚪 Auto-joining all conversation rooms...');
+    console.log('[STUDENT] 📊 Socket connected:', socketRef.current.connected);
+    console.log('[STUDENT] 👥 Number of tutors:', tutors.length);
+    
+    tutors.forEach(tutor => {
+      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
+      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      
+      socketRef.current.emit('join_conversation', {
+        conversationId: conversationKey,
+        userId: currentUserId,
+        partnerId: tutor.user_id
+      });
+      
+      console.log(`[STUDENT] ✅ Joined room: ${conversationKey} for tutor: ${tutor.name} (user_id: ${tutor.user_id})`);
+    });
+    
+    console.log('[STUDENT] 🎉 Finished auto-joining all rooms');
+  }
+}, [tutors, currentUserId, connectionStatus]); // ✅ Re-run when tutors load OR socket reconnects
 
 useEffect(() => {
   if (socketRef.current && socketRef.current.connected && selectedTutor) {
