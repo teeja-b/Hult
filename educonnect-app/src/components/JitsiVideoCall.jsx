@@ -214,19 +214,44 @@ const DailyVideoCall = ({
 
   // Initialize call when container is ready - IMPROVED VERSION
   useEffect(() => {
-    if (!isVideoCallOpen || !pendingJoinUrl.current || isInitializingRef.current) {
+    if (!isVideoCallOpen) {
+      console.log('⏸️ [VIDEO] Video call not open');
+      return;
+    }
+
+    if (!pendingJoinUrl.current) {
+      console.log('⏸️ [VIDEO] No pending join URL');
+      return;
+    }
+
+    if (isInitializingRef.current) {
+      console.log('⏸️ [VIDEO] Already initializing');
       return;
     }
 
     if (!dailyContainerRef.current) {
-      console.log('⏳ [VIDEO] Waiting for container...');
-      return;
+      console.log('⏳ [VIDEO] Waiting for container ref...');
+      // Retry after a short delay
+      const timer = setTimeout(() => {
+        if (isMountedRef.current && pendingJoinUrl.current) {
+          console.log('🔄 [VIDEO] Retrying container check...');
+          // Force a re-render to trigger this effect again
+          setIsJoining(prev => prev);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
 
     // Verify container is actually in the DOM
     if (!document.body.contains(dailyContainerRef.current)) {
       console.log('⏳ [VIDEO] Container not in DOM yet...');
-      return;
+      const timer = setTimeout(() => {
+        if (isMountedRef.current && pendingJoinUrl.current) {
+          console.log('🔄 [VIDEO] Retrying DOM check...');
+          setIsJoining(prev => prev);
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
 
     console.log('✅ [VIDEO] Container ready, initializing call');
@@ -237,17 +262,22 @@ const DailyVideoCall = ({
       requestAnimationFrame(() => {
         if (isMountedRef.current && 
             dailyContainerRef.current && 
-            document.body.contains(dailyContainerRef.current)) {
+            document.body.contains(dailyContainerRef.current) &&
+            pendingJoinUrl.current === url) { // Ensure URL hasn't changed
           
           pendingJoinUrl.current = null; // Clear before init
           initRetryCount.current = 0;
           initializeDailyCall(url);
         } else {
-          console.log('⚠️ [VIDEO] Container check failed, will retry');
+          console.log('⚠️ [VIDEO] Container check failed');
+          if (pendingJoinUrl.current === url) {
+            // Restore the URL if it was the same
+            pendingJoinUrl.current = url;
+          }
         }
       });
     });
-  }, [isVideoCallOpen, dailyContainerRef.current]);
+  }, [isVideoCallOpen, isJoining]);
 
   const startVideoCall = async () => {
     if (!selectedTutor) {
