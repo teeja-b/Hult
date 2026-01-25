@@ -66,7 +66,18 @@ useEffect(() => {
     }
   }
 }, [openConversationId, tutors, selectedTutor, onConversationOpened]);
-
+useEffect(() => {
+  if (autoJoinMeetingId && autoJoinUrl && tutors.length > 0 && !showMessages) {
+    console.log('📞 [STUDENT] Auto-join detected, need to open a conversation first');
+    
+    // For now, just open the first tutor conversation so DailyVideoCall can render
+    // In production, you'd want to find the specific tutor who's calling
+    if (tutors.length > 0) {
+      console.log('📞 [STUDENT] Opening first tutor conversation to enable video');
+      openConversation(tutors[0]);
+    }
+  }
+}, [autoJoinMeetingId, autoJoinUrl, tutors, showMessages]);
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
