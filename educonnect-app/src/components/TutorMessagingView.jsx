@@ -13,6 +13,7 @@ const TutorMessagingView = ({
   onConversationOpened = null,
   autoJoinMeetingId = null,
   autoJoinUrl = null,
+  callerStudentId = null,
   onCallEnded = null
 }) => {
   const [conversations, setConversations] = useState([]);
@@ -366,6 +367,42 @@ useEffect(() => {
     }
   }
 }, [openConversationId, conversations, selectedConversation, onConversationOpened]);
+// Auto-open conversation when auto-joining video call - PRODUCTION VERSION
+useEffect(() => {
+  if (autoJoinMeetingId && autoJoinUrl && conversations.length > 0 && !selectedConversation) {
+    console.log('📞 [TUTOR] Auto-join detected');
+    console.log('📞 [TUTOR] Looking for student with ID:', callerStudentId);
+    
+    let targetConversation = null;
+    
+    // Try to find the specific student who's calling
+    if (callerStudentId) {
+      targetConversation = conversations.find(conv => 
+        String(conv.studentId || conv.partnerId) === String(callerStudentId)
+      );
+      
+      if (targetConversation) {
+        console.log('✅ [TUTOR] Found exact caller student:', targetConversation.studentName);
+      } else {
+        console.warn('⚠️ [TUTOR] Caller student not found in conversations');
+      }
+    }
+    
+    // Fallback: open the most recent conversation
+    if (!targetConversation && conversations.length > 0) {
+      targetConversation = conversations[0];
+      console.log('⚠️ [TUTOR] Using fallback (most recent) conversation:', targetConversation.studentName);
+    }
+    
+    if (targetConversation) {
+      console.log('📞 [TUTOR] Auto-opening conversation with:', targetConversation.studentName);
+      openConversation(targetConversation);
+    } else {
+      console.error('❌ [TUTOR] No conversations available');
+      alert('Unable to start video call - no conversations available');
+    }
+  }
+}, [autoJoinMeetingId, autoJoinUrl, conversations, selectedConversation, callerStudentId]);
 
   useEffect(() => {
     scrollToBottom();

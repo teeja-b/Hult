@@ -344,6 +344,7 @@ const downloadCourse = async (course) => {
 
 
 // ================ NOTIFICATION HANDLER ================
+// ================ NOTIFICATION HANDLER ================
 useEffect(() => {
   const checkUrlForNotifications = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -351,34 +352,47 @@ useEffect(() => {
     
     console.log('🔍 [APP] Checking URL for notifications...');
     console.log('🔍 [APP] URL:', window.location.href);
-    console.log('🔍 [APP] Current view:', currentView);
-    console.log('🔍 [APP] Is authenticated:', isAuthenticated);
+    console.log('🔍 [APP] isAuthenticated:', isAuthenticated);
     
     // Check for video call notification
     const meetingId = urlParams.get('meetingId');
     const joinUrl = urlParams.get('joinUrl');
     const callerName = urlParams.get('callerName');
+    const callerUserId = urlParams.get('callerUserId');
+    const callerTutorProfileId = urlParams.get('callerTutorProfileId');
+    const callerStudentId = urlParams.get('callerStudentId');
     
-    console.log('🔍 [APP] Extracted params:', { meetingId, joinUrl, callerName });
+    console.log('🔍 [APP] Extracted params:', { 
+      meetingId, 
+      joinUrl, 
+      callerName,
+      callerUserId,
+      callerTutorProfileId,
+      callerStudentId
+    });
     
     if (meetingId && joinUrl) {
       console.log('✅ [APP] Video call detected! Showing incoming call modal');
       
+      if (!isAuthenticated) {
+        console.warn('⚠️ [APP] User not authenticated - showing login');
+        alert('Please log in to join the video call');
+        setShowLogin(true);
+        window.history.replaceState({}, '', '/');
+        return;
+      }
+      
       const callData = {
         meetingId: meetingId,
         joinUrl: joinUrl ? decodeURIComponent(joinUrl) : null,
-        callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller'
+        callerName: callerName ? decodeURIComponent(callerName) : 'Unknown Caller',
+        callerUserId: callerUserId || null,
+        callerTutorProfileId: callerTutorProfileId || null,
+        callerStudentId: callerStudentId || null
       };
       
-      console.log('📞 [APP] Setting call data:', callData);
-      
-      // ✅ Set the call data to show modal immediately
+      console.log('📞 [APP] Call data set:', callData);
       setIncomingCallData(callData);
-      
-      // Log to confirm state was set
-      setTimeout(() => {
-        console.log('📞 [APP] incomingCallData state after set:', callData);
-      }, 100);
       
       // Clear URL params
       window.history.replaceState({}, '', '/');
@@ -390,6 +404,13 @@ useEffect(() => {
     if (conversationMatch) {
       const conversationId = conversationMatch[1];
       console.log('📨 [APP] Detected message notification:', conversationId);
+      
+      if (!isAuthenticated) {
+        console.warn('⚠️ [APP] User not authenticated for message');
+        setShowLogin(true);
+        window.history.replaceState({}, '', '/');
+        return;
+      }
       
       setOpenConversationId(conversationId);
       setCurrentView('chat');
@@ -403,8 +424,7 @@ useEffect(() => {
   
   window.addEventListener('popstate', checkUrlForNotifications);
   return () => window.removeEventListener('popstate', checkUrlForNotifications);
-}, []);
-
+}, [isAuthenticated]);
 
   // Initial mount effect
   useEffect(() => {
@@ -1619,29 +1639,21 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
       />
 
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
-      {incomingCallData && (
+  {/* ✅ Incoming Call Modal - Hide when in chat view */}
+{incomingCallData && currentView !== 'chat' && (
   <GlobalIncomingCallModal
     callData={incomingCallData}
     onAccept={() => {
-       console.log('✅ [APP] Call accepted - navigating to chat');
-  console.log('📞 [APP] Auto-join data:', incomingCallData);
-  console.log('📞 [APP] Current auth state:', { isAuthenticated, userType });
-  
-  // Force navigate to chat view
-  setCurrentView('chat');
-  setMenuOpen(false);
+      console.log('✅ [APP] Call accepted - navigating to chat');
+      console.log('📞 [APP] Auto-join data:', incomingCallData);
+      setCurrentView('chat');
+      setMenuOpen(false);
     }}
     onDecline={() => {
       console.log('❌ [APP] Call declined');
       setIncomingCallData(null);
     }}
   />
-)}
-
-{incomingCallData && (
-  <div className="fixed top-0 left-0 right-0 bg-orange-500 text-white p-3 text-center text-sm z-[9998]">
-    📞 [APP] Has call data: {incomingCallData.meetingId}
-  </div>
 )}
 
       {/* Main Content Views */}
@@ -1673,7 +1685,6 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
       />
 
 {/* Chat view */}
-{/* Chat view */}
 {isAuthenticated && currentView === 'chat' && (
   (() => {
     const userStr = localStorage.getItem('user');
@@ -1683,11 +1694,13 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
     const userTypeLocal = user?.user_type || localStorage.getItem('userType');
     const tutorProfileId = user?.tutor_profile_id || Number(localStorage.getItem('tutorProfileId')) || null;
     
-    // 🔥 CRITICAL: Extract auto-join props BEFORE rendering
     const autoJoinProps = {
       autoJoinMeetingId: incomingCallData?.meetingId || null,
       autoJoinUrl: incomingCallData?.joinUrl || null,
-      callerName: incomingCallData?.callerName || null
+      callerName: incomingCallData?.callerName || null,
+      callerUserId: incomingCallData?.callerUserId || null,
+      callerTutorProfileId: incomingCallData?.callerTutorProfileId || null,
+      callerStudentId: incomingCallData?.callerStudentId || null
     };
     
     console.log('🔍 [APP] Chat View Debug:', { 
@@ -1707,6 +1720,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
           autoJoinMeetingId={autoJoinProps.autoJoinMeetingId}
           autoJoinUrl={autoJoinProps.autoJoinUrl}
           callerName={autoJoinProps.callerName}
+          callerTutorProfileId={autoJoinProps.callerTutorProfileId}
           onCallEnded={() => {
             console.log('📞 [APP] Call ended - clearing incoming call data');
             setIncomingCallData(null);
@@ -1724,6 +1738,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
           autoJoinMeetingId={autoJoinProps.autoJoinMeetingId}
           autoJoinUrl={autoJoinProps.autoJoinUrl}
           callerName={autoJoinProps.callerName}
+          callerStudentId={autoJoinProps.callerStudentId}
           onCallEnded={() => {
             console.log('📞 [APP] Call ended - clearing incoming call data');
             setIncomingCallData(null);

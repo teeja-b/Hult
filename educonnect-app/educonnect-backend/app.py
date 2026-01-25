@@ -707,16 +707,46 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
 # In your Flask backend (app.py)
 
 def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    """Send incoming call notification with caller name in URL"""
+    """Send incoming call notification with all necessary IDs"""
     try:
         caller = User.query.get(caller_id)
         if not caller:
             return False
         
+        receiver = User.query.get(receiver_id)
+        if not receiver:
+            return False
+        
         frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
         
-        # ✅ Add callerName to URL
-        notification_url = f"{frontend_url}/?meetingId={meeting_id}&joinUrl={urllib.parse.quote(join_url)}&callerName={urllib.parse.quote(caller.full_name)}"
+        # ✅ Get caller's tutor profile ID (if caller is tutor)
+        caller_tutor_profile_id = None
+        if caller.user_type == 'tutor' and caller.tutor_profile:
+            caller_tutor_profile_id = caller.tutor_profile.id
+        
+        # ✅ Get caller's student ID (if caller is student)  
+        caller_student_id = None
+        if caller.user_type == 'student':
+            caller_student_id = caller.id
+        
+        # ✅ Build URL with ALL parameters
+        notification_url = (
+            f"{frontend_url}/"
+            f"?meetingId={meeting_id}"
+            f"&joinUrl={urllib.parse.quote(join_url)}"
+            f"&callerName={urllib.parse.quote(caller.full_name)}"
+            f"&callerUserId={caller_id}"
+        )
+        
+        # Add tutor profile ID if caller is tutor
+        if caller_tutor_profile_id:
+            notification_url += f"&callerTutorProfileId={caller_tutor_profile_id}"
+        
+        # Add student ID if caller is student
+        if caller_student_id:
+            notification_url += f"&callerStudentId={caller_student_id}"
+        
+        print(f"📞 [NOTIFICATION] Call URL: {notification_url}")
         
         return send_fcm_notification(
             user_id=receiver_id,
@@ -726,6 +756,8 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                 'type': 'call',
                 'caller_id': str(caller_id),
                 'caller_name': caller.full_name,
+                'caller_tutor_profile_id': str(caller_tutor_profile_id) if caller_tutor_profile_id else None,
+                'caller_student_id': str(caller_student_id) if caller_student_id else None,
                 'meeting_id': meeting_id,
                 'meetingId': meeting_id,
                 'join_url': join_url,
@@ -737,6 +769,8 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
         )
     except Exception as e:
         print(f"❌ Error sending call notification: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def send_message_notification(sender_id, receiver_id, message_text, conversation_id):

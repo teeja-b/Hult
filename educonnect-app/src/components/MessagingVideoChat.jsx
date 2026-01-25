@@ -8,11 +8,12 @@ import DailyVideoCall from './JitsiVideoCall';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
 
 const MessagingVideoChat = ({ 
-  currentUserId = 'user123',
+ currentUserId = 'user123',
   openConversationId = null,
   onConversationOpened = null,
   autoJoinMeetingId = null,
   autoJoinUrl = null,
+  callerTutorProfileId = null,
   onCallEnded = null
 }) => {
   const [tutors, setTutors] = useState([]);
@@ -66,18 +67,44 @@ useEffect(() => {
     }
   }
 }, [openConversationId, tutors, selectedTutor, onConversationOpened]);
+
+// Auto-open conversation when auto-joining video call - PRODUCTION VERSION
 useEffect(() => {
   if (autoJoinMeetingId && autoJoinUrl && tutors.length > 0 && !showMessages) {
-    console.log('📞 [STUDENT] Auto-join detected, need to open a conversation first');
+    console.log('📞 [STUDENT] Auto-join detected');
+    console.log('📞 [STUDENT] Looking for tutor with profile ID:', callerTutorProfileId);
     
-    // For now, just open the first tutor conversation so DailyVideoCall can render
-    // In production, you'd want to find the specific tutor who's calling
-    if (tutors.length > 0) {
-      console.log('📞 [STUDENT] Opening first tutor conversation to enable video');
-      openConversation(tutors[0]);
+    let targetTutor = null;
+    
+    // Try to find the specific tutor who's calling
+    if (callerTutorProfileId) {
+      targetTutor = tutors.find(t => 
+        String(t.tutor_profile_id || t.id) === String(callerTutorProfileId)
+      );
+      
+      if (targetTutor) {
+        console.log('✅ [STUDENT] Found exact caller tutor:', targetTutor.name);
+      } else {
+        console.warn('⚠️ [STUDENT] Caller tutor not found in list');
+      }
+    }
+    
+    // Fallback: open the most recently messaged tutor or first available
+    if (!targetTutor && tutors.length > 0) {
+      targetTutor = tutors[0];
+      console.log('⚠️ [STUDENT] Using fallback tutor:', targetTutor.name);
+    }
+    
+    if (targetTutor) {
+      console.log('📞 [STUDENT] Auto-opening conversation with:', targetTutor.name);
+      openConversation(targetTutor);
+    } else {
+      console.error('❌ [STUDENT] No tutors available to open conversation');
+      alert('Unable to start video call - no tutors available');
     }
   }
-}, [autoJoinMeetingId, autoJoinUrl, tutors, showMessages]);
+}, [autoJoinMeetingId, autoJoinUrl, tutors, showMessages, callerTutorProfileId]);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
