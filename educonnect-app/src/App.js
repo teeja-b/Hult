@@ -1,4 +1,5 @@
 // educonnect-app/src/App.js
+import io from 'socket.io-client';
 import React, { useState, useEffect } from 'react';
 import StudentSurvey from './components/StudentSurvey';
 import TutorOnboarding from './components/TutorOnboarding';
