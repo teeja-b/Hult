@@ -23,7 +23,6 @@ const DailyVideoCall = ({
   const [callError, setCallError] = useState(null);
   const [isJoining, setIsJoining] = useState(false);
   const [dailyLoaded, setDailyLoaded] = useState(false);
-  const [containerMounted, setContainerMounted] = useState(false);
 
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
@@ -33,6 +32,8 @@ const DailyVideoCall = ({
   const isMountedRef = useRef(true);
   const autoJoinAttemptedRef = useRef(false);
   const pendingJoinUrl = useRef(null);
+  const initRetryCount = useRef(0);
+  const MAX_INIT_RETRIES = 5;
 
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -43,16 +44,6 @@ const DailyVideoCall = ({
       isMountedRef.current = false;
     };
   }, []);
-
-  // Track container mount
-  useEffect(() => {
-    if (isVideoCallOpen && dailyContainerRef.current) {
-      console.log('✅ [DAILY] Container mounted');
-      setContainerMounted(true);
-    } else {
-      setContainerMounted(false);
-    }
-  }, [isVideoCallOpen]);
 
   // Check if Daily.co is loaded
   useEffect(() => {
@@ -221,26 +212,42 @@ const DailyVideoCall = ({
     setIsVideoCallOpen(true);
   }, [autoJoinMeetingId, autoJoinUrl, dailyLoaded]);
 
-  // Initialize call when container is ready
+  // Initialize call when container is ready - IMPROVED VERSION
   useEffect(() => {
-    if (containerMounted && pendingJoinUrl.current && !isInitializingRef.current) {
-      console.log('✅ [VIDEO] Container ready, initializing call');
-      const url = pendingJoinUrl.current;
-      pendingJoinUrl.current = null;
-      
-      // Small delay to ensure DOM is stable
-      const timer = setTimeout(() => {
-        if (isMountedRef.current && dailyContainerRef.current && document.body.contains(dailyContainerRef.current)) {
+    if (!isVideoCallOpen || !pendingJoinUrl.current || isInitializingRef.current) {
+      return;
+    }
+
+    if (!dailyContainerRef.current) {
+      console.log('⏳ [VIDEO] Waiting for container...');
+      return;
+    }
+
+    // Verify container is actually in the DOM
+    if (!document.body.contains(dailyContainerRef.current)) {
+      console.log('⏳ [VIDEO] Container not in DOM yet...');
+      return;
+    }
+
+    console.log('✅ [VIDEO] Container ready, initializing call');
+    const url = pendingJoinUrl.current;
+    
+    // Use requestAnimationFrame to ensure DOM is fully rendered
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (isMountedRef.current && 
+            dailyContainerRef.current && 
+            document.body.contains(dailyContainerRef.current)) {
+          
+          pendingJoinUrl.current = null; // Clear before init
+          initRetryCount.current = 0;
           initializeDailyCall(url);
         } else {
-          console.log('⚠️ [VIDEO] Container became invalid, retrying...');
-          pendingJoinUrl.current = url;
+          console.log('⚠️ [VIDEO] Container check failed, will retry');
         }
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-  }, [containerMounted]);
+      });
+    });
+  }, [isVideoCallOpen, dailyContainerRef.current]);
 
   const startVideoCall = async () => {
     if (!selectedTutor) {
@@ -325,6 +332,7 @@ const DailyVideoCall = ({
   const initializeDailyCall = async (roomUrl) => {
     console.log('🎥 [DAILY] initializeDailyCall called');
     console.log('🎥 [DAILY] Room URL:', roomUrl);
+    console.log('🎥 [DAILY] Retry count:', initRetryCount.current);
     
     if (!isMountedRef.current) {
       console.log('⏸️ [DAILY] Component unmounted, skipping');
@@ -338,13 +346,39 @@ const DailyVideoCall = ({
 
     if (!dailyContainerRef.current) {
       console.error('❌ [DAILY] Container ref is null');
-      setCallError('Video container not ready');
+      
+      // Retry logic
+      if (initRetryCount.current < MAX_INIT_RETRIES) {
+        initRetryCount.current++;
+        console.log(`🔄 [DAILY] Retrying in 500ms (attempt ${initRetryCount.current}/${MAX_INIT_RETRIES})`);
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            initializeDailyCall(roomUrl);
+          }
+        }, 500);
+        return;
+      }
+      
+      setCallError('Video container not ready. Please try again.');
       return;
     }
 
     if (!document.body.contains(dailyContainerRef.current)) {
       console.error('❌ [DAILY] Container not in DOM');
-      setCallError('Video container not attached');
+      
+      // Retry logic
+      if (initRetryCount.current < MAX_INIT_RETRIES) {
+        initRetryCount.current++;
+        console.log(`🔄 [DAILY] Retrying in 500ms (attempt ${initRetryCount.current}/${MAX_INIT_RETRIES})`);
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            initializeDailyCall(roomUrl);
+          }
+        }, 500);
+        return;
+      }
+      
+      setCallError('Video container not attached. Please try again.');
       return;
     }
 
@@ -418,6 +452,7 @@ const DailyVideoCall = ({
           setIsJoining(false);
           setCallError(null);
           isInitializingRef.current = false;
+          initRetryCount.current = 0; // Reset retry count on success
           updateParticipantCount();
         }
       });
@@ -501,6 +536,7 @@ const DailyVideoCall = ({
     setCurrentMeetingUrl(incomingCall.joinUrl);
     setCurrentMeetingId(incomingCall.meetingId);
     pendingJoinUrl.current = incomingCall.joinUrl;
+    initRetryCount.current = 0; // Reset retry count
     setIsVideoCallOpen(true);
     setCallRinging(false);
 
@@ -549,6 +585,7 @@ const DailyVideoCall = ({
     isInitializingRef.current = false;
     autoJoinAttemptedRef.current = false;
     pendingJoinUrl.current = null;
+    initRetryCount.current = 0;
 
     const meetingId = currentMeetingId;
     const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
@@ -563,7 +600,6 @@ const DailyVideoCall = ({
     setParticipantCount(0);
     setCallError(null);
     setIsJoining(false);
-    setContainerMounted(false);
 
     if (socketRef.current?.connected && meetingId) {
       socketRef.current.emit('end_video_call', {
