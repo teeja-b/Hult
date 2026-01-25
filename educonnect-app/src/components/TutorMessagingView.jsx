@@ -446,52 +446,43 @@ useEffect(() => {
     setConnectionStatus('disconnected');
   });
 
-  socket.on('receive_message', (data) => {
-    console.log('📩 [TUTOR] ===== RECEIVED MESSAGE =====');
-    console.log('📩 [TUTOR] Full data:', JSON.stringify(data, null, 2));
-    console.log('📩 [TUTOR] Sender ID:', data.sender_id);
-    console.log('📩 [TUTOR] Receiver ID:', data.receiver_id);
-    console.log('📩 [TUTOR] Current tutor ID:', currentTutorUserId);
-    console.log('📩 [TUTOR] Conversation ID:', data.conversationId);
+ socket.on('receive_message', (data) => {
+  console.log('📩 [TUTOR] ===== RECEIVED MESSAGE =====');
+  console.log('📩 [TUTOR] Data:', data);
+  
+  setMessages(prev => {
+    // ✅ Check for duplicates using BOTH temp ID and DB ID
+    const isDuplicate = prev.some(m => 
+      m.id === data.id ||                    // DB ID match
+      m.id === data.messageId ||             // Temp ID became DB ID
+      (data.messageId && m.id === data.messageId)  // Temp ID match
+    );
     
-    // ✅ CRITICAL FIX: Use callback form to access latest state
-    setMessages(prev => {
-      console.log('📩 [TUTOR] Current messages count:', prev.length);
-      
-      // Check for duplicates
-      const isDuplicate = prev.some(m => m.id === data.id);
-      
-      if (isDuplicate) {
-        console.log('📩 [TUTOR] ⚠️ Duplicate message detected, skipping');
-        return prev;
-      }
-      
-      console.log('📩 [TUTOR] ✅ Adding new message to chat');
-      
-      const newMessage = {
-        ...data,
-        isOwn: String(data.sender_id) === String(currentTutorUserId)
-      };
-      
-      console.log('📩 [TUTOR] New message:', newMessage);
-      
-      return [...prev, newMessage];
-    });
-
-    // Update conversations list
-    setConversations(prev => prev.map(conv => {
-      const convStudentId = conv.studentId || conv.partnerId;
-      if (String(convStudentId) === String(data.sender_id) || conv.id === data.conversationId) {
-        return {
-          ...conv,
-          lastMessage: data.text,
-          lastMessageTime: data.timestamp,
-          unreadCount: 0 // Reset unread since message is being displayed
-        };
-      }
-      return conv;
-    }).sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0)));
+    if (isDuplicate) {
+      console.log('📩 [TUTOR] Duplicate detected, updating instead');
+      // Update existing message with DB ID
+      return prev.map(m => {
+        if (m.id === data.messageId) {
+          // This is our optimistic message, update it with DB ID
+          return {
+            ...m,
+            id: data.id,  // Replace temp ID with DB ID
+            status: 'delivered'
+          };
+        }
+        return m;
+      });
+    }
+    
+    console.log('📩 [TUTOR] ✅ Adding new message');
+    
+    return [...prev, {
+      ...data,
+      id: data.id || data.messageId || Date.now(),
+      isOwn: String(data.sender_id) === String(currentTutorUserId)
+    }];
   });
+});
 
   socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
     console.log('✅ [TUTOR] Message delivered:', { messageId, dbMessageId, status });

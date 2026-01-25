@@ -153,32 +153,43 @@ useEffect(() => {
     setConnectionStatus('reconnecting');
   });
 
-  socket.on('receive_message', (data) => {
-    console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
-    console.log('📩 [STUDENT] Sender ID:', data.sender_id);
-    console.log('📩 [STUDENT] Current student ID:', currentUserId);
+socket.on('receive_message', (data) => {
+  console.log('📩 [STUDENT] ===== RECEIVED MESSAGE =====');
+  console.log('📩 [STUDENT] Data:', data);
+  
+  setMessages(prev => {
+    // ✅ Check for duplicates using BOTH temp ID and DB ID
+    const isDuplicate = prev.some(m => 
+      m.id === data.id ||                    // DB ID match
+      m.id === data.messageId ||             // Temp ID became DB ID
+      (data.messageId && m.id === data.messageId)  // Temp ID match
+    );
     
-    setMessages(prev => {
-      // Check for duplicates
-      const isDuplicate = prev.some(m => 
-        m.id === data.id || 
-        (data.messageId && m.id === data.messageId)
-      );
-      
-      if (isDuplicate) {
-        console.log('📩 [STUDENT] ⚠️ Duplicate message, skipping');
-        return prev;
-      }
-      
-      console.log('📩 [STUDENT] ✅ Adding message');
-      
-      return [...prev, {
-        ...data,
-        id: data.id || data.messageId || Date.now(),
-        isOwn: String(data.sender_id) === String(currentUserId)
-      }];
-    });
+    if (isDuplicate) {
+      console.log('📩 [STUDENT] Duplicate detected, updating instead');
+      // Update existing message with DB ID
+      return prev.map(m => {
+        if (m.id === data.messageId) {
+          // This is our optimistic message, update it with DB ID
+          return {
+            ...m,
+            id: data.id,  // Replace temp ID with DB ID
+            status: 'delivered'
+          };
+        }
+        return m;
+      });
+    }
+    
+    console.log('📩 [STUDENT] ✅ Adding new message');
+    
+    return [...prev, {
+      ...data,
+      id: data.id || data.messageId || Date.now(),
+      isOwn: String(data.sender_id) === String(currentUserId)
+    }];
   });
+});
 
   socket.on('message_delivered', ({ messageId, dbMessageId, status }) => {
     console.log('✅ [STUDENT] Message delivered:', messageId);

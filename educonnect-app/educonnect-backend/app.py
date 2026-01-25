@@ -1286,7 +1286,7 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification - FIXED (no duplicates)"""
+    """Handle message sending with FCM notification - FIXED (instant for both)"""
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
@@ -1301,8 +1301,6 @@ def handle_send_message_with_notification(data):
         print(f"\n{'='*70}")
         print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
         print(f"📤 [MESSAGE] Conversation: {conversation_id}")
-        print(f"📤 [MESSAGE] Text: {text}")
-        print(f"📤 [MESSAGE] File: {file_url}")
         print(f"{'='*70}")
         
         # Get or create conversation
@@ -1343,6 +1341,7 @@ def handle_send_message_with_notification(data):
         # Prepare message data
         message_data = {
             'id': message.id,
+            'messageId': message_id,  # ✅ Include temp ID for frontend matching
             'conversationId': conversation_id,
             'sender_id': sender_id,
             'receiver_id': receiver_id,
@@ -1354,31 +1353,26 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
         
-        # ✅ CRITICAL FIX: Only send to RECEIVER, not sender
-        # The sender already has the message in their UI (optimistic update)
+        # ✅ Send to BOTH sender and receiver
+        # Frontend will handle deduplication
         
+        # Send to receiver
         receiver_sid = active_connections.get(receiver_id)
-        
         if receiver_sid:
-            # Send directly to receiver's socket
             emit('receive_message', message_data, room=receiver_sid)
-            print(f"📡 [MESSAGE] Sent directly to receiver SID: {receiver_sid}")
-        else:
-            print(f"⚠️ [MESSAGE] Receiver {receiver_id} not online")
-            
-            # Emit to rooms as fallback (receiver might be in room but not in active_connections)
-            # Use skip_sid to exclude sender
-            emit('receive_message', message_data, room=conversation_id, skip_sid=request.sid)
-            
-            alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
-            alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
-            
-            emit('receive_message', message_data, room=alt_room_1, skip_sid=request.sid)
-            emit('receive_message', message_data, room=alt_room_2, skip_sid=request.sid)
-            
-            print(f"📡 [MESSAGE] Emitted to rooms (excluding sender)")
+            print(f"📡 [MESSAGE] Sent to receiver: {receiver_sid}")
         
-        # Send FCM notification (for offline users)
+        # Send to sender (so they get the DB ID)
+        sender_sid = active_connections.get(sender_id)
+        if sender_sid:
+            emit('receive_message', message_data, room=sender_sid)
+            print(f"📡 [MESSAGE] Sent to sender: {sender_sid}")
+        
+        # Fallback: emit to rooms (in case active_connections is out of sync)
+        emit('receive_message', message_data, room=conversation_id)
+        print(f"📡 [MESSAGE] Also emitted to room: {conversation_id}")
+        
+        # Send FCM notification
         send_message_notification(
             sender_id=sender_id,
             receiver_id=receiver_id,
@@ -1386,28 +1380,25 @@ def handle_send_message_with_notification(data):
             conversation_id=conversation.id
         )
         
-        # Send delivery confirmation to sender ONLY
+        # Send delivery confirmation to sender
         emit('message_delivered', {
             'messageId': message_id,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
         
-        print(f"✅ [MESSAGE] Message delivered successfully\n")
+        print(f"✅ [MESSAGE] Complete\n")
         
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
         import traceback
         traceback.print_exc()
-        
         db.session.rollback()
-        
         emit('message_error', {
             'error': str(e),
             'messageId': data.get('messageId')
         }, room=request.sid)
 
-        
 @socketio.on('join_conversation')
 def handle_join_conversation(data):
     """Join a conversation room"""
