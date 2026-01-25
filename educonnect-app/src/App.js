@@ -320,6 +320,64 @@ const downloadCourse = async (course) => {
     }
   };
 
+  // ================ SOCKET.IO INCOMING CALL HANDLER (APP LEVEL) ================
+useEffect(() => {
+  if (!isAuthenticated) return;
+
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userId = user?.id || Number(localStorage.getItem('userId'));
+  
+  if (!userId) {
+    console.error('❌ [APP] No user ID found for Socket.IO');
+    return;
+  }
+
+  console.log('🔌 [APP] Setting up Socket.IO for incoming calls');
+  
+  const socket = io(API_URL, {
+    auth: { userId: userId },
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 5,
+    transports: ['websocket', 'polling']
+  });
+
+  socket.on('connect', () => {
+    console.log(`✅ [APP SOCKET] Connected! Socket ID: ${socket.id}`);
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ [APP SOCKET] Disconnected: ${reason}`);
+  });
+
+  // Listen for incoming video calls
+  socket.on('incoming_video_call', (callData) => {
+    console.log('📞 [APP] Incoming call received via Socket.IO:', callData);
+    
+    // Don't show modal if already in chat view (let the chat component handle it)
+    if (currentView === 'chat') {
+      console.log('⏸️ [APP] Already in chat, letting chat component handle call');
+      return;
+    }
+    
+    // Set incoming call data to show the global modal
+    setIncomingCallData({
+      meetingId: callData.meetingId,
+      joinUrl: callData.joinUrl,
+      callerName: callData.callerName || 'Unknown Caller',
+      callerUserId: callData.callerId,
+      callerTutorProfileId: callData.callerTutorProfileId || null,
+      callerStudentId: callData.callerStudentId || null
+    });
+  });
+
+  return () => {
+    console.log('🔌 [APP] Cleaning up Socket.IO connection');
+    socket.off('incoming_video_call');
+    socket.disconnect();
+  };
+}, [isAuthenticated, currentView, API_URL]);
 
 
 // ================ NOTIFICATION HANDLER ================
@@ -1618,23 +1676,40 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
       />
 
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
-  {/* ✅ Incoming Call Modal - Hide when in chat view */}
-{incomingCallData  && (
+{/* ✅ Incoming Call Modal - Show on ALL views EXCEPT chat */}
+{incomingCallData && currentView !== 'chat' && (
   <GlobalIncomingCallModal
     callData={incomingCallData}
     onAccept={() => {
-      console.log('✅ [APP] Call accepted - navigating to chat');
-      console.log('📞 [APP] Auto-join data:', incomingCallData);
+      console.log('✅ [APP] Global call accepted - navigating to chat');
+      console.log('📞 [APP] Call data being passed:', incomingCallData);
+      
+      // Navigate to chat view - the chat component will auto-join using incomingCallData
       setCurrentView('chat');
       setMenuOpen(false);
+      
+      // Keep incomingCallData so chat can use it for auto-join
     }}
     onDecline={() => {
-      console.log('❌ [APP] Call declined');
+      console.log('❌ [APP] Global call declined');
+      
+      // Send decline notification via socket if needed
+      const socket = io(API_URL, {
+        auth: { userId: localStorage.getItem('userId') }
+      });
+      
+      socket.emit('call_declined', {
+        meetingId: incomingCallData.meetingId,
+        declinedBy: localStorage.getItem('userId'),
+        callerId: incomingCallData.callerUserId,
+      });
+      
+      socket.disconnect();
+      
       setIncomingCallData(null);
     }}
   />
 )}
-
       {/* Main Content Views */}
       {/* Main Content Views */}
 {!isAuthenticated ? (
