@@ -642,32 +642,16 @@ useEffect(() => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => {
-                  console.log('=== ALL MESSAGES DEBUG ===');
-                  messages.forEach((msg, i) => {
-                    console.log(`Message ${i}:`, {
-                      id: msg.id,
-                      text: msg.text,
-                      file_url: msg.file_url,
-                      file_type: msg.file_type,
-                      file_name: msg.file_name,
-                      timestamp: msg.timestamp
-                    });
-                  });
-                }}
-                className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30"
-              >
-                Debug
-              </button>
-              {/* 👇 PASTE VIDEO BUTTON HERE */}
-{/* Show join status for debugging */}
+             
+            
+{/* Show call data in header for debugging */}
 {autoJoinMeetingId && (
-  <div className="fixed top-16 left-0 right-0 bg-yellow-500 text-white p-2 text-center text-sm z-40">
-    📞 Auto-joining call: {autoJoinMeetingId.substring(0, 20)}...
+  <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-1 text-xs text-center">
+    🔴 Auto-join ready: {autoJoinMeetingId.substring(0, 15)}
   </div>
 )}
 
+{/* 👇 VIDEO CALL COMPONENT */}
 <DailyVideoCall
   currentUserId={currentUserId}
   selectedTutor={{
@@ -678,7 +662,6 @@ useEffect(() => {
   autoJoinMeetingId={autoJoinMeetingId}
   autoJoinUrl={autoJoinUrl}
   onCallEnded={onCallEnded}
-  callerName={undefined} // DailyVideoCall doesn't use callerName prop
 />
               <button 
                 onClick={() => setShowMessages(false)}
