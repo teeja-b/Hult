@@ -295,25 +295,34 @@ const sendMessage = async () => {
   }
 };
 
-  const handleTyping = () => {
-    if (socketRef.current && selectedConversation) {
-      socketRef.current.emit('typing', {
+const handleTyping = () => {
+  if (socketRef.current && socketRef.current.connected && selectedConversation) {
+    const studentId = selectedConversation.studentId || selectedConversation.partnerId;
+    
+    console.log('⌨️ [TUTOR] Emitting typing event:', {
+      conversationId: selectedConversation.id,
+      userId: currentTutorUserId,
+      toStudent: studentId
+    });
+    
+    socketRef.current.emit('typing', {
+      conversationId: selectedConversation.id,
+      userId: currentTutorUserId
+    });
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      console.log('⌨️ [TUTOR] Emitting stop_typing event');
+      socketRef.current.emit('stop_typing', {
         conversationId: selectedConversation.id,
         userId: currentTutorUserId
       });
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit('stop_typing', {
-          conversationId: selectedConversation.id,
-          userId: currentTutorUserId
-        });
-      }, 2000);
-    }
-  };
+    }, 2000);
+  }
+};
 
   const getMessageStatus = (msg) => {
     if (!msg.isOwn) return null;
