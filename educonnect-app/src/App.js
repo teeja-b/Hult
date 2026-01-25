@@ -1619,7 +1619,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
 
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
   {/* ✅ Incoming Call Modal - Hide when in chat view */}
-{incomingCallData && currentView !== 'chat' && (
+{incomingCallData  && (
   <GlobalIncomingCallModal
     callData={incomingCallData}
     onAccept={() => {
