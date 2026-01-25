@@ -1286,7 +1286,7 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification"""
+    """Handle message sending with FCM notification - FIXED VERSION"""
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
@@ -1298,7 +1298,12 @@ def handle_send_message_with_notification(data):
         file_type = data.get('file_type')
         file_name = data.get('file_name')
         
+        print(f"\n{'='*70}")
         print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
+        print(f"📤 [MESSAGE] Conversation: {conversation_id}")
+        print(f"📤 [MESSAGE] Text: {text}")
+        print(f"📤 [MESSAGE] File: {file_url}")
+        print(f"{'='*70}")
         
         # Get or create conversation
         conversation = Conversation.query.filter(
@@ -1315,9 +1320,10 @@ def handle_send_message_with_notification(data):
             )
             db.session.add(conversation)
             db.session.flush()
+            print(f"✅ [MESSAGE] Created new conversation {conversation.id}")
         else:
             conversation.last_message = text
-            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            conversation.last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         
         # Save message
         message = Message(
@@ -1332,7 +1338,9 @@ def handle_send_message_with_notification(data):
         db.session.add(message)
         db.session.commit()
         
-        # Broadcast via Socket.IO (for online users)
+        print(f"✅ [MESSAGE] Saved to database with ID: {message.id}")
+        
+        # Prepare message data
         message_data = {
             'id': message.id,
             'conversationId': conversation_id,
@@ -1346,9 +1354,27 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
         
+        # ✅ CRITICAL FIX: Emit to MULTIPLE room formats for compatibility
         emit('receive_message', message_data, room=conversation_id)
+        print(f"📡 [MESSAGE] Emitted to room: {conversation_id}")
         
-        # Send FCM notification (for offline users or background tabs)
+        # ✅ Also emit to alternative room formats
+        alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
+        alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
+        
+        emit('receive_message', message_data, room=alt_room_1)
+        emit('receive_message', message_data, room=alt_room_2)
+        print(f"📡 [MESSAGE] Also emitted to: {alt_room_1}, {alt_room_2}")
+        
+        # ✅ ALSO emit directly to receiver's socket (if online)
+        receiver_sid = active_connections.get(receiver_id)
+        if receiver_sid:
+            emit('receive_message', message_data, room=receiver_sid)
+            print(f"📡 [MESSAGE] Also sent directly to receiver SID: {receiver_sid}")
+        else:
+            print(f"⚠️ [MESSAGE] Receiver {receiver_id} not online, sent to rooms only")
+        
+        # Send FCM notification (for offline users)
         send_message_notification(
             sender_id=sender_id,
             receiver_id=receiver_id,
@@ -1362,6 +1388,8 @@ def handle_send_message_with_notification(data):
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
+        
+        print(f"✅ [MESSAGE] Message delivered successfully\n")
         
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
@@ -1452,33 +1480,54 @@ def handle_join_conversation(data):
             'conversationId': conversation_id,
             'userId': user_id
         }, room=conversation_id)
+
 @socketio.on('typing')
 def handle_typing(data):
-    """Handle typing indicators"""
+    """Handle typing indicators - FIXED VERSION"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
     
+    print(f"\n⌨️ [TYPING] ===== TYPING EVENT =====")
+    print(f"⌨️ [TYPING] User {user_id} is typing in {conversation_id}")
+    
     if conversation_id and user_id:
-        # Broadcast to everyone in the room except sender
+        # ✅ Emit to ALL possible room formats
         emit('user_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
-
+        
+        print(f"⌨️ [TYPING] Emitted to room: {conversation_id}")
+        
+        # ✅ Also broadcast to ALL connected users (fallback)
+        emit('user_typing', {
+            'userId': user_id,
+            'conversationId': conversation_id
+        }, broadcast=True, include_self=False)
+        
+        print(f"⌨️ [TYPING] Also broadcasted to all users")
 
 @socketio.on('stop_typing')
 def handle_stop_typing(data):
-    """Handle stop typing"""
+    """Handle stop typing - FIXED VERSION"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
     
+    print(f"⌨️ [TYPING] User {user_id} stopped typing in {conversation_id}")
+    
     if conversation_id and user_id:
-        emit('user_stopped_typing', {
+        # Emit to room
+        emit('user_stop_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
-
-
+        
+        # Also broadcast
+        emit('user_stop_typing', {
+            'userId': user_id,
+            'conversationId': conversation_id
+        }, broadcast=True, include_self=False)
+        
 @socketio.on('mark_as_read')
 def handle_mark_as_read(data):
     """Mark messages as read"""
