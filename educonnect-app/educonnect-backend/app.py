@@ -1286,7 +1286,7 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification - FIXED VERSION"""
+    """Handle message sending with FCM notification - FIXED (no duplicates)"""
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
@@ -1323,7 +1323,7 @@ def handle_send_message_with_notification(data):
             print(f"✅ [MESSAGE] Created new conversation {conversation.id}")
         else:
             conversation.last_message = text
-            conversation.last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         
         # Save message
         message = Message(
@@ -1354,25 +1354,29 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
         
-        # ✅ CRITICAL FIX: Emit to MULTIPLE room formats for compatibility
-        emit('receive_message', message_data, room=conversation_id)
-        print(f"📡 [MESSAGE] Emitted to room: {conversation_id}")
+        # ✅ CRITICAL FIX: Only send to RECEIVER, not sender
+        # The sender already has the message in their UI (optimistic update)
         
-        # ✅ Also emit to alternative room formats
-        alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
-        alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
-        
-        emit('receive_message', message_data, room=alt_room_1)
-        emit('receive_message', message_data, room=alt_room_2)
-        print(f"📡 [MESSAGE] Also emitted to: {alt_room_1}, {alt_room_2}")
-        
-        # ✅ ALSO emit directly to receiver's socket (if online)
         receiver_sid = active_connections.get(receiver_id)
+        
         if receiver_sid:
+            # Send directly to receiver's socket
             emit('receive_message', message_data, room=receiver_sid)
-            print(f"📡 [MESSAGE] Also sent directly to receiver SID: {receiver_sid}")
+            print(f"📡 [MESSAGE] Sent directly to receiver SID: {receiver_sid}")
         else:
-            print(f"⚠️ [MESSAGE] Receiver {receiver_id} not online, sent to rooms only")
+            print(f"⚠️ [MESSAGE] Receiver {receiver_id} not online")
+            
+            # Emit to rooms as fallback (receiver might be in room but not in active_connections)
+            # Use skip_sid to exclude sender
+            emit('receive_message', message_data, room=conversation_id, skip_sid=request.sid)
+            
+            alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
+            alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
+            
+            emit('receive_message', message_data, room=alt_room_1, skip_sid=request.sid)
+            emit('receive_message', message_data, room=alt_room_2, skip_sid=request.sid)
+            
+            print(f"📡 [MESSAGE] Emitted to rooms (excluding sender)")
         
         # Send FCM notification (for offline users)
         send_message_notification(
@@ -1382,7 +1386,7 @@ def handle_send_message_with_notification(data):
             conversation_id=conversation.id
         )
         
-        # Send delivery confirmation to sender
+        # Send delivery confirmation to sender ONLY
         emit('message_delivered', {
             'messageId': message_id,
             'dbMessageId': message.id,
@@ -1403,6 +1407,7 @@ def handle_send_message_with_notification(data):
             'messageId': data.get('messageId')
         }, room=request.sid)
 
+        
 @socketio.on('join_conversation')
 def handle_join_conversation(data):
     """Join a conversation room"""
@@ -1527,7 +1532,7 @@ def handle_stop_typing(data):
             'userId': user_id,
             'conversationId': conversation_id
         }, broadcast=True, include_self=False)
-        
+
 @socketio.on('mark_as_read')
 def handle_mark_as_read(data):
     """Mark messages as read"""
