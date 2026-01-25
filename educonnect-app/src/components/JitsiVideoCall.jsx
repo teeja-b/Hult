@@ -230,8 +230,11 @@ const DailyVideoCall = ({
       
       // Small delay to ensure DOM is stable
       const timer = setTimeout(() => {
-        if (isMountedRef.current && dailyContainerRef.current) {
+        if (isMountedRef.current && dailyContainerRef.current && document.body.contains(dailyContainerRef.current)) {
           initializeDailyCall(url);
+        } else {
+          console.log('⚠️ [VIDEO] Container became invalid, retrying...');
+          pendingJoinUrl.current = url;
         }
       }, 300);
 
