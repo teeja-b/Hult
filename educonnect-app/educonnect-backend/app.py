@@ -1354,17 +1354,9 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
         
-        # ✅ CRITICAL FIX: Emit to MULTIPLE room formats for compatibility
-        emit('receive_message', message_data, room=conversation_id)
-        print(f"📡 [MESSAGE] Emitted to room: {conversation_id}")
-        
-        # ✅ Also emit to alternative room formats
-        alt_room_1 = f"conversation:{sender_id}:{receiver_id}"
-        alt_room_2 = f"conversation:{receiver_id}:{sender_id}"
-        
-        emit('receive_message', message_data, room=alt_room_1)
-        emit('receive_message', message_data, room=alt_room_2)
-        print(f"📡 [MESSAGE] Also emitted to: {alt_room_1}, {alt_room_2}")
+        emit('receive_message', message_data, room=f"conversation_{conversation.id}")
+        print(f"📡 [MESSAGE] Emitted to room: conversation_{conversation.id}")
+
         
         # ✅ ALSO emit directly to receiver's socket (if online)
         receiver_sid = active_connections.get(receiver_id)
