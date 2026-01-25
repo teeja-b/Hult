@@ -23,6 +23,7 @@ const DailyVideoCall = ({
   const [callError, setCallError] = useState(null);
   const [isJoining, setIsJoining] = useState(false);
   const [dailyLoaded, setDailyLoaded] = useState(false);
+  const [containerMounted, setContainerMounted] = useState(false);
 
   const socketRef = useRef(null);
   const callFrameRef = useRef(null);
@@ -31,6 +32,7 @@ const DailyVideoCall = ({
   const participantUpdateTimeoutRef = useRef(null);
   const isMountedRef = useRef(true);
   const autoJoinAttemptedRef = useRef(false);
+  const pendingJoinUrl = useRef(null);
 
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -41,6 +43,16 @@ const DailyVideoCall = ({
       isMountedRef.current = false;
     };
   }, []);
+
+  // Track container mount
+  useEffect(() => {
+    if (isVideoCallOpen && dailyContainerRef.current) {
+      console.log('✅ [DAILY] Container mounted');
+      setContainerMounted(true);
+    } else {
+      setContainerMounted(false);
+    }
+  }, [isVideoCallOpen]);
 
   // Check if Daily.co is loaded
   useEffect(() => {
@@ -171,15 +183,14 @@ const DailyVideoCall = ({
     };
   }, []);
 
-  // Auto-join call from notification - FIXED VERSION
+  // Auto-join call from notification
   useEffect(() => {
-    // Reset auto-join flag when props change
     if (!autoJoinMeetingId || !autoJoinUrl) {
       autoJoinAttemptedRef.current = false;
+      pendingJoinUrl.current = null;
       return;
     }
 
-    // Only attempt once per notification
     if (autoJoinAttemptedRef.current) {
       console.log('⏸️ [VIDEO] Auto-join already attempted');
       return;
@@ -194,7 +205,6 @@ const DailyVideoCall = ({
     console.log('📞 [VIDEO] Meeting ID:', autoJoinMeetingId);
     console.log('📞 [VIDEO] Join URL:', autoJoinUrl);
     
-    // Validate URL
     if (!autoJoinUrl.startsWith('http')) {
       console.error('❌ [VIDEO] Invalid join URL:', autoJoinUrl);
       setCallError('Invalid video call link');
@@ -202,24 +212,32 @@ const DailyVideoCall = ({
       return;
     }
 
-    // Mark as attempted
     autoJoinAttemptedRef.current = true;
+    pendingJoinUrl.current = autoJoinUrl;
 
-    // Open video call window
     console.log('🎬 [VIDEO] Opening video call window');
     setCurrentMeetingId(autoJoinMeetingId);
     setCurrentMeetingUrl(autoJoinUrl);
     setIsVideoCallOpen(true);
-
-    // Wait for DOM to be ready, then initialize
-    const initTimer = setTimeout(() => {
-      if (isMountedRef.current) {
-        initializeDailyCall(autoJoinUrl);
-      }
-    }, 500);
-
-    return () => clearTimeout(initTimer);
   }, [autoJoinMeetingId, autoJoinUrl, dailyLoaded]);
+
+  // Initialize call when container is ready
+  useEffect(() => {
+    if (containerMounted && pendingJoinUrl.current && !isInitializingRef.current) {
+      console.log('✅ [VIDEO] Container ready, initializing call');
+      const url = pendingJoinUrl.current;
+      pendingJoinUrl.current = null;
+      
+      // Small delay to ensure DOM is stable
+      const timer = setTimeout(() => {
+        if (isMountedRef.current && dailyContainerRef.current) {
+          initializeDailyCall(url);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [containerMounted]);
 
   const startVideoCall = async () => {
     if (!selectedTutor) {
@@ -276,14 +294,8 @@ const DailyVideoCall = ({
 
       setCurrentMeetingUrl(data.roomUrl);
       setCurrentMeetingId(data.roomName);
+      pendingJoinUrl.current = data.roomUrl;
       setIsVideoCallOpen(true);
-
-      // Wait for container to mount
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          initializeDailyCall(data.roomUrl);
-        }
-      }, 500);
 
       // Notify tutor
       if (socketRef.current?.connected) {
@@ -321,13 +333,25 @@ const DailyVideoCall = ({
       return;
     }
 
+    if (!dailyContainerRef.current) {
+      console.error('❌ [DAILY] Container ref is null');
+      setCallError('Video container not ready');
+      return;
+    }
+
+    if (!document.body.contains(dailyContainerRef.current)) {
+      console.error('❌ [DAILY] Container not in DOM');
+      setCallError('Video container not attached');
+      return;
+    }
+
     // Destroy existing frame
     if (callFrameRef.current) {
       console.log('🗑️ [DAILY] Destroying existing frame...');
       try {
         await callFrameRef.current.destroy();
         callFrameRef.current = null;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (e) {
         console.log('Warning: Error destroying old frame:', e);
         callFrameRef.current = null;
@@ -340,33 +364,21 @@ const DailyVideoCall = ({
       return;
     }
 
-    // Wait for container to be ready
-    let retries = 0;
-    while (!dailyContainerRef.current && retries < 20 && isMountedRef.current) {
-      console.log(`⏳ [DAILY] Waiting for container... (attempt ${retries + 1})`);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      retries++;
-    }
-
-    if (!dailyContainerRef.current) {
-      console.error('❌ [DAILY] Container not ready after waiting');
-      setCallError('Video container not ready');
-      return;
-    }
-
-    // Verify container is in DOM
-    if (!document.body.contains(dailyContainerRef.current)) {
-      console.error('❌ [DAILY] Container not in DOM');
-      setCallError('Video container not attached');
-      return;
-    }
-
     isInitializingRef.current = true;
     setIsJoining(true);
     console.log('🎥 [DAILY] Creating call frame...');
-    console.log('📦 [DAILY] Container element:', dailyContainerRef.current);
 
     try {
+      // Final check before creating frame
+      if (!dailyContainerRef.current || !isMountedRef.current) {
+        throw new Error('Container no longer available');
+      }
+
+      // Clear container content
+      dailyContainerRef.current.innerHTML = '';
+
+      console.log('📦 [DAILY] Creating Daily frame in container');
+      
       const callFrame = window.DailyIframe.createFrame(dailyContainerRef.current, {
         iframeStyle: {
           width: '100%',
@@ -379,6 +391,11 @@ const DailyVideoCall = ({
         showLocalVideo: true,
         showParticipantsBar: !isMobile
       });
+
+      // Verify frame was created
+      if (!callFrame) {
+        throw new Error('Failed to create Daily frame');
+      }
 
       console.log('✅ [DAILY] Frame created successfully');
       callFrameRef.current = callFrame;
@@ -480,14 +497,9 @@ const DailyVideoCall = ({
 
     setCurrentMeetingUrl(incomingCall.joinUrl);
     setCurrentMeetingId(incomingCall.meetingId);
+    pendingJoinUrl.current = incomingCall.joinUrl;
     setIsVideoCallOpen(true);
     setCallRinging(false);
-
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        initializeDailyCall(incomingCall.joinUrl);
-      }
-    }, 500);
 
     if (socketRef.current?.connected) {
       socketRef.current.emit('call_accepted', {
@@ -533,6 +545,7 @@ const DailyVideoCall = ({
 
     isInitializingRef.current = false;
     autoJoinAttemptedRef.current = false;
+    pendingJoinUrl.current = null;
 
     const meetingId = currentMeetingId;
     const otherUserId = selectedTutor?.user_id || incomingCall?.callerId;
@@ -547,6 +560,7 @@ const DailyVideoCall = ({
     setParticipantCount(0);
     setCallError(null);
     setIsJoining(false);
+    setContainerMounted(false);
 
     if (socketRef.current?.connected && meetingId) {
       socketRef.current.emit('end_video_call', {
