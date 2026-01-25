@@ -946,36 +946,60 @@ def handle_initiate_video_call_with_notification(data):
 
 
 # Update call_accepted handler
+# In your app.py, update the call_accepted handler (around line 550)
+
 @socketio.on('call_accepted')
 def handle_call_accepted(data):
-    """Handle call acceptance - FIXED"""
+    """Handle call acceptance - ENHANCED"""
     try:
         meeting_id = data.get('meetingId')
         accepted_by = data.get('acceptedBy')
-        caller_id = data.get('callerId')  # Add this
+        caller_id = data.get('callerId')
         
         print(f"✅ [VIDEO] Call {meeting_id} accepted by: {accepted_by}")
+        print(f"✅ [VIDEO] Notifying caller: {caller_id}")
         
-        # Notify the caller
-        if caller_id:
-            caller_sid = active_connections.get(caller_id)
-            if caller_sid:
-                emit('call_accepted', {
-                    'meetingId': meeting_id,
-                    'acceptedBy': accepted_by
-                }, room=caller_sid)
-                print(f"✅ [VIDEO] Notified caller {caller_id}")
+        # Get caller's socket ID
+        caller_sid = active_connections.get(caller_id)
+        
+        if caller_sid:
+            print(f"✅ [VIDEO] Found caller socket: {caller_sid}")
+            # Send to specific caller
+            emit('call_accepted', {
+                'meetingId': meeting_id,
+                'acceptedBy': accepted_by
+            }, room=caller_sid)
         else:
+            print(f"⚠️ [VIDEO] Caller {caller_id} not connected, broadcasting")
             # Fallback: broadcast to all
             emit('call_accepted', {
                 'meetingId': meeting_id,
                 'acceptedBy': accepted_by
             }, broadcast=True)
         
+        # ALSO send FCM notification to caller
+        try:
+            accepter = User.query.get(accepted_by)
+            if accepter and caller_id:
+                send_fcm_notification(
+                    user_id=caller_id,
+                    title=f"{accepter.full_name} joined the call",
+                    body="Click to continue the video call",
+                    data={
+                        'type': 'call_accepted',
+                        'meeting_id': meeting_id,
+                        'url': '/'
+                    },
+                    notification_type='call'
+                )
+        except Exception as e:
+            print(f"⚠️ [VIDEO] FCM notification failed: {e}")
+        
     except Exception as e:
         print(f"❌ [VIDEO] Error accepting call: {e}")
-
-
+        import traceback
+        traceback.print_exc()
+        
 # Update call_declined handler
 @socketio.on('call_declined')
 def handle_call_declined(data):
