@@ -327,7 +327,7 @@ useEffect(() => {
 
     try {
       const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      const conversationKey = `conversation:${currentUserId}:${tutor.user_id}`;
       
       if (socketRef.current) {
         socketRef.current.emit('join_conversation', {
@@ -459,7 +459,7 @@ useEffect(() => {
     }
   };
 
- const sendMessage = async () => {
+const sendMessage = async () => {
   if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
 
   const tempId = Date.now();
@@ -472,17 +472,8 @@ useEffect(() => {
     try {
       console.log('📤 Uploading file...', attachmentFile.name);
       
-      // Show uploading indicator
-      setMessages(prev => [...prev, {
-        id: tempId,
-        sender_id: currentUserId,
-        text: '📤 Uploading file...',
-        timestamp: new Date().toISOString(),
-        isOwn: true,
-        status: 'uploading'
-      }]);
-      
-      const conversationKey = `conversation:${currentUserId}:${selectedTutor.tutor_profile_id || selectedTutor.id}`;
+      // ✅ FIX: Use consistent conversation ID
+      const conversationKey = `conversation:${currentUserId}:${selectedTutor.user_id}`;
       
       const formData = new FormData();
       formData.append('file', attachmentFile);
@@ -513,7 +504,7 @@ useEffect(() => {
       
       console.log('✅ File uploaded successfully:', fileUrl);
       
-      // Remove uploading message
+      // Remove uploading message if exists
       setMessages(prev => prev.filter(m => m.id !== tempId));
       
     } catch (err) {
@@ -544,18 +535,16 @@ useEffect(() => {
   if (fileInputRef.current) fileInputRef.current.value = '';
 
   try {
-    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+    // ✅ FIX: Use consistent conversation ID
+    const conversationKey = `conversation:${currentUserId}:${selectedTutor.user_id}`;
 
-    // 🔥 CRITICAL FIX: Send via Socket.IO which will save to database
+    // Send via Socket.IO
     if (socketRef.current && socketRef.current.connected) {
-      // Create a promise to wait for message delivery confirmation
       const messageDeliveryPromise = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Message delivery timeout'));
-        }, 10000); // 10 second timeout
+        }, 10000);
 
-        // Listen for delivery confirmation
         socketRef.current.once('message_delivered', (data) => {
           clearTimeout(timeout);
           if (data.messageId === tempId) {
@@ -563,14 +552,10 @@ useEffect(() => {
           }
         });
       });
-      console.log('📤 About to emit to socket:', {
-  fileUrl: fileUrl,
-  fileType: fileType,
-  fileName: fileName,
-  text: msg.text
-});
 
-      // Emit the message
+      console.log('📤 [STUDENT] Emitting message to conversation:', conversationKey);
+
+      // ✅ Emit the message
       socketRef.current.emit('send_message', {
         conversationId: conversationKey,
         sender_id: currentUserId,
@@ -583,20 +568,18 @@ useEffect(() => {
         file_name: fileName
       });
 
-      console.log(`[STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
+      console.log(`✅ [STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
 
       // Wait for delivery confirmation
       try {
         const dbMessageId = await messageDeliveryPromise;
         console.log(`✅ [STUDENT] Message saved to database with ID: ${dbMessageId}`);
         
-        // Update message status to 'sent' with database ID
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, id: dbMessageId, status: 'sent' } : m
         ));
       } catch (err) {
-        console.warn('⚠️ [STUDENT] Message delivery timeout, but message may have been sent');
-        // Mark as sent anyway since socket is connected
+        console.warn('⚠️ [STUDENT] Message delivery timeout');
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, status: 'sent' } : m
         ));
@@ -609,10 +592,10 @@ useEffect(() => {
       return;
     }
 
-    // Save to storage as backup
+    // Save to storage
     const conversationData = {
       tutorUserId: selectedTutor.user_id,
-      tutorProfileId: tutorProfileId,
+      tutorProfileId: selectedTutor.tutor_profile_id || selectedTutor.id,
       tutorName: selectedTutor.name,
       studentId: currentUserId,
       studentName: 'Student Name',
