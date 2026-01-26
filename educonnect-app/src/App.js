@@ -30,7 +30,7 @@ import DailyVideoCall from './components/JitsiVideoCall';
 // Around line 17, add this import with your other component imports:
 import AITutorMatcher from './components/AITutorMatch';
 // Add this with your other imports (around line 1-20)
-import { playRingtone, stopRingtone } from './firebaseConfig';
+
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
   
