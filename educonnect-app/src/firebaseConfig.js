@@ -12,6 +12,20 @@ const firebaseConfig = {
   measurementId: "G-4CSVJ017JB"
 };
 
+// Add this function near the top of firebaseConfig.js
+function triggerVibration(pattern = [200, 100, 200]) {
+  try {
+    if ('vibrate' in navigator) {
+      navigator.vibrate(pattern);
+      console.log('📳 [VIBRATE] Triggered:', pattern);
+    } else {
+      console.warn('⚠️ [VIBRATE] Not supported');
+    }
+  } catch (error) {
+    console.error('❌ [VIBRATE] Error:', error);
+  }
+}
+
 // 🔥 CRITICAL: Make sure this VAPID key matches your Firebase Console
 const VAPID_KEY = 'BFQpL8IdUKwyIhGevetM_Ayo7gZPDmHsm4UyHq0DVpuxr9K9lViXsp6eYCAgsL8pSfR-DoP9feY3fDB_Lfo6S-Y';
 // 🎵 RINGTONE MANAGER
@@ -269,9 +283,12 @@ export function setupForegroundMessageListener(callback) {
     const data = payload.data || {};
     
     // 🎵 PLAY RINGTONE FOR CALLS
-    if (data.type === 'call') {
-      playRingtone();
-    }
+  if (data.type === 'call') {
+    playRingtone();
+    triggerVibration([500, 250, 500, 250, 500, 250, 500]); // ✅ Add manual vibration
+  } else {
+    triggerVibration([200, 100, 200]); // ✅ Add vibration for other notifications
+  }
     
     if (Notification.permission === 'granted') {
       const title = notification.title || data.title || 'New notification';
