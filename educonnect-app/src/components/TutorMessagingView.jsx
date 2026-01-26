@@ -58,6 +58,7 @@ const TutorMessagingView = ({
     }
   };
 
+
   const removeAttachment = () => {
     setAttachmentFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -117,7 +118,6 @@ const TutorMessagingView = ({
  // Replace the sendMessage function in TutorMessagingView.jsx (around line 150)
 
 // Replace the sendMessage function in TutorMessagingView.jsx (around line 150)
-
 const sendMessage = async () => {
   if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
 
@@ -133,16 +133,14 @@ const sendMessage = async () => {
   let fileType = null;
   let fileName = null;
 
-  // Handle file upload FIRST if there's a file
+  // Handle file upload if there's a file
   if (attachmentFile) {
     try {
       console.log('📤 Uploading file...', attachmentFile.name);
       
-      const conversationKey = selectedConversation.id;
-      
       const formData = new FormData();
       formData.append('file', attachmentFile);
-      formData.append('conversation_id', conversationKey);
+      formData.append('conversation_id', selectedConversation.id);
       
       const token = localStorage.getItem('token');
       
@@ -195,33 +193,23 @@ const sendMessage = async () => {
   if (fileInputRef.current) fileInputRef.current.value = '';
 
   try {
-    // Send via Socket.IO which will save to database
     if (socketRef.current && socketRef.current.connected) {
-      // Create a promise to wait for message delivery confirmation
       const messageDeliveryPromise = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Message delivery timeout'));
-        }, 10000); // 10 second timeout
-
-        // Listen for delivery confirmation
+        const timeout = setTimeout(() => reject(new Error('Timeout')), 10000);
         socketRef.current.once('message_delivered', (data) => {
           clearTimeout(timeout);
-          if (data.messageId === tempId) {
-            resolve(data.dbMessageId);
-          }
+          if (data.messageId === tempId) resolve(data.dbMessageId);
         });
       });
 
-      console.log('📤 About to emit to socket:', {
-  fileUrl: fileUrl,
-  fileType: fileType,
-  fileName: fileName,
-  text: msg.text
-});
+      // ✅ FIX: Emit to BOTH room formats for guaranteed delivery
+      const stringRoomKey = getConversationKey(studentId, currentTutorUserId);
+      
+      console.log('📤 [TUTOR] Emitting to rooms:', stringRoomKey, selectedConversation.id);
 
-      // Emit the message
+      // Emit to string-based room
       socketRef.current.emit('send_message', {
-        conversationId: selectedConversation.id,
+        conversationId: stringRoomKey,
         sender_id: currentTutorUserId,
         receiver_id: studentId,
         text: msg.text,
@@ -231,21 +219,33 @@ const sendMessage = async () => {
         file_type: fileType,
         file_name: fileName
       });
-      
-      console.log(`[TUTOR] Sent message to student ${studentId}`);
 
-      // Wait for delivery confirmation
+      // ✅ ALSO emit to database ID room if it's numeric
+      if (typeof selectedConversation.id === 'number') {
+        socketRef.current.emit('send_message', {
+          conversationId: selectedConversation.id,
+          sender_id: currentTutorUserId,
+          receiver_id: studentId,
+          text: msg.text,
+          timestamp: msg.timestamp,
+          messageId: tempId,
+          file_url: fileUrl,
+          file_type: fileType,
+          file_name: fileName
+        });
+      }
+      
+      console.log(`✅ [TUTOR] Sent message to student ${studentId}`);
+
       try {
         const dbMessageId = await messageDeliveryPromise;
         console.log(`✅ [TUTOR] Message saved to database with ID: ${dbMessageId}`);
         
-        // Update message status to 'sent' with database ID
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, id: dbMessageId, status: 'sent' } : m
         ));
       } catch (err) {
-        console.warn('⚠️ [TUTOR] Message delivery timeout, but message may have been sent');
-        // Mark as sent anyway since socket is connected
+        console.warn('⚠️ [TUTOR] Message delivery timeout');
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, status: 'sent' } : m
         ));
@@ -258,7 +258,7 @@ const sendMessage = async () => {
       return;
     }
 
-    // Save to storage as backup
+    // Save to storage
     const studentName = selectedConversation.studentName || selectedConversation.partnerName || 'Student';
     
     const conversationData = {
@@ -278,7 +278,6 @@ const sendMessage = async () => {
       localStorage.setItem(selectedConversation.id, JSON.stringify(conversationData));
     }
 
-    // Update conversations list
     setConversations(prevConvs =>
       prevConvs.map(conv =>
         conv.id === selectedConversation.id
@@ -554,17 +553,25 @@ useEffect(() => {
   if (socketRef.current && socketRef.current.connected && selectedConversation) {
     const studentId = selectedConversation.studentId || selectedConversation.partnerId;
     
-    console.log('🚪 [TUTOR] Joining conversation room:', {
-      conversationId: selectedConversation.id,
-      studentId: studentId,
-      tutorId: currentTutorUserId
-    });
+    // ✅ Join both room formats for compatibility
+    const roomKey = getConversationKey(studentId, currentTutorUserId);
     
     socketRef.current.emit('join_conversation', {
-      conversationId: selectedConversation.id,
+      conversationId: roomKey,
       userId: currentTutorUserId,
       partnerId: studentId
     });
+    
+    // Also join database ID format if it exists
+    if (typeof selectedConversation.id === 'number') {
+      socketRef.current.emit('join_conversation', {
+        conversationId: selectedConversation.id,
+        userId: currentTutorUserId,
+        partnerId: studentId
+      });
+    }
+    
+    console.log(`[TUTOR] Joined rooms for conversation with student ${studentId}`);
   }
 }, [selectedConversation, currentTutorUserId]);
 
@@ -575,29 +582,38 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [tutorProfileId]);
 
-  // Auto-join all conversation rooms when conversations load
-  useEffect(() => {
-    if (socketRef.current && socketRef.current.connected && conversations.length > 0) {
-      console.log('[TUTOR] Auto-joining all conversation rooms...');
+useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && conversations.length > 0) {
+    console.log('[TUTOR] Auto-joining all conversation rooms...');
+    
+    conversations.forEach(conv => {
+      const studentId = conv.studentId || conv.partnerId;
       
-      conversations.forEach(conv => {
-        const studentId = conv.studentId || conv.partnerId;
+      if (studentId) {
+        // ✅ Use consistent room format
+        const roomKey = getConversationKey(studentId, currentTutorUserId);
         
-        if (studentId) {
+        socketRef.current.emit('join_conversation', {
+          conversationId: roomKey,
+          userId: currentTutorUserId,
+          partnerId: studentId
+        });
+        
+        // ✅ ALSO join the database ID format if it exists
+        if (typeof conv.id === 'number') {
           socketRef.current.emit('join_conversation', {
             conversationId: conv.id,
             userId: currentTutorUserId,
             partnerId: studentId
           });
-          
-          const studentName = conv.studentName || conv.partnerName || 'Student';
-          console.log(`[TUTOR] Joined room for conversation with ${studentName} (student ID: ${studentId})`);
+          console.log(`[TUTOR] Joined DB room: ${conv.id} and string room: ${roomKey}`);
         } else {
-          console.warn('[TUTOR] WARNING: Conversation missing student ID:', conv);
+          console.log(`[TUTOR] Joined room: ${roomKey}`);
         }
-      });
-    }
-  }, [conversations, currentTutorUserId]);
+      }
+    });
+  }
+}, [conversations, currentTutorUserId]);
 
   const loadConversations = async () => {
     try {

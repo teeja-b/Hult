@@ -236,68 +236,41 @@ useEffect(() => {
   };
 }, [currentUserId]); // ✅ Only currentUserId
 
-// ✅ ADD THIS NEW EFFECT - Auto-join rooms when tutors load (JUST LIKE TUTOR DOES)
 useEffect(() => {
   if (socketRef.current && socketRef.current.connected && tutors.length > 0) {
     console.log('[STUDENT] 🚪 Auto-joining all conversation rooms...');
-    console.log('[STUDENT] 📊 Socket connected:', socketRef.current.connected);
-    console.log('[STUDENT] 👥 Number of tutors:', tutors.length);
     
     tutors.forEach(tutor => {
-      const tutorProfileId = tutor.tutor_profile_id || tutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+      // ✅ Use user_id for consistent room naming
+      const tutorUserId = tutor.user_id;
+      const conversationKey = `conversation:${currentUserId}:${tutorUserId}`;
       
       socketRef.current.emit('join_conversation', {
         conversationId: conversationKey,
         userId: currentUserId,
-        partnerId: tutor.user_id
+        partnerId: tutorUserId
       });
       
-      console.log(`[STUDENT] ✅ Joined room: ${conversationKey} for tutor: ${tutor.name} (user_id: ${tutor.user_id})`);
+      console.log(`[STUDENT] ✅ Joined room: ${conversationKey}`);
     });
-    
-    console.log('[STUDENT] 🎉 Finished auto-joining all rooms');
   }
-}, [tutors, currentUserId, connectionStatus]); // ✅ Re-run when tutors load OR socket reconnects
+}, [tutors, currentUserId, connectionStatus]);
 
 useEffect(() => {
   if (socketRef.current && socketRef.current.connected && selectedTutor) {
-    const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-    const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
+    const tutorUserId = selectedTutor.user_id;
+    const conversationKey = `conversation:${currentUserId}:${tutorUserId}`;
     
-    console.log('🚪 [STUDENT] Joining conversation rooms');
-    console.log('🚪 [STUDENT] Main room:', conversationKey);
-    console.log('🚪 [STUDENT] Tutor user ID:', selectedTutor.user_id);
+    console.log('🚪 [STUDENT] Joining conversation room:', conversationKey);
     
-    // ✅ JOIN MULTIPLE ROOM FORMATS for cross-compatibility
     socketRef.current.emit('join_conversation', {
       conversationId: conversationKey,
       userId: currentUserId,
-      partnerId: selectedTutor.user_id  // Tutor's USER ID (not profile ID)
+      partnerId: tutorUserId
     });
-    
-    // ✅ ALSO join alternative room formats
-    const altRoom1 = `conversation:${currentUserId}:${selectedTutor.user_id}`;
-    const altRoom2 = `conversation:${selectedTutor.user_id}:${currentUserId}`;
-    
-    console.log('🚪 [STUDENT] Also joining alt rooms:', altRoom1, altRoom2);
-    
-    // Join alternative formats
-    socketRef.current.emit('join_conversation', {
-      conversationId: altRoom1,
-      userId: currentUserId,
-      partnerId: selectedTutor.user_id
-    });
-    
-    socketRef.current.emit('join_conversation', {
-      conversationId: altRoom2,
-      userId: currentUserId,
-      partnerId: selectedTutor.user_id
-    });
-    
-    console.log('✅ [STUDENT] Joined all conversation rooms');
   }
 }, [selectedTutor, currentUserId]);
+
   useEffect(() => {
     const fetchTutors = async () => {
       try {
@@ -621,28 +594,29 @@ const sendMessage = async () => {
   }
 };
 
-  const handleTyping = () => {
-    if (socketRef.current && selectedTutor) {
-      const tutorProfileId = selectedTutor.tutor_profile_id || selectedTutor.id;
-      const conversationKey = `conversation:${currentUserId}:${tutorProfileId}`;
-      
-      socketRef.current.emit('typing', {
+const handleTyping = () => {
+  if (socketRef.current && selectedTutor) {
+    // ✅ FIX: Use user_id consistently
+    const tutorUserId = selectedTutor.user_id;
+    const conversationKey = `conversation:${currentUserId}:${tutorUserId}`;
+    
+    socketRef.current.emit('typing', {
+      conversationId: conversationKey,
+      userId: currentUserId
+    });
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      socketRef.current.emit('stop_typing', {
         conversationId: conversationKey,
         userId: currentUserId
       });
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit('stop_typing', {
-          conversationId: conversationKey,
-          userId: currentUserId
-        });
-      }, 2000);
-    }
-  };
+    }, 2000);
+  }
+};
 
   const getMessageStatus = (msg) => {
     if (!msg.isOwn) return null;
