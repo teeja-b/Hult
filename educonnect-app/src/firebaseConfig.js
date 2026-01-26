@@ -12,20 +12,21 @@ const firebaseConfig = {
   measurementId: "G-4CSVJ017JB"
 };
 
-// Add this function near the top of firebaseConfig.js
 function triggerVibration(pattern = [200, 100, 200]) {
   try {
     if ('vibrate' in navigator) {
-      navigator.vibrate(pattern);
-      console.log('📳 [VIBRATE] Triggered:', pattern);
+      const success = navigator.vibrate(pattern);
+      console.log('📳 [VIBRATE] Triggered:', pattern, 'Success:', success);
+      return success;
     } else {
-      console.warn('⚠️ [VIBRATE] Not supported');
+      console.warn('⚠️ [VIBRATE] API not supported');
+      return false;
     }
   } catch (error) {
     console.error('❌ [VIBRATE] Error:', error);
+    return false;
   }
 }
-
 // 🔥 CRITICAL: Make sure this VAPID key matches your Firebase Console
 const VAPID_KEY = 'BFQpL8IdUKwyIhGevetM_Ayo7gZPDmHsm4UyHq0DVpuxr9K9lViXsp6eYCAgsL8pSfR-DoP9feY3fDB_Lfo6S-Y';
 // 🎵 RINGTONE MANAGER
@@ -283,12 +284,14 @@ export function setupForegroundMessageListener(callback) {
     const data = payload.data || {};
     
     // 🎵 PLAY RINGTONE FOR CALLS
-  if (data.type === 'call') {
-    playRingtone();
-    triggerVibration([500, 250, 500, 250, 500, 250, 500]); // ✅ Add manual vibration
-  } else {
-    triggerVibration([200, 100, 200]); // ✅ Add vibration for other notifications
-  }
+    if (data.type === 'call') {
+      playRingtone();
+      // ✅ VIBRATE FOR CALLS - Long pattern
+      triggerVibration([500, 250, 500, 250, 500, 250, 500]);
+    } else {
+      // ✅ VIBRATE FOR OTHER NOTIFICATIONS - Short pattern
+      triggerVibration([200, 100, 200]);
+    }
     
     if (Notification.permission === 'granted') {
       const title = notification.title || data.title || 'New notification';
@@ -298,9 +301,11 @@ export function setupForegroundMessageListener(callback) {
         badge: '/icons/icon-192x192.png',
         tag: data.type || 'general',
         requireInteraction: data.type === 'call',
-        vibrate: data.type === 'call' ? [200, 100, 200] : [100],
+        vibrate: data.type === 'call' 
+          ? [500, 250, 500, 250, 500, 250, 500] 
+          : [200, 100, 200],
         data: data,
-        silent: false // Silent notification, ringtone plays instead
+        silent: false // ✅ IMPORTANT: Set to false
       };
       
       console.log('🔔 [FCM] Showing notification:', title);

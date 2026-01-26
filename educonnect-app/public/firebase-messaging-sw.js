@@ -27,32 +27,31 @@ messaging.onBackgroundMessage((payload) => {
   const notificationBody = payload.notification?.body || '';
   const data = payload.data || {};
   
-  const notificationOptions = {
-    body: notificationBody,
-    icon: payload.notification?.icon || '/logo192.png',
-    badge: '/logo192.png',
-    image: payload.notification?.image || null,
-    tag: data.type || 'general',
-    renotify: true,
-    requireInteraction: data.type === 'call',
-    silent: false,
-    vibrate: data.type === 'call' 
-  ? [200, 100, 200, 100, 200]
-  : [100, 50, 100],
-
-    timestamp: Date.now(),
-    dir: 'ltr',
-    lang: 'en',
-    data: {
-      url: data.url || data.click_action || '/',
-      meeting_id: data.meeting_id || data.meetingId || '',
-      join_url: data.join_url || data.joinUrl || '',  // ✅ Critical for video calls
-      conversation_id: data.conversation_id || data.conversationId || '',
-      type: data.type || 'general',
-      timestamp: data.timestamp || new Date().toISOString()
-    },
-    actions: getActionsForType(data.type, data)
-  };
+const notificationOptions = {
+  body: notificationBody,
+  icon: payload.notification?.icon || '/logo192.png',
+  badge: '/logo192.png',
+  image: payload.notification?.image || null,
+  tag: data.type || 'general',
+  renotify: true,
+  requireInteraction: data.type === 'call',
+  silent: false, // ✅ CHANGED: Must be false for vibration to work
+  vibrate: data.type === 'call' 
+    ? [500, 250, 500, 250, 500, 250, 500] // ✅ Long pattern for calls
+    : [200, 100, 200], // ✅ Short pattern for messages
+  timestamp: Date.now(),
+  dir: 'ltr',
+  lang: 'en',
+  data: {
+    url: data.url || data.click_action || '/',
+    meeting_id: data.meeting_id || data.meetingId || '',
+    join_url: data.join_url || data.joinUrl || '',
+    conversation_id: data.conversation_id || data.conversationId || '',
+    type: data.type || 'general',
+    timestamp: data.timestamp || new Date().toISOString()
+  },
+  actions: getActionsForType(data.type, data)
+};
 
   console.log('[SW] 📱 Showing notification with options:', notificationOptions);
   
