@@ -47,7 +47,7 @@ function stopRingtone() {
   }
 }
 
-export { playRingtone, stopRingtone };
+
 
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
