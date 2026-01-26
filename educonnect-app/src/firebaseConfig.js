@@ -14,6 +14,40 @@ const firebaseConfig = {
 
 // 🔥 CRITICAL: Make sure this VAPID key matches your Firebase Console
 const VAPID_KEY = 'BFQpL8IdUKwyIhGevetM_Ayo7gZPDmHsm4UyHq0DVpuxr9K9lViXsp6eYCAgsL8pSfR-DoP9feY3fDB_Lfo6S-Y';
+// 🎵 RINGTONE MANAGER
+let ringtoneAudio = null;
+
+function playRingtone() {
+  try {
+    if (ringtoneAudio) {
+      ringtoneAudio.pause();
+      ringtoneAudio.currentTime = 0;
+    }
+    
+    // Put your ringtone file in public/sounds/ringtone.mp3
+    ringtoneAudio = new Audio('/sounds/ringtone.mp3');
+    ringtoneAudio.loop = true; // Keep ringing until answered/declined
+    ringtoneAudio.volume = 1.0;
+    
+    ringtoneAudio.play().catch(err => {
+      console.error('❌ [RINGTONE] Failed to play:', err);
+    });
+    
+    console.log('🎵 [RINGTONE] Playing...');
+  } catch (error) {
+    console.error('❌ [RINGTONE] Error:', error);
+  }
+}
+
+function stopRingtone() {
+  if (ringtoneAudio) {
+    ringtoneAudio.pause();
+    ringtoneAudio.currentTime = 0;
+    console.log('🎵 [RINGTONE] Stopped');
+  }
+}
+
+export { playRingtone, stopRingtone };
 
 const app = initializeApp(firebaseConfig);
 const messaging = getMessaging(app);
@@ -234,7 +268,11 @@ export function setupForegroundMessageListener(callback) {
     const notification = payload.notification || {};
     const data = payload.data || {};
     
-    // 🔥 FIX 5: Always show notification, even in foreground
+    // 🎵 PLAY RINGTONE FOR CALLS
+    if (data.type === 'call') {
+      playRingtone();
+    }
+    
     if (Notification.permission === 'granted') {
       const title = notification.title || data.title || 'New notification';
       const options = {
@@ -245,7 +283,7 @@ export function setupForegroundMessageListener(callback) {
         requireInteraction: data.type === 'call',
         vibrate: data.type === 'call' ? [200, 100, 200] : [100],
         data: data,
-        silent: false
+        silent: data.type === 'call' // Silent notification, ringtone plays instead
       };
       
       console.log('🔔 [FCM] Showing notification:', title);
@@ -256,17 +294,26 @@ export function setupForegroundMessageListener(callback) {
         event.preventDefault();
         console.log('🔔 [FCM] Notification clicked');
         
+        // Stop ringtone when notification is clicked
+        if (data.type === 'call') {
+          stopRingtone();
+        }
+        
         const url = data.url || '/';
         window.focus();
         window.location.href = url;
         
         notif.close();
       };
-    } else {
-      console.warn('⚠️ [FCM] Notification permission not granted');
+      
+      notif.onclose = function() {
+        // Stop ringtone when notification is closed
+        if (data.type === 'call') {
+          stopRingtone();
+        }
+      };
     }
     
-    // Call custom callback
     if (callback) {
       callback(payload);
     }
@@ -382,4 +429,4 @@ export async function sendTestNotification() {
   }
 }
 
-export { messaging, getToken, onMessage };
+export { messaging, getToken, onMessage, playRingtone, stopRingtone };

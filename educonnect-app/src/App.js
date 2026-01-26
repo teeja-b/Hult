@@ -29,7 +29,8 @@ import FCMInitializer from './components/FCMInitializer';
 import DailyVideoCall from './components/JitsiVideoCall';
 // Around line 17, add this import with your other component imports:
 import AITutorMatcher from './components/AITutorMatch';
-
+// Add this with your other imports (around line 1-20)
+import { playRingtone, stopRingtone } from './firebaseConfig';
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
   
@@ -361,6 +362,8 @@ useEffect(() => {
       console.log('⏸️ [APP] Already in chat, letting chat component handle call');
       return;
     }
+
+    playRingtone();
     
     // Set incoming call data to show the global modal
     setIncomingCallData({
@@ -419,6 +422,7 @@ useEffect(() => {
         window.history.replaceState({}, '', '/');
         return;
       }
+      playRingtone();
       
       const callData = {
         meetingId: meetingId,
@@ -1641,13 +1645,20 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
 
         <div className="flex gap-3 sm:gap-4 justify-center">
           <button
-            onClick={onDecline}
+              onClick={() => {
+              stopRingtone(); // 🎵 STOP RINGTONE
+              onDecline();
+            }}
+            
             className="flex items-center gap-2 bg-red-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-red-700 active:bg-red-800 transition touch-manipulation"
           >
             <PhoneOff size={18} /> Decline
           </button>
           <button
-            onClick={onAccept}
+              onClick={() => {
+              stopRingtone(); // 🎵 STOP RINGTONE
+              onAccept();
+            }}
             className="flex items-center gap-2 bg-green-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-green-700 active:bg-green-800 transition touch-manipulation"
           >
             <Phone size={18} /> Accept
