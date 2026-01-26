@@ -380,6 +380,9 @@ useEffect(() => {
     }
   }
 }, [openConversationId, conversations, selectedConversation, onConversationOpened]);
+const getConversationKey = (studentId, tutorUserId) => {
+  return `conversation:${studentId}:${tutorUserId}`;
+};
 // Auto-open conversation when auto-joining video call - PRODUCTION VERSION
 useEffect(() => {
   if (autoJoinMeetingId && autoJoinUrl && conversations.length > 0 && !selectedConversation) {
