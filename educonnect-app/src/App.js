@@ -1689,7 +1689,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
 
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
 {/* ✅ Incoming Call Modal - Show on ALL views EXCEPT chat */}
-{incomingCallData && currentView !== 'chat' && (
+{incomingCallData  (
   <GlobalIncomingCallModal
     callData={incomingCallData}
     onAccept={() => {
