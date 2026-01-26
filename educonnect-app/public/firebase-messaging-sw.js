@@ -37,8 +37,9 @@ messaging.onBackgroundMessage((payload) => {
     requireInteraction: data.type === 'call',
     silent: false,
     vibrate: data.type === 'call' 
-      ? [200, 100, 200, 100, 200]
-      : [100, 50, 100],
+  ? [200, 100, 200, 100, 200]
+  : [100, 50, 100],
+
     timestamp: Date.now(),
     dir: 'ltr',
     lang: 'en',

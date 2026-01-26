@@ -300,7 +300,7 @@ export function setupForegroundMessageListener(callback) {
         requireInteraction: data.type === 'call',
         vibrate: data.type === 'call' ? [200, 100, 200] : [100],
         data: data,
-        silent: data.type === 'call' // Silent notification, ringtone plays instead
+        silent: false // Silent notification, ringtone plays instead
       };
       
       console.log('🔔 [FCM] Showing notification:', title);
