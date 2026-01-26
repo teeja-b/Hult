@@ -141,7 +141,9 @@ useEffect(() => {
       socket.connect();
     }
   });
-
+const getConversationKey = (studentId, tutorUserId) => {
+  return `conversation:${studentId}:${tutorUserId}`;
+};
   socket.on('connect_error', (error) => {
     console.error('❌ [STUDENT] Socket connection error:', error.message);
     setConnectionStatus('error');
