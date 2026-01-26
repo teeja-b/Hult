@@ -460,24 +460,33 @@ useEffect(() => {
   };
 
 const sendMessage = async () => {
-  if ((!newMessage.trim() && !attachmentFile) || !selectedTutor) return;
+  if ((!newMessage.trim() && !attachmentFile) || !selectedConversation) return;
+
+  const studentId = selectedConversation.studentId || selectedConversation.partnerId;
+  
+  if (!studentId) {
+    console.error('[TUTOR] ERROR: Cannot send message - no student ID!');
+    return;
+  }
 
   const tempId = Date.now();
   let fileUrl = null;
   let fileType = null;
   let fileName = null;
 
+  // ✅ FIX: Use string-based conversation key (same format as student)
+  const conversationKey = `conversation:${studentId}:${currentTutorUserId}`;
+  
+  console.log('[TUTOR] 🔧 Using conversation key:', conversationKey);
+
   // Handle file upload FIRST if there's a file
   if (attachmentFile) {
     try {
       console.log('📤 Uploading file...', attachmentFile.name);
       
-      // ✅ FIX: Use consistent conversation ID
-      const conversationKey = `conversation:${currentUserId}:${selectedTutor.user_id}`;
-      
       const formData = new FormData();
       formData.append('file', attachmentFile);
-      formData.append('conversation_id', conversationKey);
+      formData.append('conversation_id', conversationKey); // ✅ Use string key
       
       const token = localStorage.getItem('token');
       
@@ -503,13 +512,8 @@ const sendMessage = async () => {
       fileName = attachmentFile.name;
       
       console.log('✅ File uploaded successfully:', fileUrl);
-      
-      // Remove uploading message if exists
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      
     } catch (err) {
       console.error('❌ Upload failed:', err);
-      setMessages(prev => prev.filter(m => m.id !== tempId));
       alert('Failed to upload attachment. Please try again.');
       return;
     }
@@ -518,7 +522,7 @@ const sendMessage = async () => {
   // Create message object
   const msg = {
     id: tempId,
-    sender_id: currentUserId,
+    sender_id: currentTutorUserId,
     text: newMessage.trim() || (fileType === 'voice' ? '🎤 Voice message' : '📎 File attachment'),
     timestamp: new Date().toISOString(),
     isOwn: true,
@@ -535,10 +539,7 @@ const sendMessage = async () => {
   if (fileInputRef.current) fileInputRef.current.value = '';
 
   try {
-    // ✅ FIX: Use consistent conversation ID
-    const conversationKey = `conversation:${currentUserId}:${selectedTutor.user_id}`;
-
-    // Send via Socket.IO
+    // ✅ Send via Socket.IO using the STRING-BASED KEY
     if (socketRef.current && socketRef.current.connected) {
       const messageDeliveryPromise = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -553,13 +554,13 @@ const sendMessage = async () => {
         });
       });
 
-      console.log('📤 [STUDENT] Emitting message to conversation:', conversationKey);
+      console.log('📤 [TUTOR] Emitting to conversation:', conversationKey);
 
-      // ✅ Emit the message
+      // ✅ Emit using the string-based key
       socketRef.current.emit('send_message', {
-        conversationId: conversationKey,
-        sender_id: currentUserId,
-        receiver_id: selectedTutor.user_id,
+        conversationId: conversationKey,  // ✅ THIS IS THE KEY FIX
+        sender_id: currentTutorUserId,
+        receiver_id: studentId,
         text: msg.text,
         timestamp: msg.timestamp,
         messageId: tempId,
@@ -567,51 +568,60 @@ const sendMessage = async () => {
         file_type: fileType,
         file_name: fileName
       });
+      
+      console.log(`✅ [TUTOR] Sent message to student ${studentId}`);
 
-      console.log(`✅ [STUDENT] Sent message to tutor ${selectedTutor.user_id}`);
-
-      // Wait for delivery confirmation
       try {
         const dbMessageId = await messageDeliveryPromise;
-        console.log(`✅ [STUDENT] Message saved to database with ID: ${dbMessageId}`);
+        console.log(`✅ [TUTOR] Message saved to database with ID: ${dbMessageId}`);
         
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, id: dbMessageId, status: 'sent' } : m
         ));
       } catch (err) {
-        console.warn('⚠️ [STUDENT] Message delivery timeout');
+        console.warn('⚠️ [TUTOR] Message delivery timeout');
         setMessages(prev => prev.map(m => 
           m.id === tempId ? { ...m, status: 'sent' } : m
         ));
       }
     } else {
-      console.error('❌ [STUDENT] Socket not connected!');
+      console.error('❌ [TUTOR] Socket not connected!');
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { ...m, status: 'failed' } : m
       ));
       return;
     }
 
-    // Save to storage
+    // Save to storage using the same key
+    const studentName = selectedConversation.studentName || selectedConversation.partnerName || 'Student';
+    
     const conversationData = {
-      tutorUserId: selectedTutor.user_id,
-      tutorProfileId: selectedTutor.tutor_profile_id || selectedTutor.id,
-      tutorName: selectedTutor.name,
-      studentId: currentUserId,
-      studentName: 'Student Name',
+      tutorUserId: currentTutorUserId,
+      tutorProfileId: tutorProfileId,
+      studentId: studentId,
+      studentName: studentName,
+      tutorName: tutorName,
       lastMessage: msg.text,
       lastMessageTime: msg.timestamp,
       messages: updatedMessages
     };
 
     if (window.storage && window.storage.set) {
-      await window.storage.set(conversationKey, JSON.stringify(conversationData));
+      await window.storage.set(conversationKey, JSON.stringify(conversationData)); // ✅ Use string key
     } else {
       localStorage.setItem(conversationKey, JSON.stringify(conversationData));
     }
 
+    setConversations(prevConvs =>
+      prevConvs.map(conv =>
+        conv.id === selectedConversation.id
+          ? { ...conv, lastMessage: msg.text, lastMessageTime: msg.timestamp }
+          : conv
+      ).sort((a, b) => new Date(b.lastMessageTime || 0) - new Date(a.lastMessageTime || 0))
+    );
+
   } catch (err) {
-    console.error('[STUDENT] Failed to send message:', err);
+    console.error('[TUTOR] Failed to send message:', err);
     setMessages(prev => prev.map(m => 
       m.id === tempId ? { ...m, status: 'failed' } : m
     ));
