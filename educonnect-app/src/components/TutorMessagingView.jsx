@@ -453,6 +453,11 @@ useEffect(() => {
   console.log('📩 [TUTOR] Data:', data);
   
   setMessages(prev => {
+
+    if (String(data.sender_id) === String(currentTutorUserId)) {
+    console.log('📩 [TUTOR] ⏭️ Ignoring own message (already added optimistically)');
+    return;
+  }
     // ✅ Check for duplicates using BOTH temp ID and DB ID
     const isDuplicate = prev.some(m => 
       m.id === data.id ||                    // DB ID match
