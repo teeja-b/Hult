@@ -448,45 +448,39 @@ useEffect(() => {
     setConnectionStatus('disconnected');
   });
 
- socket.on('receive_message', (data) => {
+socket.on('receive_message', (data) => {
   console.log('📩 [TUTOR] ===== RECEIVED MESSAGE =====');
   console.log('📩 [TUTOR] Data:', data);
+  console.log('📩 [TUTOR] Sender ID:', data.sender_id);
+  console.log('📩 [TUTOR] Current Tutor ID:', currentTutorUserId);
   
-  setMessages(prev => {
-
-    if (String(data.sender_id) === String(currentTutorUserId)) {
+  // ✅ CRITICAL FIX: Don't process our own sent messages
+  // When the tutor sends a message, it's already added optimistically
+  // We should only process messages from OTHER users (students)
+  if (String(data.sender_id) === String(currentTutorUserId)) {
     console.log('📩 [TUTOR] ⏭️ Ignoring own message (already added optimistically)');
     return;
   }
-    // ✅ Check for duplicates using BOTH temp ID and DB ID
+  
+  setMessages(prev => {
+    // Check for duplicates from the student
     const isDuplicate = prev.some(m => 
-      m.id === data.id ||                    // DB ID match
-      m.id === data.messageId ||             // Temp ID became DB ID
-      (data.messageId && m.id === data.messageId)  // Temp ID match
+      m.id === data.id ||
+      m.id === data.messageId ||
+      (data.messageId && m.id === data.messageId)
     );
     
     if (isDuplicate) {
-      console.log('📩 [TUTOR] Duplicate detected, updating instead');
-      // Update existing message with DB ID
-      return prev.map(m => {
-        if (m.id === data.messageId) {
-          // This is our optimistic message, update it with DB ID
-          return {
-            ...m,
-            id: data.id,  // Replace temp ID with DB ID
-            status: 'delivered'
-          };
-        }
-        return m;
-      });
+      console.log('📩 [TUTOR] Duplicate detected, skipping');
+      return prev;
     }
     
-    console.log('📩 [TUTOR] ✅ Adding new message');
+    console.log('📩 [TUTOR] ✅ Adding new message from student');
     
     return [...prev, {
       ...data,
       id: data.id || data.messageId || Date.now(),
-      isOwn: String(data.sender_id) === String(currentTutorUserId)
+      isOwn: false // This is from the student
     }];
   });
 });
