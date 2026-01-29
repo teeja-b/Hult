@@ -5,7 +5,7 @@ import StudentSurvey from './components/StudentSurvey';
 import TutorOnboarding from './components/TutorOnboarding';
 import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
-import AssignmentsScreen from './components/AssignmentsScreen'; // NEW IMPORT
+
 import CourseMaterialsViewer from './components/CourseMaterialViewer';
 import { 
   BookOpen, Users, Award, Heart, Download, Menu, X, Search, 
@@ -61,7 +61,6 @@ const [userType, setUserType] = useState(() => {
 });
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
-  const [selectedCourseForAssignments, setSelectedCourseForAssignments] = useState(null); // NEW
   const [userRegion, setUserRegion] = useState(null);
   const [detectedCountry, setDetectedCountry] = useState(null);
   const [incomeLevel, setIncomeLevel] = useState(null);
@@ -187,33 +186,7 @@ const handleAIMatching = async () => {
   }
 };
 
-  // NEW: Course Selection Handler for Assignments
-  const handleOpenAssignments = (course) => {
-    console.log('📚 Opening assignments for course:', course?.title);
-    
-    // Check if user is authenticated
-    if (!isAuthenticated) {
-      alert('Please log in to view assignments');
-      setShowLogin(true);
-      return;
-    }
-    
-    // Check if course is provided
-    if (!course || !course.id) {
-      console.error('No course provided for assignments');
-      alert('Course information is missing');
-      return;
-    }
-    
-    // Store the selected course
-    setSelectedCourseForAssignments(course);
-    
-    // Navigate to assignments screen
-    setCurrentView('assignments');
-    
-    // Optional: Store in localStorage for persistence
-    localStorage.setItem('selectedCourseForAssignments', JSON.stringify(course));
-  };
+  
 
   // Download Course Handler
 const downloadCourse = async (course) => {
@@ -661,18 +634,7 @@ useEffect(() => {
                     <span className="font-medium">📚 My Courses</span>
                   </button>
                   
-                  {/* NEW: Assignments Menu Item */}
-                  <button 
-                    onClick={() => { 
-                      setSelectedCourseForAssignments(null); // Show all assignments
-                      setCurrentView('assignments'); 
-                      setMenuOpen(false); 
-                    }} 
-                    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-                  >
-                    <FileText size={20} />
-                    <span className="font-medium">📝 My Assignments</span>
-                  </button>
+                
                   
                   <button 
                     onClick={() => { setCurrentView('tutors'); setMenuOpen(false); }} 
@@ -701,18 +663,7 @@ useEffect(() => {
                     <span className="font-medium">📚 Manage Courses</span>
                   </button>
                   
-                  {/* NEW: Tutor Assignments Menu Item */}
-                  <button 
-                    onClick={() => { 
-                      setSelectedCourseForAssignments(null); // Show all assignments
-                      setCurrentView('assignments'); 
-                      setMenuOpen(false); 
-                    }} 
-                    className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
-                  >
-                    <FileText size={20} />
-                    <span className="font-medium">📝 Grade Assignments</span>
-                  </button>
+                  
                 </>
               )}
 
@@ -1026,11 +977,7 @@ useEffect(() => {
                 <p className="text-2xl font-bold text-gray-800">{tutors.length}</p>
               </div>
           
-              <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
-                <FileText className="text-orange-500 mb-2" />
-                <h4 className="font-semibold text-sm">Assignments</h4>
-                <p className="text-2xl font-bold text-gray-800">0</p>
-              </div>
+              
             </>
           ) : (
             <>
@@ -1262,15 +1209,7 @@ const CoursesView = () => {
                 View Course
               </button>
               
-              {isAuthenticated && (
-                <button 
-                  onClick={() => handleOpenAssignments(course)}
-                  className="w-full bg-gradient-to-r from-green-600 to-teal-600 text-white py-2 rounded hover:bg-green-700 transition flex items-center justify-center gap-2"
-                >
-                  <FileText size={16} />
-                  View Assignments
-                </button>
-              )}
+              
             </div>
           </div>
         ))}
@@ -1732,15 +1671,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
     {currentView === 'courses' && <CoursesView />}
     {currentView === 'course-detail' && <CourseDetailView />}
     {currentView === 'my-courses' && <MyCoursesView />}  {/* ✅ ADD THIS */}
-    {currentView === 'assignments' && (
-      <AssignmentsScreen 
-        course={selectedCourseForAssignments}
-        userType={userType}
-        isAuthenticated={isAuthenticated}
-        API_URL={API_URL}
-        onBack={() => setCurrentView('courses')}
-      />
-    )}
+    
   </>
 )}
 
@@ -1927,10 +1858,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
                   <FileText size={24} />
                   <span className="text-xs mt-1">Courses</span>
                 </button>
-                <button onClick={() => setCurrentView('assignments')} className={`flex flex-col items-center p-2 ${currentView === 'assignments' ? 'text-blue-600' : 'text-gray-600'}`}>
-                  <FileText size={24} />
-                  <span className="text-xs mt-1">Assignments</span>
-                </button>
+                
 
                 <button onClick={() => setCurrentView('my-courses')} className={`flex flex-col items-center p-2 ${currentView === 'my-courses' ? 'text-blue-600' : 'text-gray-600'}`}>
                   <GraduationCap size={24} />
@@ -1951,10 +1879,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
                   <FileText size={24} />
                   <span className="text-xs mt-1">Manage</span>
                 </button>
-                <button onClick={() => setCurrentView('assignments')} className={`flex flex-col items-center p-2 ${currentView === 'assignments' ? 'text-blue-600' : 'text-gray-600'}`}>
-                  <FileText size={24} />
-                  <span className="text-xs mt-1">Assignments</span>
-                </button>
+                
                 <button onClick={() => setCurrentView('chat')} className={`flex flex-col items-center p-2 ${currentView === 'chat' ? 'text-blue-600' : 'text-gray-600'}`}>
                   <MessageSquare size={24} />
                   <span className="text-xs mt-1">Messages</span>
