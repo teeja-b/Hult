@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 import { MessageSquare, X, Send, CheckCheck, Check, User, Search, Paperclip, Mic, FileText, Image as ImageIcon, Video, PhoneOff } from 'lucide-react';
 import io from 'socket.io-client';
-
+import TutorProfileViewer from './TutorProfileViewer';
 import DailyVideoCall from './JitsiVideoCall';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
@@ -20,6 +20,7 @@ const MessagingVideoChat = ({
   const [selectedTutor, setSelectedTutor] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [viewingTutorProfile, setViewingTutorProfile] = useState(null);
   const [showMessages, setShowMessages] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -689,25 +690,36 @@ const handleTyping = () => {
           filteredTutors.map(tutor => (
             <div key={tutor.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="relative">
+                {/* Tutor Avatar - CLICKABLE */}
+                <button
+                  onClick={() => setViewingTutorProfile(tutor.tutor_profile_id || tutor.id)}
+                  className="relative hover:scale-105 transition-transform flex-shrink-0"
+                  title="View tutor profile"
+                >
                   {tutor.avatar ? (
-                    <div className="text-3xl flex-shrink-0">{tutor.avatar}</div>
+                    <div className="text-3xl">{tutor.avatar}</div>
                   ) : (
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center hover:bg-blue-200 transition">
                       <User size={24} className="text-blue-600" />
                     </div>
                   )}
                   {onlineUsers.has(tutor.user_id) && (
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
-                </div>
+                </button>
+                
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-gray-800 truncate flex items-center gap-2">
+                  {/* Tutor Name - CLICKABLE */}
+                  <button
+                    onClick={() => setViewingTutorProfile(tutor.tutor_profile_id || tutor.id)}
+                    className="font-semibold text-gray-800 truncate flex items-center gap-2 hover:text-blue-600 transition text-left hover:underline w-full"
+                    title="View tutor profile"
+                  >
                     {tutor.name}
                     {onlineUsers.has(tutor.user_id) && (
                       <span className="text-xs text-green-600 font-normal">● Online</span>
                     )}
-                  </div>
+                  </button>
                   <div className="text-sm text-gray-600 truncate">{tutor.expertise}</div>
                 </div>
               </div>
@@ -728,15 +740,30 @@ const handleTyping = () => {
           {/* Header */}
           <div className="p-4 bg-blue-600 text-white flex justify-between items-center shadow-md">
             <div className="flex items-center gap-2">
-              {selectedTutor.avatar ? (
-                <span className="text-2xl">{selectedTutor.avatar}</span>
-              ) : (
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <User size={20} />
-                </div>
-              )}
+              {/* Tutor Avatar - CLICKABLE */}
+              <button
+                onClick={() => setViewingTutorProfile(selectedTutor.tutor_profile_id || selectedTutor.id)}
+                className="hover:scale-105 transition-transform"
+                title="View tutor profile"
+              >
+                {selectedTutor.avatar ? (
+                  <span className="text-2xl">{selectedTutor.avatar}</span>
+                ) : (
+                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition">
+                    <User size={20} />
+                  </div>
+                )}
+              </button>
+              
               <div>
-                <h2 className="font-semibold">{selectedTutor.name}</h2>
+                {/* Tutor Name - CLICKABLE */}
+                <button
+                  onClick={() => setViewingTutorProfile(selectedTutor.tutor_profile_id || selectedTutor.id)}
+                  className="font-semibold hover:underline text-left"
+                  title="View tutor profile"
+                >
+                  {selectedTutor.name}
+                </button>
                 <p className="text-xs text-blue-100">
                   {onlineUsers.has(selectedTutor.user_id) ? '● Online' : 'Offline'}
                 </p>
@@ -926,6 +953,15 @@ const handleTyping = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tutor Profile Viewer Modal */}
+      {viewingTutorProfile && (
+        <TutorProfileViewer
+          tutorId={viewingTutorProfile}
+          onClose={() => setViewingTutorProfile(null)}
+          API_URL={API_URL}
+        />
       )}
 
     </div>
