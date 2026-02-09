@@ -1933,34 +1933,41 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
     }
   };
 
-  const handleAnswer = (selectedColor) => {
-    const colorName = langData[selectedColor.name] || selectedColor.name;
+const handleAnswer = (selectedColor) => {
+  const colorName = langData[selectedColor.name] || selectedColor.name;
 
-    if (selectedColor.name === currentColor.name) {
-      setFeedback('correct');
-      onScoreUpdate(10);
-      setRoundScore(prev => prev + 10);
+  if (selectedColor.name === currentColor.name) {
+    setFeedback('correct');
+    onScoreUpdate(10);
+    setRoundScore(prev => prev + 10);
 
-      speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
+    // Speak immediately the correct feedback + color
+    speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
 
-      setTimeout(generateNewRound, 1500);
-    } else {
-      setFeedback('wrong');
-      setLives(prev => prev - 1);
-      onScoreUpdate(0);
+    // Generate new round after a short delay
+    setTimeout(() => {
+      generateNewRound();
+      setFeedback(null); // reset feedback for next round
+    }, 1500);
+  } else {
+    setFeedback('wrong');
+    setLives(prev => prev - 1);
+    onScoreUpdate(0);
 
-      speakColorName(langData.tryAgain || 'Try again!');
+    // Speak wrong feedback
+    speakColorName(langData.tryAgain || 'Try again!');
 
-      setTimeout(() => setFeedback(null), 1000);
+    setTimeout(() => setFeedback(null), 1000);
 
-      if (lives <= 1) {
-        setTimeout(() => {
-          alert(`${langData.gameOver || 'Game Over!'} ${roundScore} ⭐`);
-          onBack();
-        }, 1000);
-      }
+    if (lives <= 1) {
+      setTimeout(() => {
+        alert(`${langData.gameOver || 'Game Over!'} ${roundScore} ⭐`);
+        onBack();
+      }, 1000);
     }
-  };
+  }
+};
+
 
   if (!selectedLang) {
     return (
