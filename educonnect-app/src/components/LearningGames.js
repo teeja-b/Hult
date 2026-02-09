@@ -416,21 +416,7 @@ const LearningGames = ({ onClose }) => {
         />
       )}
       
-      {currentGame === 'color-match' && (
-        <ColorMatchGame 
-          onBack={() => setCurrentGame(null)}
-          onScoreUpdate={(points) => {
-            setScore(prev => prev + points);
-            if (points > 0) {
-              setStreak(prev => prev + 1);
-              showRewardAnimation();
-            } else {
-              setStreak(0);
-            }
-          }}
-          currentStreak={streak}
-        />
-      )}
+   
       
       {currentGame === 'sound-words' && (
         <SoundWordsGame 
