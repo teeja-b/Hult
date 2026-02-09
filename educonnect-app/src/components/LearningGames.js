@@ -92,21 +92,8 @@ const TRANSLATIONS = {
       { word: 'Soleil', image: '☀️', category: 'Nature' },
       { word: 'Arbre', image: '🌳', category: 'Nature' },
       { word: 'Eau', image: '💧', category: 'Nature' }
-    ],
-    mfe: [
-      { word: 'Pom', image: '🍎', category: 'Fri' },
-      { word: 'Balon', image: '⚽', category: 'Zwe' },
-      { word: 'Sat', image: '🐱', category: 'Zanimo' },
-      { word: 'Lisien', image: '🐕', category: 'Zanimo' },
-      { word: 'Elefan', image: '🐘', category: 'Zanimo' },
-      { word: 'Pwason', image: '🐟', category: 'Zanimo' },
-      { word: 'Rezen', image: '🍇', category: 'Fri' },
-      { word: 'Lakaz', image: '🏠', category: 'Batiman' },
-      { word: 'Laglas', image: '🍦', category: 'Manze' },
-      { word: 'Soley', image: '☀️', category: 'Natirel' },
-      { word: 'Pie', image: '🌳', category: 'Natirel' },
-      { word: 'Dilo', image: '💧', category: 'Natirel' }
     ]
+    
   },
   formFields: {
     en: {
@@ -430,7 +417,7 @@ const LanguageSelector = ({ selectedLang, onSelectLang }) => {
         <Globe className="text-blue-600" size={24} />
         <h3 className="text-lg font-bold text-gray-800">Choose Language</h3>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {Object.entries(LANGUAGES).map(([code, lang]) => (
           <button
             key={code}
