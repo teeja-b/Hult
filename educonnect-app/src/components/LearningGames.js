@@ -380,23 +380,25 @@ const LearningGames = ({ onClose }) => {
         />
       )}
       
-   {currentGame === 'color-match' && (
-        <ColorMatchGame 
-          onBack={() => setCurrentGame(null)}
-          onScoreUpdate={(points) => {
-            setScore(prev => prev + points);
-            if (points > 0) {
-              setStreak(prev => prev + 1);
-              showRewardAnimation();
-            } else {
-              setStreak(0);
-            }
-          }}
-          currentStreak={streak}
-          language={language}
-          langData={lang}
-        />
-      )}
+{currentGame === 'color-match' && (
+  <ColorMatchGame 
+    onBack={() => setCurrentGame(null)}
+    onScoreUpdate={(points) => {
+      setScore(prev => prev + points);
+      if (points > 0) {
+        setStreak(prev => prev + 1);
+        showRewardAnimation();
+      } else {
+        setStreak(0);
+      }
+    }}
+    currentStreak={streak}
+    selectedLang={selectedLang}       // pass the current language
+    speak={(text) => speak(text, selectedLang)} // pass the speak function
+    langData={LANGUAGE_CONFIG[selectedLang]}    // pass the text config for UI
+  />
+)}
+
       
       {currentGame === 'sound-words' && (
         <SoundWordsGame 
