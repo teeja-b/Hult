@@ -5,6 +5,7 @@ import StudentSurvey from './components/StudentSurvey';
 import TutorOnboarding from './components/TutorOnboarding';
 import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
+import TutorProfileViewer from './components/TutorProfileViewer';
 
 import CourseMaterialsViewer from './components/CourseMaterialViewer';
 import { 
@@ -39,6 +40,7 @@ const EduConnectApp = () => {
   // Around line 56, add this state with your other state declarations:
 const [showAIMatcherModal, setShowAIMatcherModal] = useState(false);
 const [studentProfileForMatching, setStudentProfileForMatching] = useState(null);
+  const [viewingTutorProfile, setViewingTutorProfile] = useState(null);
   const [showCourseManager, setShowCourseManager] = useState(false);
   const [tutorStats, setTutorStats] = useState({
     totalCourses: 0,
@@ -1840,7 +1842,14 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
   </div>
 )}
       
-
+      {/* Tutor Profile Viewer Modal */}
+      {viewingTutorProfile && (
+        <TutorProfileViewer
+          tutorId={viewingTutorProfile}
+          onClose={() => setViewingTutorProfile(null)}
+          API_URL={API_URL}
+        />
+      )}
       <div className="h-16"></div>
 
       {/* Bottom navigation */}

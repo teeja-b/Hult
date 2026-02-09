@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, User, Send, ArrowLeft, CheckCheck, Clock, Search, Paperclip, Mic, X, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import io from 'socket.io-client';
+import TutorProfileViewer from './TutorProfileViewer';
 import { Video, PhoneOff } from 'lucide-react';
 import DailyVideoCall from './JitsiVideoCall';
 const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
@@ -25,6 +26,7 @@ const TutorMessagingView = ({
   const [isTyping, setIsTyping] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [viewingTutorProfile, setViewingTutorProfile] = useState(null); 
   
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
@@ -862,6 +864,7 @@ useEffect(() => {
                   onClick={() => openConversation(conv)}
                   className="flex items-center gap-3 p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer transition"
                 >
+                  {/* Student Avatar - NOT CLICKABLE (students don't have profiles) */}
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center relative">
                     <User size={24} className="text-blue-600" />
                     {onlineUsers.has(conv.studentId || conv.partnerId) && (
@@ -913,6 +916,14 @@ useEffect(() => {
                   {onlineUsers.has(selectedConversation?.studentId || selectedConversation?.partnerId) ? '● Online' : 'Offline'}
                 </p>
               </div>
+              {/* View My Profile Button */}
+              <button
+                onClick={() => setViewingTutorProfile(tutorProfileId)}
+                className="p-2 hover:bg-white/20 rounded-lg transition"
+                title="View my profile"
+              >
+                <User size={20} />
+              </button>
 
 
 <DailyVideoCall
@@ -1089,6 +1100,14 @@ useEffect(() => {
             </div>
           </div>
         </>
+      )}
+      {/* Tutor Profile Viewer Modal */}
+      {viewingTutorProfile && (
+        <TutorProfileViewer
+          tutorId={viewingTutorProfile}
+          onClose={() => setViewingTutorProfile(null)}
+          API_URL={API_URL}
+        />
       )}
 
     </div>

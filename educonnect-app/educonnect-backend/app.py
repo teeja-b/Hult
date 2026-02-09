@@ -5182,6 +5182,60 @@ def debug_tutor_status():
 
 
 
+
+
+# ----------------------------------
+# Tutor profile viewer
+@app.route('/api/tutors/<int:tutor_id>/profile', methods=['GET'])
+def get_tutor_full_profile(tutor_id):
+    """Get complete tutor profile for viewing"""
+    try:
+        # tutor_id here is the tutor_profile.id, not user_id
+        tutor_profile = TutorProfile.query.get(tutor_id)
+        
+        if not tutor_profile:
+            return jsonify({'error': 'Tutor not found'}), 404
+        
+        user = User.query.get(tutor_profile.user_id)
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify({
+            'tutor': {
+                'id': tutor_profile.id,
+                'user_id': tutor_profile.user_id,
+                'name': user.full_name,
+                'email': user.email,
+                'bio': tutor_profile.bio,
+                'expertise': json.loads(tutor_profile.expertise or '[]'),
+                'languages': json.loads(tutor_profile.languages or '[]'),
+                'hourly_rate': tutor_profile.hourly_rate,
+                'rating': tutor_profile.rating,
+                'total_sessions': tutor_profile.total_sessions,
+                'availability': json.loads(tutor_profile.availability or '{}'),
+                'verified': tutor_profile.verified,
+                'teaching_style': getattr(tutor_profile, 'teaching_style', 'adaptive'),
+                'years_experience': getattr(tutor_profile, 'years_experience', ''),
+                'education': getattr(tutor_profile, 'education', ''),
+                'certifications': getattr(tutor_profile, 'certifications', ''),
+                'specializations': getattr(tutor_profile, 'specializations', ''),
+                'teaching_philosophy': getattr(tutor_profile, 'teaching_philosophy', ''),
+                'min_session_length': getattr(tutor_profile, 'min_session_length', '30'),
+                'max_students': getattr(tutor_profile, 'max_students', '10'),
+                'preferred_age_groups': json.loads(getattr(tutor_profile, 'preferred_age_groups', '[]') or '[]')
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [TUTOR PROFILE ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get tutor profile'}), 500
+
+
+
+
 # ============================================================================
 # INITIALIZE DATABASE
 # ============================================================================
