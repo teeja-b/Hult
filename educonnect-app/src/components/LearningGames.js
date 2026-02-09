@@ -4,7 +4,7 @@ import {
   Check, X, Award, Heart, Sparkles, Target, Edit3, Calendar,
   FileText, User, Home, Phone, Mail, MapPin, Cake, Hash, Globe
 } from 'lucide-react';
-import { LANGUAGE_CONFIG, speak } from '../utils/language';
+
 
 
 // Language data
@@ -15,11 +15,44 @@ const LANGUAGES = {
 };
 
 const TRANSLATIONS = {
+
   weekdays: {
     en: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     fr: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
     mfe: ['Lindi', 'Mardi', 'Merkredi', 'Zedi', 'Vandredi', 'Samdi', 'Dimans']
   },
+  colors: {
+  en: {
+    Red: 'Red',
+    Blue: 'Blue',
+    Green: 'Green',
+    Yellow: 'Yellow',
+    Purple: 'Purple',
+    Pink: 'Pink',
+    Orange: 'Orange',
+    Cyan: 'Cyan'
+  },
+  fr: {
+    Red: 'Rouge',
+    Blue: 'Bleu',
+    Green: 'Vert',
+    Yellow: 'Jaune',
+    Purple: 'Violet',
+    Pink: 'Rose',
+    Orange: 'Orange',
+    Cyan: 'Cyan'
+  },
+  mfe: {
+    Red: 'Rouz',
+    Blue: 'Ble',
+    Green: 'Ver',
+    Yellow: 'Zol',
+    Purple: 'Violet',
+    Pink: 'Roz',
+    Orange: 'Oranj',
+    Cyan: 'Syan'
+  }
+},
   months: {
     en: [
       { name: 'January', emoji: '❄️', days: 31 },
@@ -393,8 +426,7 @@ const LearningGames = ({ onClose }) => {
             }
           }}
           currentStreak={streak}
-          language={language}
-          langData={lang}
+    
         />
       )}
       
