@@ -1886,8 +1886,12 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 
 const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
   const [selectedLang, setSelectedLang] = useState(language || null);
-  const [feedbackColor, setFeedbackColor] = useState(null);
-
+  const [currentColor, setCurrentColor] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [feedbackColor, setFeedbackColor] = useState(null); // NEW: freeze color for feedback
+  const [lives, setLives] = useState(3);
+  const [roundScore, setRoundScore] = useState(0);
 
   const colors = [
     { name: 'Red', hex: '#EF4444' },
@@ -1899,12 +1903,6 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
     { name: 'Orange', hex: '#F97316' },
     { name: 'Cyan', hex: '#06B6D4' }
   ];
-
-  const [currentColor, setCurrentColor] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [feedback, setFeedback] = useState(null);
-  const [lives, setLives] = useState(3);
-  const [roundScore, setRoundScore] = useState(0);
 
   const langData = selectedLang ? TRANSLATIONS.colors[selectedLang] : {};
 
@@ -1923,6 +1921,7 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
     setCurrentColor(correct);
     setOptions(shuffled);
     setFeedback(null);
+    setFeedbackColor(null);
   };
 
   const speakColorName = (text) => {
@@ -1930,47 +1929,48 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.7;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
+      utterance.lang =
+        selectedLang === 'fr'
+          ? 'fr-FR'
+          : selectedLang === 'mfe'
+          ? 'fr-MU'
+          : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
 
-const handleAnswer = (selectedColor) => {
-  const colorName = langData[selectedColor.name] || selectedColor.name;
+  const handleAnswer = (selectedOption) => {
+    const colorName = langData[selectedOption.name] || selectedOption.name;
 
-  if (selectedColor.name === currentColor.name) {
-    setFeedback('correct');
-    setFeedbackColor(currentColor); // freeze the color for feedback
-    onScoreUpdate(10);
-    setRoundScore(prev => prev + 10);
+    if (selectedOption.name === currentColor.name) {
+      setFeedback('correct');
+      setFeedbackColor(currentColor); // freeze the correct color for feedback
+      onScoreUpdate(10);
+      setRoundScore(prev => prev + 10);
 
-    speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
+      speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
 
-    setTimeout(() => {
-      generateNewRound();
-      setFeedback(null);
-      setFeedbackColor(null); // reset after animation
-    }, 1500);
-  } else {
-    setFeedback('wrong');
-    setFeedbackColor(selectedColor); // optional: show which one was wrong
-    setLives(prev => prev - 1);
-    onScoreUpdate(0);
-
-    speakColorName(langData.tryAgain || 'Try again!');
-
-    setTimeout(() => setFeedback(null), 1000);
-
-    if (lives <= 1) {
       setTimeout(() => {
-        alert(`${langData.gameOver || 'Game Over!'} ${roundScore} ⭐`);
-        onBack();
-      }, 1000);
+        generateNewRound();
+      }, 1500);
+    } else {
+      setFeedback('wrong');
+      setFeedbackColor(selectedOption); // optional: show wrong color
+      setLives(prev => prev - 1);
+      onScoreUpdate(0);
+
+      speakColorName(langData.tryAgain || 'Try again!');
+
+      setTimeout(() => setFeedback(null), 1000);
+
+      if (lives <= 1) {
+        setTimeout(() => {
+          alert(`${langData.gameOver || 'Game Over!'} ${roundScore} ⭐`);
+          onBack();
+        }, 1000);
+      }
     }
-  }
-};
-
-
+  };
 
   if (!selectedLang) {
     return (
@@ -1989,6 +1989,7 @@ const handleAnswer = (selectedColor) => {
 
   return (
     <div className="max-w-md mx-auto p-4">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
           <ArrowLeft size={24} />
@@ -2009,6 +2010,7 @@ const handleAnswer = (selectedColor) => {
         </div>
       </div>
 
+      {/* Color Display */}
       <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
         <h2 className="text-xl font-bold mb-4">{langData.whatColor || 'What color is this?'}</h2>
 
@@ -2026,6 +2028,7 @@ const handleAnswer = (selectedColor) => {
         </button>
       </div>
 
+      {/* Options */}
       <div className="grid grid-cols-2 gap-4">
         {options.map((color, index) => (
           <button
@@ -2033,10 +2036,12 @@ const handleAnswer = (selectedColor) => {
             onClick={() => handleAnswer(color)}
             disabled={feedback !== null}
             className={`bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition
-              ${feedback === 'correct' && color.name === currentColor.name
-                ? 'ring-4 ring-green-500'
-                : ''
-              }`}
+              ${
+                feedback === 'correct' && color.name === currentColor.name
+                  ? 'ring-4 ring-green-500'
+                  : ''
+              }
+            `}
           >
             <div
               className="w-16 h-16 mx-auto rounded-xl mb-3 shadow"
@@ -2047,17 +2052,14 @@ const handleAnswer = (selectedColor) => {
         ))}
       </div>
 
-    {feedback === 'correct' && feedbackColor && (
-  <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-    <div
-      className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce"
-      style={{ backgroundColor: feedbackColor.hex }}
-    >
-      ✓ {langData.greatJob || 'Great Job!'}
-    </div>
-  </div>
-)}
-      
+      {/* Feedback */}
+      {feedback === 'correct' && feedbackColor && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
+            ✓ {langData.greatJob || 'Great Job!'}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
