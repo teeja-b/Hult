@@ -457,7 +457,7 @@ const LanguageSelector = ({ selectedLang, onSelectLang }) => {
         <Globe className="text-blue-600" size={24} />
         <h3 className="text-lg font-bold text-gray-800">Choose Language</h3>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {Object.entries(LANGUAGES).map(([code, lang]) => (
           <button
             key={code}
