@@ -9,7 +9,7 @@ import {
 const LANGUAGES = {
   en: { name: 'English', flag: '🇬🇧' },
   fr: { name: 'Français', flag: '🇫🇷' },
-  mfe: { name: 'Kreol Morisien', flag: '🇲🇺' }
+  
 };
 
 const TRANSLATIONS = {
@@ -46,21 +46,8 @@ const TRANSLATIONS = {
       { name: 'Octobre', emoji: '🎃', days: 31 },
       { name: 'Novembre', emoji: '🦃', days: 30 },
       { name: 'Décembre', emoji: '🎄', days: 31 }
-    ],
-    mfe: [
-      { name: 'Zanvie', emoji: '❄️', days: 31 },
-      { name: 'Fevrie', emoji: '💝', days: 28 },
-      { name: 'Mars', emoji: '🌸', days: 31 },
-      { name: 'Avril', emoji: '🌧️', days: 30 },
-      { name: 'Me', emoji: '🌺', days: 31 },
-      { name: 'Zin', emoji: '☀️', days: 30 },
-      { name: 'Ziyé', emoji: '🏖️', days: 31 },
-      { name: 'Out', emoji: '🌻', days: 31 },
-      { name: 'Septam', emoji: '🍂', days: 30 },
-      { name: 'Oktob', emoji: '🎃', days: 31 },
-      { name: 'Novam', emoji: '🦃', days: 30 },
-      { name: 'Desam', emoji: '🎄', days: 31 }
     ]
+    
   },
   numbers: {
     en: {
@@ -75,12 +62,7 @@ const TRANSLATIONS = {
       11: 'Onze', 12: 'Douze', 13: 'Treize', 14: 'Quatorze', 15: 'Quinze',
       16: 'Seize', 17: 'Dix-sept', 18: 'Dix-huit', 19: 'Dix-neuf', 20: 'Vingt'
     },
-    mfe: {
-      1: 'Enn', 2: 'De', 3: 'Trwa', 4: 'Kat', 5: 'Sink',
-      6: 'Sis', 7: 'Set', 8: 'Uit', 9: 'Nef', 10: 'Dis',
-      11: 'Onz', 12: 'Douz', 13: 'Trez', 14: 'Katorz', 15: 'Kenz',
-      16: 'Sez', 17: 'Dis-set', 18: 'Dizuit', 19: 'Diznef', 20: 'Ven'
-    }
+   
   },
   words: {
     en: [
@@ -141,13 +123,7 @@ const TRANSLATIONS = {
       country: { label: 'Pays', placeholder: 'ex., Maurice', help: 'Dans quel pays vivez-vous?' },
       city: { label: 'Ville', placeholder: 'ex., Port-Louis', help: 'Dans quelle ville habitez-vous?' }
     },
-    mfe: {
-      firstName: { label: 'Premie Non', placeholder: 'ex., Zan', help: 'To premie non se sa dimoun apel twa' },
-      lastName: { label: 'Non Fami', placeholder: 'ex., Ramsamy', help: 'To non fami' },
-      age: { label: 'Laz', placeholder: 'ex., 12', help: 'Konbien lane to ena?' },
-      country: { label: 'Pei', placeholder: 'ex., Moris', help: 'Dan ki pei to pe reste?' },
-      city: { label: 'Vil', placeholder: 'ex., Por-Lwi', help: 'Dan ki vil to pe reste?' }
-    }
+
   }
 };
 
