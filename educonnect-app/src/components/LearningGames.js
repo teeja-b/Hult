@@ -33,25 +33,16 @@ const TRANSLATIONS = {
     Cyan: 'Cyan'
   },
   fr: {
-    Red: 'Rouge',
-    Blue: 'Bleu',
-    Green: 'Vert',
-    Yellow: 'Jaune',
-    Purple: 'Violet',
-    Pink: 'Rose',
+    Rouge: 'Rouge',
+    Bleu: 'Bleu',
+    Vert: 'Vert',
+    Jaune: 'Jaune',
+    Violet: 'Violet',
+    Rose: 'Rose',
     Orange: 'Orange',
     Cyan: 'Cyan'
-  },
-  mfe: {
-    Red: 'Rouz',
-    Blue: 'Ble',
-    Green: 'Ver',
-    Yellow: 'Zol',
-    Purple: 'Violet',
-    Pink: 'Roz',
-    Orange: 'Oranj',
-    Cyan: 'Syan'
   }
+ 
 },
   months: {
     en: [
