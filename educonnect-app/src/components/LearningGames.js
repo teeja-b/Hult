@@ -4,6 +4,8 @@ import {
   Check, X, Award, Heart, Sparkles, Target, Edit3, Calendar,
   FileText, User, Home, Phone, Mail, MapPin, Cake, Hash, Globe
 } from 'lucide-react';
+import { LANGUAGE_CONFIG, speak } from '../utils/language';
+
 
 // Language data
 const LANGUAGES = {
@@ -92,8 +94,7 @@ const TRANSLATIONS = {
       { word: 'Soleil', image: '☀️', category: 'Nature' },
       { word: 'Arbre', image: '🌳', category: 'Nature' },
       { word: 'Eau', image: '💧', category: 'Nature' }
-    ]
-    
+    ],
   },
   formFields: {
     en: {
@@ -379,7 +380,23 @@ const LearningGames = ({ onClose }) => {
         />
       )}
       
-   
+   {currentGame === 'color-match' && (
+        <ColorMatchGame 
+          onBack={() => setCurrentGame(null)}
+          onScoreUpdate={(points) => {
+            setScore(prev => prev + points);
+            if (points > 0) {
+              setStreak(prev => prev + 1);
+              showRewardAnimation();
+            } else {
+              setStreak(0);
+            }
+          }}
+          currentStreak={streak}
+          language={language}
+          langData={lang}
+        />
+      )}
       
       {currentGame === 'sound-words' && (
         <SoundWordsGame 
@@ -417,7 +434,7 @@ const LanguageSelector = ({ selectedLang, onSelectLang }) => {
         <Globe className="text-blue-600" size={24} />
         <h3 className="text-lg font-bold text-gray-800">Choose Language</h3>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {Object.entries(LANGUAGES).map(([code, lang]) => (
           <button
             key={code}
@@ -1843,6 +1860,152 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     </div>
   );
 };
+
+const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, selectedLang }) => {
+  const colors = [
+    { name: 'Red', hex: '#EF4444' },
+    { name: 'Blue', hex: '#3B82F6' },
+    { name: 'Green', hex: '#10B981' },
+    { name: 'Yellow', hex: '#F59E0B' },
+    { name: 'Purple', hex: '#8B5CF6' },
+    { name: 'Pink', hex: '#EC4899' },
+    { name: 'Orange', hex: '#F97316' },
+    { name: 'Cyan', hex: '#06B6D4' }
+  ];
+
+  const [currentColor, setCurrentColor] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [lives, setLives] = useState(3);
+  const [roundScore, setRoundScore] = useState(0);
+
+  useEffect(() => {
+    generateNewRound();
+  }, []);
+
+  const generateNewRound = () => {
+    const correct = colors[Math.floor(Math.random() * colors.length)];
+    const wrongOptions = colors.filter(c => c.name !== correct.name);
+    const shuffled = [
+      correct,
+      ...wrongOptions.sort(() => Math.random() - 0.5).slice(0, 3)
+    ].sort(() => Math.random() - 0.5);
+
+    setCurrentColor(correct);
+    setOptions(shuffled);
+    setFeedback(null);
+  };
+
+  const handleAnswer = (selectedColor) => {
+    if (selectedColor.name === currentColor.name) {
+      setFeedback('correct');
+      onScoreUpdate(10);
+      setRoundScore(prev => prev + 10);
+
+      speak(
+        `${LANGUAGE_CONFIG[selectedLang].correct} ${currentColor.name}`,
+        selectedLang
+      );
+
+      setTimeout(generateNewRound, 1500);
+    } else {
+      setFeedback('wrong');
+      setLives(prev => prev - 1);
+
+      speak(LANGUAGE_CONFIG[selectedLang].tryAgain, selectedLang);
+
+      setTimeout(() => setFeedback(null), 1000);
+
+      if (lives <= 1) {
+        setTimeout(() => {
+          alert(
+            `${LANGUAGE_CONFIG[selectedLang].gameOver} ${roundScore} ⭐`
+          );
+          onBack();
+        }, 1000);
+      }
+    }
+  };
+
+  const speakColorName = () => {
+    if (currentColor) {
+      speak(currentColor.name, selectedLang);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
+          <ArrowLeft size={24} />
+        </button>
+
+        <div className="flex gap-2">
+          {[...Array(3)].map((_, i) => (
+            <Heart
+              key={i}
+              size={24}
+              className={i < lives ? 'text-red-500 fill-red-500' : 'text-gray-300'}
+            />
+          ))}
+        </div>
+
+        <div className="bg-white px-4 py-2 rounded-lg shadow font-bold">
+          {roundScore} ⭐
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
+        <h2 className="text-xl font-bold mb-4">
+          {LANGUAGE_CONFIG[selectedLang].whatColor}
+        </h2>
+
+        <div
+          className="w-48 h-48 mx-auto rounded-3xl shadow-xl mb-4"
+          style={{ backgroundColor: currentColor?.hex }}
+        />
+
+        <button
+          onClick={speakColorName}
+          className="bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto"
+        >
+          <Volume2 size={20} />
+          {LANGUAGE_CONFIG[selectedLang].hearColor}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {options.map((color, index) => (
+          <button
+            key={index}
+            onClick={() => handleAnswer(color)}
+            disabled={feedback !== null}
+            className={`bg-white rounded-xl p-6 shadow-lg
+              ${feedback === 'correct' && color.name === currentColor.name
+                ? 'ring-4 ring-green-500'
+                : ''
+              }`}
+          >
+            <div
+              className="w-16 h-16 mx-auto rounded-xl mb-3"
+              style={{ backgroundColor: color.hex }}
+            />
+            <p className="font-bold">{color.name}</p>
+          </button>
+        ))}
+      </div>
+
+      {feedback === 'correct' && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold animate-bounce">
+            ✓ {LANGUAGE_CONFIG[selectedLang].greatJob}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 
 export default LearningGames;
