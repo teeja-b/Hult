@@ -2,154 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Palette, Volume2, Star, Trophy, ArrowLeft, Play, 
   Check, X, Award, Heart, Sparkles, Target, Edit3, Calendar,
-  FileText, User, Home, Phone, Mail, MapPin, Cake, Hash, Globe
+  FileText, User, Home, Phone, Mail, MapPin, Cake, Hash
 } from 'lucide-react';
-
-// Language data
-const LANGUAGES = {
-  en: { name: 'English', flag: '🇬🇧' },
-  fr: { name: 'Français', flag: '🇫🇷' },
-  mfe: { name: 'Kreol Morisien', flag: '🇲🇺' }
-};
-
-const TRANSLATIONS = {
-  weekdays: {
-    en: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-    fr: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
-    mfe: ['Lindi', 'Mardi', 'Merkredi', 'Zedi', 'Vandredi', 'Samdi', 'Dimans']
-  },
-  months: {
-    en: [
-      { name: 'January', emoji: '❄️', days: 31 },
-      { name: 'February', emoji: '💝', days: 28 },
-      { name: 'March', emoji: '🌸', days: 31 },
-      { name: 'April', emoji: '🌧️', days: 30 },
-      { name: 'May', emoji: '🌺', days: 31 },
-      { name: 'June', emoji: '☀️', days: 30 },
-      { name: 'July', emoji: '🏖️', days: 31 },
-      { name: 'August', emoji: '🌻', days: 31 },
-      { name: 'September', emoji: '🍂', days: 30 },
-      { name: 'October', emoji: '🎃', days: 31 },
-      { name: 'November', emoji: '🦃', days: 30 },
-      { name: 'December', emoji: '🎄', days: 31 }
-    ],
-    fr: [
-      { name: 'Janvier', emoji: '❄️', days: 31 },
-      { name: 'Février', emoji: '💝', days: 28 },
-      { name: 'Mars', emoji: '🌸', days: 31 },
-      { name: 'Avril', emoji: '🌧️', days: 30 },
-      { name: 'Mai', emoji: '🌺', days: 31 },
-      { name: 'Juin', emoji: '☀️', days: 30 },
-      { name: 'Juillet', emoji: '🏖️', days: 31 },
-      { name: 'Août', emoji: '🌻', days: 31 },
-      { name: 'Septembre', emoji: '🍂', days: 30 },
-      { name: 'Octobre', emoji: '🎃', days: 31 },
-      { name: 'Novembre', emoji: '🦃', days: 30 },
-      { name: 'Décembre', emoji: '🎄', days: 31 }
-    ],
-    mfe: [
-      { name: 'Zanvie', emoji: '❄️', days: 31 },
-      { name: 'Fevrie', emoji: '💝', days: 28 },
-      { name: 'Mars', emoji: '🌸', days: 31 },
-      { name: 'Avril', emoji: '🌧️', days: 30 },
-      { name: 'Me', emoji: '🌺', days: 31 },
-      { name: 'Zin', emoji: '☀️', days: 30 },
-      { name: 'Ziyé', emoji: '🏖️', days: 31 },
-      { name: 'Out', emoji: '🌻', days: 31 },
-      { name: 'Septam', emoji: '🍂', days: 30 },
-      { name: 'Oktob', emoji: '🎃', days: 31 },
-      { name: 'Novam', emoji: '🦃', days: 30 },
-      { name: 'Desam', emoji: '🎄', days: 31 }
-    ]
-  },
-  numbers: {
-    en: {
-      1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five',
-      6: 'Six', 7: 'Seven', 8: 'Eight', 9: 'Nine', 10: 'Ten',
-      11: 'Eleven', 12: 'Twelve', 13: 'Thirteen', 14: 'Fourteen', 15: 'Fifteen',
-      16: 'Sixteen', 17: 'Seventeen', 18: 'Eighteen', 19: 'Nineteen', 20: 'Twenty'
-    },
-    fr: {
-      1: 'Un', 2: 'Deux', 3: 'Trois', 4: 'Quatre', 5: 'Cinq',
-      6: 'Six', 7: 'Sept', 8: 'Huit', 9: 'Neuf', 10: 'Dix',
-      11: 'Onze', 12: 'Douze', 13: 'Treize', 14: 'Quatorze', 15: 'Quinze',
-      16: 'Seize', 17: 'Dix-sept', 18: 'Dix-huit', 19: 'Dix-neuf', 20: 'Vingt'
-    },
-    mfe: {
-      1: 'Enn', 2: 'De', 3: 'Trwa', 4: 'Kat', 5: 'Sink',
-      6: 'Sis', 7: 'Set', 8: 'Uit', 9: 'Nef', 10: 'Dis',
-      11: 'Onz', 12: 'Douz', 13: 'Trez', 14: 'Katorz', 15: 'Kenz',
-      16: 'Sez', 17: 'Dis-set', 18: 'Dizuit', 19: 'Diznef', 20: 'Ven'
-    }
-  },
-  words: {
-    en: [
-      { word: 'Apple', image: '🍎', category: 'Fruit' },
-      { word: 'Ball', image: '⚽', category: 'Toy' },
-      { word: 'Cat', image: '🐱', category: 'Animal' },
-      { word: 'Dog', image: '🐕', category: 'Animal' },
-      { word: 'Elephant', image: '🐘', category: 'Animal' },
-      { word: 'Fish', image: '🐟', category: 'Animal' },
-      { word: 'Grapes', image: '🍇', category: 'Fruit' },
-      { word: 'House', image: '🏠', category: 'Building' },
-      { word: 'Ice Cream', image: '🍦', category: 'Food' },
-      { word: 'Sun', image: '☀️', category: 'Nature' },
-      { word: 'Tree', image: '🌳', category: 'Nature' },
-      { word: 'Water', image: '💧', category: 'Nature' }
-    ],
-    fr: [
-      { word: 'Pomme', image: '🍎', category: 'Fruit' },
-      { word: 'Ballon', image: '⚽', category: 'Jouet' },
-      { word: 'Chat', image: '🐱', category: 'Animal' },
-      { word: 'Chien', image: '🐕', category: 'Animal' },
-      { word: 'Éléphant', image: '🐘', category: 'Animal' },
-      { word: 'Poisson', image: '🐟', category: 'Animal' },
-      { word: 'Raisin', image: '🍇', category: 'Fruit' },
-      { word: 'Maison', image: '🏠', category: 'Bâtiment' },
-      { word: 'Glace', image: '🍦', category: 'Nourriture' },
-      { word: 'Soleil', image: '☀️', category: 'Nature' },
-      { word: 'Arbre', image: '🌳', category: 'Nature' },
-      { word: 'Eau', image: '💧', category: 'Nature' }
-    ],
-    mfe: [
-      { word: 'Pom', image: '🍎', category: 'Fri' },
-      { word: 'Balon', image: '⚽', category: 'Zwe' },
-      { word: 'Sat', image: '🐱', category: 'Zanimo' },
-      { word: 'Lisien', image: '🐕', category: 'Zanimo' },
-      { word: 'Elefan', image: '🐘', category: 'Zanimo' },
-      { word: 'Pwason', image: '🐟', category: 'Zanimo' },
-      { word: 'Rezen', image: '🍇', category: 'Fri' },
-      { word: 'Lakaz', image: '🏠', category: 'Batiman' },
-      { word: 'Laglas', image: '🍦', category: 'Manze' },
-      { word: 'Soley', image: '☀️', category: 'Natirel' },
-      { word: 'Pie', image: '🌳', category: 'Natirel' },
-      { word: 'Dilo', image: '💧', category: 'Natirel' }
-    ]
-  },
-  formFields: {
-    en: {
-      firstName: { label: 'First Name', placeholder: 'e.g., John', help: 'Your first name is what people call you' },
-      lastName: { label: 'Last Name', placeholder: 'e.g., Smith', help: 'Your family name or surname' },
-      age: { label: 'Age', placeholder: 'e.g., 12', help: 'How old are you in years?' },
-      country: { label: 'Country', placeholder: 'e.g., Mauritius', help: 'Which country do you live in?' },
-      city: { label: 'City', placeholder: 'e.g., Port Louis', help: 'Which city or town do you live in?' }
-    },
-    fr: {
-      firstName: { label: 'Prénom', placeholder: 'ex., Jean', help: 'Votre prénom est comment les gens vous appellent' },
-      lastName: { label: 'Nom de famille', placeholder: 'ex., Dupont', help: 'Votre nom de famille' },
-      age: { label: 'Âge', placeholder: 'ex., 12', help: 'Quel âge avez-vous en années?' },
-      country: { label: 'Pays', placeholder: 'ex., Maurice', help: 'Dans quel pays vivez-vous?' },
-      city: { label: 'Ville', placeholder: 'ex., Port-Louis', help: 'Dans quelle ville habitez-vous?' }
-    },
-    mfe: {
-      firstName: { label: 'Premie Non', placeholder: 'ex., Zan', help: 'To premie non se sa dimoun apel twa' },
-      lastName: { label: 'Non Fami', placeholder: 'ex., Ramsamy', help: 'To non fami' },
-      age: { label: 'Laz', placeholder: 'ex., 12', help: 'Konbien lane to ena?' },
-      country: { label: 'Pei', placeholder: 'ex., Moris', help: 'Dan ki pei to pe reste?' },
-      city: { label: 'Vil', placeholder: 'ex., Por-Lwi', help: 'Dan ki vil to pe reste?' }
-    }
-  }
-};
 
 const LearningGames = ({ onClose }) => {
   const [currentGame, setCurrentGame] = useState(null);
@@ -460,36 +314,8 @@ const LearningGames = ({ onClose }) => {
   );
 };
 
-// Language Selector Component
-const LanguageSelector = ({ selectedLang, onSelectLang }) => {
-  return (
-    <div className="bg-white rounded-xl p-6 shadow-lg mb-6">
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <Globe className="text-blue-600" size={24} />
-        <h3 className="text-lg font-bold text-gray-800">Choose Language</h3>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {Object.entries(LANGUAGES).map(([code, lang]) => (
-          <button
-            key={code}
-            onClick={() => onSelectLang(code)}
-            className={`p-4 rounded-lg border-2 transition transform hover:scale-105 active:scale-95 ${
-              selectedLang === code
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 bg-white'
-            }`}
-          >
-            <div className="text-3xl mb-2">{lang.flag}</div>
-            <div className="text-sm font-bold text-gray-800">{lang.name}</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // ============================================================================
-// ALPHABET TRACING GAME (No changes - English only)
+// ALPHABET TRACING GAME
 // ============================================================================
 
 const AlphabetTracingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
@@ -498,6 +324,7 @@ const AlphabetTracingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   const [userInput, setUserInput] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
   const [roundScore, setRoundScore] = useState(0);
+  const canvasRef = useRef(null);
 
   const currentLetter = alphabet[currentLetterIndex];
 
@@ -630,7 +457,7 @@ const AlphabetTracingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// NAME WRITING GAME (No changes - Language independent)
+// NAME WRITING GAME
 // ============================================================================
 
 const NameWritingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
@@ -815,24 +642,22 @@ const NameWritingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// WEEKDAYS GAME - WITH LANGUAGE SUPPORT
+// WEEKDAYS GAME
 // ============================================================================
 
 const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
+  const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const [options, setOptions] = useState([]);
   const [feedback, setFeedback] = useState(null);
   const [roundScore, setRoundScore] = useState(0);
-  const [mode, setMode] = useState('learn');
-
-  const weekdays = selectedLang ? TRANSLATIONS.weekdays[selectedLang] : [];
+  const [mode, setMode] = useState('learn'); // 'learn' or 'quiz'
 
   useEffect(() => {
-    if (mode === 'quiz' && selectedLang) {
+    if (mode === 'quiz') {
       generateOptions();
     }
-  }, [currentDayIndex, mode, selectedLang]);
+  }, [currentDayIndex, mode]);
 
   const generateOptions = () => {
     const correct = weekdays[currentDayIndex];
@@ -849,7 +674,6 @@ const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(day);
       utterance.rate = 0.7;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -877,7 +701,7 @@ const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     }
   };
 
-  if (!selectedLang) {
+  if (mode === 'learn') {
     return (
       <div className="max-w-md mx-auto p-4">
         <div className="flex items-center justify-between mb-6">
@@ -885,24 +709,6 @@ const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
             <ArrowLeft size={24} />
           </button>
           <h2 className="text-xl font-bold text-gray-800">Days of the Week</h2>
-          <div className="w-10"></div>
-        </div>
-        <LanguageSelector selectedLang={selectedLang} onSelectLang={setSelectedLang} />
-      </div>
-    );
-  }
-
-  if (mode === 'learn') {
-    return (
-      <div className="max-w-md mx-auto p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
-            <ArrowLeft size={24} />
-          </button>
-          <div className="text-center">
-            <h2 className="text-xl font-bold text-gray-800">Days of the Week</h2>
-            <p className="text-sm text-gray-600">{LANGUAGES[selectedLang].flag} {LANGUAGES[selectedLang].name}</p>
-          </div>
           <div className="w-10"></div>
         </div>
 
@@ -1009,24 +815,35 @@ const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// MONTHS GAME - WITH LANGUAGE SUPPORT
+// MONTHS GAME
 // ============================================================================
 
 const MonthsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
+  const months = [
+    { name: 'January', emoji: '❄️', days: 31 },
+    { name: 'February', emoji: '💝', days: 28 },
+    { name: 'March', emoji: '🌸', days: 31 },
+    { name: 'April', emoji: '🌧️', days: 30 },
+    { name: 'May', emoji: '🌺', days: 31 },
+    { name: 'June', emoji: '☀️', days: 30 },
+    { name: 'July', emoji: '🏖️', days: 31 },
+    { name: 'August', emoji: '🌻', days: 31 },
+    { name: 'September', emoji: '🍂', days: 30 },
+    { name: 'October', emoji: '🎃', days: 31 },
+    { name: 'November', emoji: '🦃', days: 30 },
+    { name: 'December', emoji: '🎄', days: 31 }
+  ];
+
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [mode, setMode] = useState('learn');
   const [userInput, setUserInput] = useState('');
   const [roundScore, setRoundScore] = useState(0);
-
-  const months = selectedLang ? TRANSLATIONS.months[selectedLang] : [];
 
   const speakMonth = (month) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(month);
       utterance.rate = 0.7;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -1051,32 +868,14 @@ const MonthsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     }
   };
 
-  if (!selectedLang) {
-    return (
-      <div className="max-w-md mx-auto p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">Months of the Year</h2>
-          <div className="w-10"></div>
-        </div>
-        <LanguageSelector selectedLang={selectedLang} onSelectLang={setSelectedLang} />
-      </div>
-    );
-  }
-
   if (mode === 'learn') {
     return (
       <div className="max-w-md mx-auto p-4 pb-20">
         <div className="flex items-center justify-between mb-6">
-          <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
+          <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
             <ArrowLeft size={24} />
           </button>
-          <div className="text-center">
-            <h2 className="text-xl font-bold text-gray-800">12 Months</h2>
-            <p className="text-sm text-gray-600">{LANGUAGES[selectedLang].flag} {LANGUAGES[selectedLang].name}</p>
-          </div>
+          <h2 className="text-xl font-bold text-gray-800">12 Months</h2>
           <div className="w-10"></div>
         </div>
 
@@ -1183,27 +982,30 @@ const MonthsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// NUMBERS GAME - WITH LANGUAGE SUPPORT
+// NUMBERS GAME
 // ============================================================================
 
 const NumbersGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
   const [currentNumber, setCurrentNumber] = useState(1);
   const [mode, setMode] = useState('learn');
   const [userInput, setUserInput] = useState('');
   const [roundScore, setRoundScore] = useState(0);
   const maxNumber = 20;
 
-  const numberWords = selectedLang ? TRANSLATIONS.numbers[selectedLang] : {};
-
   const speakNumber = (num) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(num.toString());
       utterance.rate = 0.7;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const numberWords = {
+    1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five',
+    6: 'Six', 7: 'Seven', 8: 'Eight', 9: 'Nine', 10: 'Ten',
+    11: 'Eleven', 12: 'Twelve', 13: 'Thirteen', 14: 'Fourteen', 15: 'Fifteen',
+    16: 'Sixteen', 17: 'Seventeen', 18: 'Eighteen', 19: 'Nineteen', 20: 'Twenty'
   };
 
   const handleCheck = () => {
@@ -1226,32 +1028,14 @@ const NumbersGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     }
   };
 
-  if (!selectedLang) {
+  if (mode === 'learn') {
     return (
-      <div className="max-w-md mx-auto p-4">
+      <div className="max-w-md mx-auto p-4 pb-20">
         <div className="flex items-center justify-between mb-6">
           <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
             <ArrowLeft size={24} />
           </button>
           <h2 className="text-xl font-bold text-gray-800">Learn Numbers</h2>
-          <div className="w-10"></div>
-        </div>
-        <LanguageSelector selectedLang={selectedLang} onSelectLang={setSelectedLang} />
-      </div>
-    );
-  }
-
-  if (mode === 'learn') {
-    return (
-      <div className="max-w-md mx-auto p-4 pb-20">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
-            <ArrowLeft size={24} />
-          </button>
-          <div className="text-center">
-            <h2 className="text-xl font-bold text-gray-800">Learn Numbers</h2>
-            <p className="text-sm text-gray-600">{LANGUAGES[selectedLang].flag} {LANGUAGES[selectedLang].name}</p>
-          </div>
           <div className="w-10"></div>
         </div>
 
@@ -1364,11 +1148,10 @@ const NumbersGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// FORM FILLING GAME - WITH LANGUAGE SUPPORT
+// FORM FILLING GAME
 // ============================================================================
 
 const FormFillingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -1380,38 +1163,30 @@ const FormFillingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   const [currentField, setCurrentField] = useState('firstName');
   const [completedFields, setCompletedFields] = useState([]);
 
-  const fieldsList = [
-    { id: 'firstName', icon: User, type: 'text' },
-    { id: 'lastName', icon: User, type: 'text' },
-    { id: 'age', icon: Cake, type: 'number' },
-    { id: 'country', icon: MapPin, type: 'text' },
-    { id: 'city', icon: Home, type: 'text' }
+  const fields = [
+    { id: 'firstName', label: 'First Name', icon: User, placeholder: 'e.g., John', type: 'text', help: 'Your first name is what people call you' },
+    { id: 'lastName', label: 'Last Name', icon: User, placeholder: 'e.g., Smith', type: 'text', help: 'Your family name or surname' },
+    { id: 'age', label: 'Age', icon: Cake, placeholder: 'e.g., 12', type: 'number', help: 'How old are you in years?' },
+    { id: 'country', label: 'Country', icon: MapPin, placeholder: 'e.g., USA', type: 'text', help: 'Which country do you live in?' },
+    { id: 'city', label: 'City', icon: Home, placeholder: 'e.g., New York', type: 'text', help: 'Which city or town do you live in?' }
   ];
-
-  const fields = selectedLang ? fieldsList.map(f => ({
-    ...f,
-    ...TRANSLATIONS.formFields[selectedLang][f.id]
-  })) : [];
 
   const currentFieldData = fields.find(f => f.id === currentField);
   const currentFieldIndex = fields.findIndex(f => f.id === currentField);
-  const Icon = currentFieldData?.icon;
+  const Icon = currentFieldData.icon;
 
   const speakText = (text) => {
-    if ('speechSynthesis' in window && selectedLang) {
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.7;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
 
   useEffect(() => {
-    if (currentFieldData) {
-      speakText(currentFieldData.label + '. ' + currentFieldData.help);
-    }
-  }, [currentField, selectedLang]);
+    speakText(currentFieldData.label + '. ' + currentFieldData.help);
+  }, [currentField]);
 
   const handleNext = () => {
     if (formData[currentField].trim()) {
@@ -1443,25 +1218,10 @@ const FormFillingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     }
   };
 
-  if (!selectedLang) {
-    return (
-      <div className="max-w-md mx-auto p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">Fill a Form</h2>
-          <div className="w-10"></div>
-        </div>
-        <LanguageSelector selectedLang={selectedLang} onSelectLang={setSelectedLang} />
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-md mx-auto p-4">
       <div className="flex items-center justify-between mb-6">
-        <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
+        <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
           <ArrowLeft size={24} />
         </button>
         <div className="text-center">
@@ -1548,173 +1308,7 @@ const FormFillingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 };
 
 // ============================================================================
-// SOUND WORDS GAME - WITH LANGUAGE SUPPORT
-// ============================================================================
-
-const SoundWordsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
-  const [currentWord, setCurrentWord] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [feedback, setFeedback] = useState(null);
-  const [roundScore, setRoundScore] = useState(0);
-  const [showWord, setShowWord] = useState(false);
-
-  const words = selectedLang ? TRANSLATIONS.words[selectedLang] : [];
-
-  useEffect(() => {
-    if (selectedLang) {
-      generateNewRound();
-    }
-  }, [selectedLang]);
-
-  const generateNewRound = () => {
-    const correct = words[Math.floor(Math.random() * words.length)];
-    const wrongOptions = words.filter(w => w.word !== correct.word);
-    const shuffled = [
-      correct,
-      ...wrongOptions.sort(() => Math.random() - 0.5).slice(0, 3)
-    ].sort(() => Math.random() - 0.5);
-    
-    setCurrentWord(correct);
-    setOptions(shuffled);
-    setFeedback(null);
-    setShowWord(false);
-    
-    setTimeout(() => speakWord(correct.word), 500);
-  };
-
-  const speakWord = (word) => {
-    if ('speechSynthesis' in window && selectedLang) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.rate = 0.7;
-      utterance.pitch = 1.2;
-      utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
-  const handleAnswer = (selectedWord) => {
-    if (selectedWord.word === currentWord.word) {
-      setFeedback('correct');
-      onScoreUpdate(10);
-      setRoundScore(prev => prev + 10);
-      setShowWord(true);
-      
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(`Excellent! ${currentWord.word}`);
-        utterance.rate = 0.8;
-        utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
-        window.speechSynthesis.speak(utterance);
-      }
-      
-      setTimeout(() => {
-        generateNewRound();
-      }, 2000);
-    } else {
-      setFeedback('wrong');
-      onScoreUpdate(0);
-      
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance('Try again!');
-        utterance.rate = 0.8;
-        utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
-        window.speechSynthesis.speak(utterance);
-      }
-      
-      setTimeout(() => {
-        setFeedback(null);
-        speakWord(currentWord.word);
-      }, 1500);
-    }
-  };
-
-  if (!selectedLang) {
-    return (
-      <div className="max-w-md mx-auto p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">Learn Words</h2>
-          <div className="w-10"></div>
-        </div>
-        <LanguageSelector selectedLang={selectedLang} onSelectLang={setSelectedLang} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-md mx-auto p-4">
-      <div className="flex items-center justify-between mb-6">
-        <button onClick={() => setSelectedLang(null)} className="p-2 bg-white rounded-lg shadow">
-          <ArrowLeft size={24} />
-        </button>
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-800">Learn Words</h2>
-          <p className="text-sm text-gray-600">{LANGUAGES[selectedLang].flag} {LANGUAGES[selectedLang].name}</p>
-        </div>
-        <div className="bg-white px-4 py-2 rounded-lg shadow font-bold">
-          {roundScore} ⭐
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
-        <div className="w-32 h-32 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-          <Volume2 className="text-white" size={48} />
-        </div>
-        
-        <h3 className="text-lg font-bold text-gray-800 mb-4">
-          Listen and tap the correct picture!
-        </h3>
-        
-        <button
-          onClick={() => speakWord(currentWord?.word)}
-          className="bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-blue-600 transition"
-        >
-          <Volume2 size={20} />
-          Play Again
-        </button>
-        
-        {showWord && (
-          <div className="mt-4 text-3xl font-bold text-green-600 animate-bounce">
-            {currentWord.word}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {options.map((item, index) => (
-          <button
-            key={index}
-            onClick={() => handleAnswer(item)}
-            disabled={feedback !== null}
-            className={`
-              bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition
-              ${feedback === 'correct' && item.word === currentWord.word ? 'ring-4 ring-green-500' : ''}
-            `}
-          >
-            <div className="text-6xl mb-3">{item.image}</div>
-            {showWord && (
-              <p className="text-sm font-bold text-gray-800">{item.word}</p>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {feedback === 'correct' && (
-        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
-            ✓ Perfect!
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// COMMON SIGNS GAME (No changes - English only for safety signs)
+// COMMON SIGNS GAME
 // ============================================================================
 
 const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
@@ -1895,5 +1489,315 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   );
 };
 
+// ============================================================================
+// COLOR MATCHING GAME (from previous implementation)
+// ============================================================================
+
+const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
+  const colors = [
+    { name: 'Red', hex: '#EF4444' },
+    { name: 'Blue', hex: '#3B82F6' },
+    { name: 'Green', hex: '#10B981' },
+    { name: 'Yellow', hex: '#F59E0B' },
+    { name: 'Purple', hex: '#8B5CF6' },
+    { name: 'Pink', hex: '#EC4899' },
+    { name: 'Orange', hex: '#F97316' },
+    { name: 'Cyan', hex: '#06B6D4' }
+  ];
+
+  const [currentColor, setCurrentColor] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [lives, setLives] = useState(3);
+  const [roundScore, setRoundScore] = useState(0);
+
+  useEffect(() => {
+    generateNewRound();
+  }, []);
+
+  const generateNewRound = () => {
+    const correct = colors[Math.floor(Math.random() * colors.length)];
+    const wrongOptions = colors.filter(c => c.name !== correct.name);
+    const shuffled = [
+      correct,
+      ...wrongOptions.sort(() => Math.random() - 0.5).slice(0, 3)
+    ].sort(() => Math.random() - 0.5);
+    
+    setCurrentColor(correct);
+    setOptions(shuffled);
+    setFeedback(null);
+  };
+
+  const handleAnswer = (selectedColor) => {
+    if (selectedColor.name === currentColor.name) {
+      setFeedback('correct');
+      onScoreUpdate(10);
+      setRoundScore(prev => prev + 10);
+      
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(`Correct! ${currentColor.name}`);
+        utterance.rate = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      setTimeout(() => {
+        generateNewRound();
+      }, 1500);
+    } else {
+      setFeedback('wrong');
+      setLives(prev => prev - 1);
+      onScoreUpdate(0);
+      
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance('Try again!');
+        utterance.rate = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      setTimeout(() => {
+        setFeedback(null);
+      }, 1000);
+      
+      if (lives <= 1) {
+        setTimeout(() => {
+          alert(`Game Over! You scored ${roundScore} points!`);
+          onBack();
+        }, 1000);
+      }
+    }
+  };
+
+  const speakColorName = () => {
+    if ('speechSynthesis' in window && currentColor) {
+      const utterance = new SpeechSynthesisUtterance(currentColor.name);
+      utterance.rate = 0.8;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
+          <ArrowLeft size={24} />
+        </button>
+        <div className="flex items-center gap-2">
+          {[...Array(3)].map((_, i) => (
+            <Heart
+              key={i}
+              size={24}
+              className={i < lives ? 'text-red-500 fill-red-500' : 'text-gray-300'}
+            />
+          ))}
+        </div>
+        <div className="bg-white px-4 py-2 rounded-lg shadow font-bold">
+          {roundScore} ⭐
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">
+          What color is this?
+        </h2>
+        
+        <div 
+          className="w-48 h-48 mx-auto rounded-3xl shadow-xl mb-4"
+          style={{ backgroundColor: currentColor?.hex }}
+        />
+        
+        <button
+          onClick={speakColorName}
+          className="bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-blue-600 transition"
+        >
+          <Volume2 size={20} />
+          Hear the Color
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {options.map((color, index) => (
+          <button
+            key={index}
+            onClick={() => handleAnswer(color)}
+            disabled={feedback !== null}
+            className={`
+              bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition
+              ${feedback === 'correct' && color.name === currentColor.name ? 'ring-4 ring-green-500' : ''}
+            `}
+          >
+            <div 
+              className="w-16 h-16 mx-auto rounded-xl mb-3 shadow"
+              style={{ backgroundColor: color.hex }}
+            />
+            <p className="text-lg font-bold text-gray-800">{color.name}</p>
+          </button>
+        ))}
+      </div>
+
+      {feedback === 'correct' && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
+            ✓ Great Job!
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// SOUND WORDS GAME (from previous implementation)
+// ============================================================================
+
+const SoundWordsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
+  const words = [
+    { word: 'Apple', image: '🍎', category: 'Fruit' },
+    { word: 'Ball', image: '⚽', category: 'Toy' },
+    { word: 'Cat', image: '🐱', category: 'Animal' },
+    { word: 'Dog', image: '🐕', category: 'Animal' },
+    { word: 'Elephant', image: '🐘', category: 'Animal' },
+    { word: 'Fish', image: '🐟', category: 'Animal' },
+    { word: 'Grapes', image: '🍇', category: 'Fruit' },
+    { word: 'House', image: '🏠', category: 'Building' },
+    { word: 'Ice Cream', image: '🍦', category: 'Food' },
+    { word: 'Sun', image: '☀️', category: 'Nature' },
+    { word: 'Tree', image: '🌳', category: 'Nature' },
+    { word: 'Water', image: '💧', category: 'Nature' }
+  ];
+
+  const [currentWord, setCurrentWord] = useState(null);
+  const [options, setOptions] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [roundScore, setRoundScore] = useState(0);
+  const [showWord, setShowWord] = useState(false);
+
+  useEffect(() => {
+    generateNewRound();
+  }, []);
+
+  const generateNewRound = () => {
+    const correct = words[Math.floor(Math.random() * words.length)];
+    const wrongOptions = words.filter(w => w.word !== correct.word);
+    const shuffled = [
+      correct,
+      ...wrongOptions.sort(() => Math.random() - 0.5).slice(0, 3)
+    ].sort(() => Math.random() - 0.5);
+    
+    setCurrentWord(correct);
+    setOptions(shuffled);
+    setFeedback(null);
+    setShowWord(false);
+    
+    setTimeout(() => speakWord(correct.word), 500);
+  };
+
+  const speakWord = (word) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.rate = 0.7;
+      utterance.pitch = 1.2;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleAnswer = (selectedWord) => {
+    if (selectedWord.word === currentWord.word) {
+      setFeedback('correct');
+      onScoreUpdate(10);
+      setRoundScore(prev => prev + 10);
+      setShowWord(true);
+      
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(`Excellent! ${currentWord.word}`);
+        utterance.rate = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      setTimeout(() => {
+        generateNewRound();
+      }, 2000);
+    } else {
+      setFeedback('wrong');
+      onScoreUpdate(0);
+      
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance('Try again!');
+        utterance.rate = 0.8;
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      setTimeout(() => {
+        setFeedback(null);
+        speakWord(currentWord.word);
+      }, 1500);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={onBack} className="p-2 bg-white rounded-lg shadow">
+          <ArrowLeft size={24} />
+        </button>
+        <h2 className="text-xl font-bold text-gray-800">Learn Words</h2>
+        <div className="bg-white px-4 py-2 rounded-lg shadow font-bold">
+          {roundScore} ⭐
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
+        <div className="w-32 h-32 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <Volume2 className="text-white" size={48} />
+        </div>
+        
+        <h3 className="text-lg font-bold text-gray-800 mb-4">
+          Listen and tap the correct picture!
+        </h3>
+        
+        <button
+          onClick={() => speakWord(currentWord?.word)}
+          className="bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-blue-600 transition"
+        >
+          <Volume2 size={20} />
+          Play Again
+        </button>
+        
+        {showWord && (
+          <div className="mt-4 text-3xl font-bold text-green-600 animate-bounce">
+            {currentWord.word}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {options.map((item, index) => (
+          <button
+            key={index}
+            onClick={() => handleAnswer(item)}
+            disabled={feedback !== null}
+            className={`
+              bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition
+              ${feedback === 'correct' && item.word === currentWord.word ? 'ring-4 ring-green-500' : ''}
+            `}
+          >
+            <div className="text-6xl mb-3">{item.image}</div>
+            {showWord && (
+              <p className="text-sm font-bold text-gray-800">{item.word}</p>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {feedback === 'correct' && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
+            ✓ Perfect!
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default LearningGames;
