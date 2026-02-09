@@ -5,13 +5,12 @@ import StudentSurvey from './components/StudentSurvey';
 import TutorOnboarding from './components/TutorOnboarding';
 import StudentProfile from './components/StudentProfile';
 import TutorProfile from './components/TutorProfile';
-import TutorProfileViewer from './components/TutorProfileViewer';
 
 import CourseMaterialsViewer from './components/CourseMaterialViewer';
 import { 
   BookOpen, Users, Award, Heart, Download, Menu, X, Search, 
   Upload, MessageSquare, BarChart3, Globe, DollarSign, GraduationCap, 
-  Video, FileText, CheckCircle, MapPin, Shield, AlertCircle, Lock, LogOut,Phone,PhoneOff
+  Video, FileText, CheckCircle, MapPin, Shield, AlertCircle, Lock, LogOut,Phone,PhoneOff,Sparkles
 } from 'lucide-react';
 import TutorCourseManager from './components/TutorCourseManager';
 import MessagingVideoChat from './components/MessagingVideoChat';
@@ -32,6 +31,7 @@ import DailyVideoCall from './components/JitsiVideoCall';
 import AITutorMatcher from './components/AITutorMatch';
 // Add this with your other imports (around line 1-20)
 import { playRingtone, stopRingtone } from './firebaseConfig';
+import LearningGames from './components/LearningGames';
 const EduConnectApp = () => {
   const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
   
@@ -40,7 +40,6 @@ const EduConnectApp = () => {
   // Around line 56, add this state with your other state declarations:
 const [showAIMatcherModal, setShowAIMatcherModal] = useState(false);
 const [studentProfileForMatching, setStudentProfileForMatching] = useState(null);
-  const [viewingTutorProfile, setViewingTutorProfile] = useState(null);
   const [showCourseManager, setShowCourseManager] = useState(false);
   const [tutorStats, setTutorStats] = useState({
     totalCourses: 0,
@@ -61,6 +60,7 @@ const [isAuthenticated, setIsAuthenticated] = useState(() => {
 const [userType, setUserType] = useState(() => {
   return localStorage.getItem('userType');
 });
+const [showGames, setShowGames] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [userRegion, setUserRegion] = useState(null);
@@ -645,10 +645,19 @@ useEffect(() => {
                     <Users size={20} />
                     <span className="font-medium">Find Tutors</span>
                   </button>
+
+                      <button 
+      onClick={() => { setShowGames(true); setMenuOpen(false); }} 
+      className="w-full text-left px-4 py-3 hover:bg-white/20 rounded-lg transition flex items-center gap-3"
+    >
+      <Sparkles size={20} />
+      <span className="font-medium">Learning Games 🎮</span>
+    </button>
+  </>
+)}
                   
            
-                </>
-              )}
+              
 
               {/* TUTOR MENU ITEMS */}
               {isAuthenticated && userType === 'tutor' && (
@@ -1627,7 +1636,10 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
         setShowTutorProfile={setShowTutorProfile}
         setShowCourseManager={setShowCourseManager}
       />
-
+{/* Learning Games */}
+{showGames && (
+  <LearningGames onClose={() => setShowGames(false)} />
+)}
             {/* ✅ ADD THIS RIGHT HERE - After NavBar, before Main Content */}
 {/* ✅ Incoming Call Modal - Show on ALL views EXCEPT chat */}
 {incomingCallData  && (
@@ -1842,14 +1854,7 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
   </div>
 )}
       
-      {/* Tutor Profile Viewer Modal */}
-      {viewingTutorProfile && (
-        <TutorProfileViewer
-          tutorId={viewingTutorProfile}
-          onClose={() => setViewingTutorProfile(null)}
-          API_URL={API_URL}
-        />
-      )}
+
       <div className="h-16"></div>
 
       {/* Bottom navigation */}
@@ -1877,7 +1882,15 @@ const GlobalIncomingCallModal = ({ callData, onAccept, onDecline }) => {
             <MessageSquare size={24} />
             <span className="text-xs mt-1">Messages</span>
           </button>
-              </>
+              <button 
+      onClick={() => setShowGames(true)} 
+      className={`flex flex-col items-center p-2 ${showGames ? 'text-blue-600' : 'text-gray-600'}`}
+    >
+      <Sparkles size={24} />
+      <span className="text-xs mt-1">Games</span>
+    </button>
+  </>
+            
               
               
             )}
