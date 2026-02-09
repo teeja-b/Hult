@@ -1886,6 +1886,8 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
 
 const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
   const [selectedLang, setSelectedLang] = useState(language || null);
+  const [feedbackColor, setFeedbackColor] = useState(null);
+
 
   const colors = [
     { name: 'Red', hex: '#EF4444' },
@@ -1938,23 +1940,23 @@ const handleAnswer = (selectedColor) => {
 
   if (selectedColor.name === currentColor.name) {
     setFeedback('correct');
+    setFeedbackColor(currentColor); // freeze the color for feedback
     onScoreUpdate(10);
     setRoundScore(prev => prev + 10);
 
-    // Speak immediately the correct feedback + color
     speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
 
-    // Generate new round after a short delay
     setTimeout(() => {
       generateNewRound();
-      setFeedback(null); // reset feedback for next round
+      setFeedback(null);
+      setFeedbackColor(null); // reset after animation
     }, 1500);
   } else {
     setFeedback('wrong');
+    setFeedbackColor(selectedColor); // optional: show which one was wrong
     setLives(prev => prev - 1);
     onScoreUpdate(0);
 
-    // Speak wrong feedback
     speakColorName(langData.tryAgain || 'Try again!');
 
     setTimeout(() => setFeedback(null), 1000);
@@ -1967,6 +1969,7 @@ const handleAnswer = (selectedColor) => {
     }
   }
 };
+
 
 
   if (!selectedLang) {
@@ -2044,13 +2047,17 @@ const handleAnswer = (selectedColor) => {
         ))}
       </div>
 
-      {feedback === 'correct' && (
-        <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
-            ✓ {langData.greatJob || 'Great Job!'}
-          </div>
-        </div>
-      )}
+    {feedback === 'correct' && feedbackColor && (
+  <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+    <div
+      className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce"
+      style={{ backgroundColor: feedbackColor.hex }}
+    >
+      ✓ {langData.greatJob || 'Great Job!'}
+    </div>
+  </div>
+)}
+      
     </div>
   );
 };
