@@ -510,7 +510,7 @@ const AlphabetTracingGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       setRoundScore(prev => prev + 10);
       speakLetter('Correct! ' + currentLetter);
     } else {
-      speakLetter('Try again: ' + currentLetter);
+      speakLetter('Try again: ');
     }
     
     setUserInput('');
@@ -848,7 +848,7 @@ const WeekdaysGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       setFeedback('correct');
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
-      speakDay('Correct! ' + selectedDay);
+      speakDay('Correct! ' );
       
       setTimeout(() => {
         if (currentDayIndex < weekdays.length - 1) {
@@ -1024,7 +1024,7 @@ const MonthsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     if (userInput.toLowerCase() === months[currentMonthIndex].name.toLowerCase()) {
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
-      speakMonth('Correct! ' + months[currentMonthIndex].name);
+      speakMonth('Correct! ' );
       
       setTimeout(() => {
         if (currentMonthIndex < months.length - 1) {
@@ -1199,7 +1199,7 @@ const NumbersGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     if (parseInt(userInput) === currentNumber) {
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
-      speakNumber(`Correct! ${currentNumber}`);
+      speakNumber(`Correct! `);
       
       setTimeout(() => {
         if (currentNumber < maxNumber) {
@@ -1613,7 +1613,7 @@ const SoundWordsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       
       setTimeout(() => {
         setFeedback(null);
-        speakWord(currentWord.word);
+        
       }, 1500);
     }
   };
@@ -1756,7 +1756,7 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       setFeedback('correct');
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
-      speakSign('Correct! ' + selectedSign.name);
+      speakSign('Correct! ' );
       
       setTimeout(() => {
         if (currentSignIndex < signs.length - 1) {
@@ -1948,7 +1948,7 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
 
-      speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
+      speakColorName(`${langData.correct || 'Correct!'} `);
 
       setTimeout(() => {
         generateNewRound();
@@ -2053,7 +2053,7 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
       </div>
 
       {/* Feedback */}
-      {feedback === 'correct' && feedbackColor && (
+      {feedback === 'correct' && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
             ✓ {langData.greatJob || 'Great Job!'}
