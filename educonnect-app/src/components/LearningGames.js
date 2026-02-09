@@ -33,12 +33,12 @@ const TRANSLATIONS = {
     Cyan: 'Cyan'
   },
   fr: {
-    Rouge: 'Rouge',
-    Bleu: 'Bleu',
-    Vert: 'Vert',
-    Jaune: 'Jaune',
-    Violet: 'Violet',
-    Rose: 'Rose',
+    Red: 'Rouge',
+    Blue: 'Bleu',
+    Green: 'Vert',
+    Yellow: 'Jaune',
+    Purple: 'Violet',
+    Pink: 'Rose',
     Orange: 'Orange',
     Cyan: 'Cyan'
   }
@@ -1884,9 +1884,9 @@ const CommonSignsGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   );
 };
 
-const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
-  const [selectedLang, setSelectedLang] = useState(null);
-  
+const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak, language }) => {
+  const [selectedLang, setSelectedLang] = useState(language || null);
+
   const colors = [
     { name: 'Red', hex: '#EF4444' },
     { name: 'Blue', hex: '#3B82F6' },
@@ -1904,10 +1904,10 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   const [lives, setLives] = useState(3);
   const [roundScore, setRoundScore] = useState(0);
 
+  const langData = selectedLang ? TRANSLATIONS.colors[selectedLang] : {};
+
   useEffect(() => {
-    if (selectedLang) {
-      generateNewRound();
-    }
+    if (selectedLang) generateNewRound();
   }, [selectedLang]);
 
   const generateNewRound = () => {
@@ -1923,10 +1923,10 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
     setFeedback(null);
   };
 
-  const speakColorName = (colorName) => {
+  const speakColorName = (text) => {
     if ('speechSynthesis' in window && selectedLang) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(colorName);
+      const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.7;
       utterance.lang = selectedLang === 'fr' ? 'fr-FR' : selectedLang === 'mfe' ? 'fr-MU' : 'en-US';
       window.speechSynthesis.speak(utterance);
@@ -1934,12 +1934,14 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
   };
 
   const handleAnswer = (selectedColor) => {
+    const colorName = langData[selectedColor.name] || selectedColor.name;
+
     if (selectedColor.name === currentColor.name) {
       setFeedback('correct');
       onScoreUpdate(10);
       setRoundScore(prev => prev + 10);
 
-      speakColorName('Correct! ' + currentColor.name);
+      speakColorName(`${langData.correct || 'Correct!'} ${colorName}`);
 
       setTimeout(generateNewRound, 1500);
     } else {
@@ -1947,13 +1949,13 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       setLives(prev => prev - 1);
       onScoreUpdate(0);
 
-      speakColorName('Try again!');
+      speakColorName(langData.tryAgain || 'Try again!');
 
       setTimeout(() => setFeedback(null), 1000);
 
       if (lives <= 1) {
         setTimeout(() => {
-          alert(`Game Over! Score: ${roundScore} ⭐`);
+          alert(`${langData.gameOver || 'Game Over!'} ${roundScore} ⭐`);
           onBack();
         }, 1000);
       }
@@ -1998,9 +2000,7 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       </div>
 
       <div className="bg-white rounded-xl p-8 shadow-lg mb-6 text-center">
-        <h2 className="text-xl font-bold mb-4">
-          What color is this?
-        </h2>
+        <h2 className="text-xl font-bold mb-4">{langData.whatColor || 'What color is this?'}</h2>
 
         <div
           className="w-48 h-48 mx-auto rounded-3xl shadow-xl mb-4"
@@ -2008,11 +2008,11 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
         />
 
         <button
-          onClick={() => speakColorName(currentColor?.name)}
+          onClick={() => speakColorName(langData[currentColor.name] || currentColor.name)}
           className="bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 mx-auto hover:bg-blue-600 transition"
         >
           <Volume2 size={20} />
-          Hear the Color
+          {langData.hearColor || 'Hear the Color'}
         </button>
       </div>
 
@@ -2032,7 +2032,7 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
               className="w-16 h-16 mx-auto rounded-xl mb-3 shadow"
               style={{ backgroundColor: color.hex }}
             />
-            <p className="font-bold text-gray-800">{color.name}</p>
+            <p className="font-bold text-gray-800">{langData[color.name] || color.name}</p>
           </button>
         ))}
       </div>
@@ -2040,13 +2040,14 @@ const ColorMatchGame = ({ onBack, onScoreUpdate, currentStreak }) => {
       {feedback === 'correct' && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-green-500 text-white px-8 py-4 rounded-full text-2xl font-bold shadow-2xl animate-bounce">
-            ✓ Great Job!
+            ✓ {langData.greatJob || 'Great Job!'}
           </div>
         </div>
       )}
     </div>
   );
 };
+
 
 
 
