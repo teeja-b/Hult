@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Video, PhoneOff, Phone, X, Users, AlertCircle } from 'lucide-react';
 import io from 'socket.io-client';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
 
 const DailyVideoCall = ({ 
   currentUserId, 

@@ -33,7 +33,7 @@ import AITutorMatcher from './components/AITutorMatch';
 import { playRingtone, stopRingtone } from './firebaseConfig';
 import LearningGames from './components/LearningGames';
 const EduConnectApp = () => {
-  const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+  const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
   
   
   // ================ STATE DECLARATIONS ================

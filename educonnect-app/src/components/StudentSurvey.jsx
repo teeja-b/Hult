@@ -67,7 +67,7 @@ const StudentSurvey = ({ onComplete, onClose }) => {
         learning_goals: surveyData.learningGoals
       };
 
-      const surveyResponse = await fetch('https://hult.onrender.com/api/student/survey', {
+      const surveyResponse = await fetch('https://educonnect-92gb.onrender.com/api/student/survey', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ const StudentSurvey = ({ onComplete, onClose }) => {
       console.log('✅ Survey saved! Now updating profile...');
 
       // Update profile with snake_case
-      const profileResponse = await fetch('https://hult.onrender.com/api/student/profile', {
+      const profileResponse = await fetch('https://educonnect-92gb.onrender.com/api/student/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

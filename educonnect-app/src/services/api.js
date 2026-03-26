@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // FIXED: Use REACT_APP_API_URL and fallback to production URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
 
 console.log('🔥 API Base URL:', API_BASE_URL); // Debug log
 

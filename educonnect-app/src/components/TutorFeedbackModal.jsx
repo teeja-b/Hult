@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Star, ThumbsUp, ThumbsDown, MessageCircle, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
 
 const TutorFeedbackModal = ({ tutor, onClose, onSubmit }) => {
   const [rating, setRating] = useState(0);

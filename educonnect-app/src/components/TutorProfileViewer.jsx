@@ -17,7 +17,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 
-const TutorProfileViewer = ({ tutorId, onClose, API_URL = 'https://hult.onrender.com' }) => {
+const TutorProfileViewer = ({ tutorId, onClose, API_URL = 'https://educonnect-92gb.onrender.com' }) => {
   const [tutor, setTutor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

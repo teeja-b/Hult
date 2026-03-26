@@ -190,7 +190,7 @@ export async function requestNotificationPermission() {
  */
 export async function registerFCMToken(token) {
   try {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
     const authToken = localStorage.getItem('token');
     
     if (!authToken) {
@@ -241,7 +241,7 @@ export async function unregisterFCMToken() {
       return true;
     }
     
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
     const authToken = localStorage.getItem('token');
     
     if (!authToken) {
@@ -407,7 +407,7 @@ export async function initializeFCM(onMessageCallback) {
  */
 export async function sendTestNotification() {
   try {
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
     const authToken = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, User, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { initializeFCM, unregisterFCMToken } from '../firebaseConfig';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
 
 // ============================================================================
 // ENHANCED REGISTER MODAL WITH FCM

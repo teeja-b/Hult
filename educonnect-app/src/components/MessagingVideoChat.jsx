@@ -5,7 +5,7 @@ import io from 'socket.io-client';
 import TutorProfileViewer from './TutorProfileViewer';
 import DailyVideoCall from './JitsiVideoCall';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://hult.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://educonnect-92gb.onrender.com';
 
 const MessagingVideoChat = ({ 
  currentUserId = 'user123',

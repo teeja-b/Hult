@@ -42,7 +42,7 @@ const TutorCourseManager = ({ onClose }) => {
     duration: 0
   });
 
-  const API_URL = 'https://hult.onrender.com';
+  const API_URL = 'https://educonnect-92gb.onrender.com';
 
   useEffect(() => {
     fetchCourses();

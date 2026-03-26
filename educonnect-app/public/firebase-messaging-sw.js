@@ -147,7 +147,7 @@ self.addEventListener('notificationclick', (event) => {
     
     const meetingId = data.meeting_id || data.meetingId;
     if (meetingId) {
-      fetch('https://hult.onrender.com/api/video/decline-call', {
+      fetch('https://educonnect-92gb.onrender.com/api/video/decline-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
@@ -251,7 +251,7 @@ self.addEventListener('notificationclose', (event) => {
     
     const meetingId = data.meeting_id || data.meetingId;
     if (meetingId) {
-      fetch('https://hult.onrender.com/api/video/missed-call', {
+      fetch('https://educonnect-92gb.onrender.com/api/video/missed-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
