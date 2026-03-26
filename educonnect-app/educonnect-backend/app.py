@@ -147,10 +147,35 @@ update_counter = 0
 
 db = SQLAlchemy()
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=[
+        "https://hult-ten.vercel.app",
+        "http://localhost:3000"
+    ],
+    async_mode='threading'
+)
 active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "https://hult-ten.vercel.app",
+            "http://localhost:3000",
+            "http://localhost:5173"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    },
+    r"/socket.io/*": {
+        "origins": [
+            "https://hult-ten.vercel.app",
+            "http://localhost:3000"
+        ],
+        "supports_credentials": True
+    }
+})
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
 
 
