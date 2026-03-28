@@ -444,7 +444,38 @@ class Booking(db.Model):
 
 
 
-
+@app.route('/api/debug/test-fcm/<int:user_id>', methods=['POST'])
+def test_fcm_direct(user_id):
+    if not FIREBASE_ENABLED:
+        return jsonify({'error': 'Firebase not enabled'}), 500
+    
+    tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+    if not tokens:
+        return jsonify({'error': 'No tokens found', 'user_id': user_id}), 404
+    
+    results = []
+    for token_obj in tokens:
+        try:
+            message = fcm_messaging.Message(
+                notification=fcm_messaging.Notification(
+                    title='Test notification',
+                    body='FCM is working!',
+                ),
+                data={'type': 'test'},
+                android=fcm_messaging.AndroidConfig(
+                    priority='high',
+                    notification=fcm_messaging.AndroidNotification(
+                        channel_id='calls',
+                    )
+                ),
+                token=token_obj.token,
+            )
+            fcm_messaging.send(message)
+            results.append({'token_suffix': token_obj.token[-10:], 'status': 'sent'})
+        except Exception as e:
+            results.append({'token_suffix': token_obj.token[-10:], 'status': 'failed', 'error': str(e)})
+    
+    return jsonify({'results': results}), 200
 # In app.py — replace both send_fcm_notification / send_call_notification
 # / send_message_notification with this no-op so no existing call sites break:
 def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
