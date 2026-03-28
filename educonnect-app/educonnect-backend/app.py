@@ -490,19 +490,28 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
         caller_name = caller.full_name if caller else "Someone"
         for token_obj in tokens:
             message = fcm_messaging.Message(
-                data={
-                    'type': 'call',
-                    'meetingId': str(meeting_id),
-                    'joinUrl': join_url or '',
-                    'callerName': caller_name,
-                    'callerId': str(caller_id),
-                },
-                notification=fcm_messaging.Notification(
-                    title=f"{caller_name} is calling",
-                    body="Tap to join the video call",
-                ),
-                token=token_obj.token,
-            )
+            data={
+                'type': 'call',
+                'meetingId': str(meeting_id),
+                'joinUrl': join_url or '',
+                'callerName': caller_name,
+                'callerId': str(caller_id),
+            },
+            notification=fcm_messaging.Notification(
+                title=f"{caller_name} is calling",
+                body="Tap to join the video call",
+            ),
+            android=fcm_messaging.AndroidConfig(
+                priority='high',
+                notification=fcm_messaging.AndroidNotification(
+                    channel_id='calls',
+                    sound='ringtone',
+                    priority='high',
+                    default_sound=False,
+                )
+            ),
+            token=token_obj.token,
+        )
             try:
                 fcm_messaging.send(message)
             except Exception as e:
