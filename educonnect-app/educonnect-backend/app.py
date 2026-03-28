@@ -489,7 +489,6 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
         caller_name = caller.full_name if caller else "Someone"
         for token_obj in tokens:
             message = fcm_messaging.Message(
-                # ✅ data only - no notification block
                 data={
                     'type': 'call',
                     'meetingId': str(meeting_id),
@@ -497,9 +496,18 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                     'callerName': caller_name,
                     'callerId': str(caller_id),
                 },
+                notification=fcm_messaging.Notification(
+                    title=f"{caller_name} is calling",
+                    body="Tap to join the video call",
+                ),
                 android=fcm_messaging.AndroidConfig(
                     priority='high',
-                    # ✅ no AndroidNotification block
+                    notification=fcm_messaging.AndroidNotification(
+                        channel_id='calls',  # ✅ routes to your custom channel
+                        sound='ringtone',    # ✅ custom sound
+                        default_sound=False,
+                        priority='high',
+                    )
                 ),
                 token=token_obj.token,
             )
