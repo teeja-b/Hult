@@ -757,61 +757,56 @@ def unregister_fcm_token():
 
 @socketio.on('initiate_video_call')
 def handle_initiate_video_call_with_notification(data):
-    """Handle video call initiation with FCM notification"""
     try:
-        meeting_id = data.get('meetingId')
-        caller_id = data.get('callerId')
+        meeting_id  = data.get('meetingId')
+        caller_id   = data.get('callerId')
         receiver_id = data.get('receiverId')
         caller_name = data.get('callerName')
-        join_url = data.get('joinUrl')
-        
+        join_url    = data.get('joinUrl')
+
         print(f"\n{'='*70}")
-        print(f"📞 [VIDEO] Call initiated with notification")
-        print(f"📞 [VIDEO] Caller: {caller_id} ({caller_name})")
-        print(f"📞 [VIDEO] Receiver: {receiver_id}")
+        print(f"📞 [VIDEO] Caller: {caller_id} → Receiver: {receiver_id}")
         print(f"{'='*70}")
-        
-        # Send Socket.IO event (for users currently online)
+
         receiver_sid = active_connections.get(receiver_id)
-        
+
         if receiver_sid:
+            # ✅ User is online and app is open — use Socket.IO only
+            # Do NOT send FCM, it would cause double notification
             emit('incoming_video_call', {
-                'meetingId': meeting_id,
-                'callerId': caller_id,
-                'callerName': caller_name,
-                'joinUrl': join_url
+                'meetingId':   meeting_id,
+                'callerId':    caller_id,
+                'callerName':  caller_name,
+                'joinUrl':     join_url
             }, room=receiver_sid)
-            print(f"✅ [VIDEO] Socket notification sent")
-        
-        # ALWAYS send FCM notification (works even when app is closed)
-        fcm_success = send_call_notification(
-            caller_id=caller_id,
-            receiver_id=receiver_id,
-            meeting_id=meeting_id,
-            join_url=join_url
-        )
-        
-        if fcm_success:
-            print(f"✅ [VIDEO] FCM notification sent")
+
+            print(f"✅ [VIDEO] User online — sent via Socket.IO only (no FCM)")
+            fcm_success = False
+
         else:
-            print(f"⚠️ [VIDEO] FCM notification failed (user may not have notifications enabled)")
-        
+            # ✅ User is offline/app is closed — use FCM only
+            # Socket.IO can't reach them, FCM will wake the app
+            fcm_success = send_call_notification(
+                caller_id=caller_id,
+                receiver_id=receiver_id,
+                meeting_id=meeting_id,
+                join_url=join_url
+            )
+            print(f"✅ [VIDEO] User offline — sent via FCM only")
+
         # Confirm to caller
         emit('call_initiated', {
             'meetingId': meeting_id,
-            'status': 'sent',
-            'fcm_sent': fcm_success
+            'status':    'sent',
+            'method':    'socket' if receiver_sid else 'fcm',
+            'fcm_sent':  fcm_success
         }, room=request.sid)
-        
+
     except Exception as e:
         print(f"❌ [VIDEO] Error: {e}")
         import traceback
         traceback.print_exc()
         emit('call_failed', {'error': str(e)}, room=request.sid)
-
-
-# Update call_accepted handler
-# In your app.py, update the call_accepted handler (around line 550)
 
 @socketio.on('call_accepted')
 def handle_call_accepted(data):
