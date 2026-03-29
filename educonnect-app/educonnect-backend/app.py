@@ -465,7 +465,7 @@ def test_fcm_direct(user_id):
                 android=fcm_messaging.AndroidConfig(
                     priority='high',
                     notification=fcm_messaging.AndroidNotification(
-                        channel_id='calls_v4',
+                        channel_id='calls_v5',
                     )
                 ),
                 token=token_obj.token,
@@ -503,7 +503,7 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                 android=fcm_messaging.AndroidConfig(
                     priority='high',
                     notification=fcm_messaging.AndroidNotification(
-                        channel_id='calls_v4',  # ✅ routes to your custom channel
+                        channel_id='calls_v5',  # ✅ routes to your custom channel
                         sound='ringtone',    # ✅ custom sound
                         default_sound=False,
                         priority='high',
@@ -539,7 +539,7 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
             android_config = fcm_messaging.AndroidConfig(
                 priority='high',
                 notification=fcm_messaging.AndroidNotification(
-                    channel_id='calls_v4',
+                    channel_id='calls_v5',
                     priority='high',
                     default_vibrate_timings=True,
                     default_sound=False,
