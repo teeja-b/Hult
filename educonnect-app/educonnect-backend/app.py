@@ -509,11 +509,7 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
     except Exception as e:
         print(f"❌ send_call_notification error: {e}")
         return False
-```
 
-Deploy that, then make a test call and run:
-```
-adb logcat | findstr "LOCAL NOTIF"
 def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
     if not FIREBASE_ENABLED:
         print(f"⚠️ [FCM] Firebase not enabled, skipping notification for user {user_id}")
