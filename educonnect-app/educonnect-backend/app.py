@@ -494,8 +494,18 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
                     'callerName': caller_name,
                     'callerId': str(caller_id),
                 },
+                notification=fcm_messaging.Notification(
+                    title=f"{caller_name} is calling",
+                    body="Tap to join the video call",
+                ),
                 android=fcm_messaging.AndroidConfig(
                     priority='high',
+                    notification=fcm_messaging.AndroidNotification(
+                        channel_id='calls_v7',
+                        sound='ringtone',
+                        default_sound=False,
+                        priority='high',
+                    )
                 ),
                 token=token_obj.token,
             )
@@ -509,7 +519,6 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
     except Exception as e:
         print(f"❌ send_call_notification error: {e}")
         return False
-
 def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
     if not FIREBASE_ENABLED:
         print(f"⚠️ [FCM] Firebase not enabled, skipping notification for user {user_id}")
