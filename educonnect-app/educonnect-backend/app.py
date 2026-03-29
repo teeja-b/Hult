@@ -536,14 +536,15 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
         print(f"📨 [FCM] Sending {notification_type} notification to user {user_id} ({len(tokens)} tokens)")
         
         # Build android config based on notification type
-        if notification_type == 'call':
+       if notification_type == 'call':
             android_config = fcm_messaging.AndroidConfig(
                 priority='high',
                 notification=fcm_messaging.AndroidNotification(
                     channel_id='calls_v3',
                     priority='high',
                     default_vibrate_timings=True,
-                    default_sound=True,
+                    default_sound=False,      # ← Change to False
+                    sound='ringtone',         # ← Add this
                 )
             )
         elif notification_type == 'message':
