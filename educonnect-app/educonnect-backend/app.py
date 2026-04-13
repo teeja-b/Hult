@@ -148,7 +148,8 @@ update_counter = 0
 db = SQLAlchemy()
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
-active_connections = {}  # {user_id: sid}
+active_connections = {}
+processed_message_ids = set()# {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
 CORS(app)
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
@@ -989,6 +990,29 @@ def handle_send_message_with_notification(data):
         file_type = data.get('file_type')
         file_name = data.get('file_name')
 
+        # Send to receiver only — sender already has the message displayed optimistically
+        receiver_sid = active_connections.get(receiver_id)
+        if receiver_sid:
+            emit('receive_message', message_data, room=receiver_sid)
+            print(f"📡 [MESSAGE] Sent to receiver via Socket.IO: {receiver_sid}")
+            # ✅ User is online — skip FCM to avoid double notification/render
+        else:
+            # ✅ User is offline — send FCM only
+            send_message_notification(
+                sender_id=sender_id,
+                receiver_id=receiver_id,
+                message_text=text or 'Sent a file',
+                conversation_id=conversation.id
+            )
+            print(f"📡 [MESSAGE] User offline — sent FCM notification")
+        
+        # Send delivery confirmation to sender only
+        emit('message_delivered', {
+            'messageId': message_id,
+            'dbMessageId': message.id,
+            'status': 'delivered'
+        }, room=request.sid)
+
         print(f"\n{'='*70}")
         print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
         print(f"📤 [MESSAGE] Conversation: {conversation_id}")
@@ -1043,29 +1067,30 @@ def handle_send_message_with_notification(data):
             'file_type': file_type,
             'file_name': file_name
         }
-
         # Send to receiver only — sender already has the message displayed optimistically
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
-            print(f"📡 [MESSAGE] Sent to receiver: {receiver_sid}")
+            print(f"📡 [MESSAGE] Sent to receiver via Socket.IO: {receiver_sid}")
+            # ✅ User is online — skip FCM to avoid double notification/render
+        else:
+            # ✅ User is offline — send FCM only
+            send_message_notification(
+                sender_id=sender_id,
+                receiver_id=receiver_id,
+                message_text=text or 'Sent a file',
+                conversation_id=conversation.id
+            )
+        print(f"📡 [MESSAGE] User offline — sent FCM notification")
 
-        # Send FCM notification
-        send_message_notification(
-            sender_id=sender_id,
-            receiver_id=receiver_id,
-            message_text=text or 'Sent a file',
-            conversation_id=conversation.id
-        )
-
-        # Send delivery confirmation to sender only (updates temp message with real DB id)
+        # Send delivery confirmation to sender only
         emit('message_delivered', {
             'messageId': message_id,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
 
-        print(f"✅ [MESSAGE] Complete\n")
+
 
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
