@@ -978,16 +978,22 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    message_uuid = data.get('messageId') # The UUID from frontend
-    
-    # 1. Check if we've already saved this exact message (Deduplication)
-    if message_uuid:
-        existing_msg = Message.query.filter_by(frontend_uuid=message_uuid).first()
-        if existing_msg:
-            print(f"⚠️ Duplicate detected: {message_uuid}")
-            return  
+    message_uuid = data.get('messageId')
 
     try:
+        # Deduplication check INSIDE try/catch
+        if message_uuid:
+            existing_msg = Message.query.filter_by(frontend_uuid=message_uuid).first()
+            if existing_msg:
+                print(f"⚠️ Duplicate detected: {message_uuid}")
+                # Still confirm to sender so UI doesn't hang
+                emit('message_delivered', {
+                    'messageId': message_uuid,
+                    'dbMessageId': existing_msg.id,
+                    'status': 'delivered'
+                }, room=request.sid)
+                return
+
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
         receiver_id = data.get('receiver_id')
@@ -996,11 +1002,9 @@ def handle_send_message_with_notification(data):
         file_url = data.get('file_url')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
-        
-        # Parse timestamp safely
+
         dt_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
 
-        # Get/Update Conversation
         conversation = Conversation.query.filter(
             ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
             ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
@@ -1017,13 +1021,12 @@ def handle_send_message_with_notification(data):
             conversation.last_message = text
             conversation.last_message_time = dt_timestamp
 
-        # 2. Save Message with UUID
         message = Message(
             conversation_id=conversation.id,
             sender_id=sender_id,
             text=text,
             timestamp=dt_timestamp,
-            frontend_uuid=message_uuid, # CRITICAL: Save the fingerprint
+            frontend_uuid=message_uuid,
             file_url=file_url,
             file_type=file_type,
             file_name=file_name
@@ -1031,10 +1034,9 @@ def handle_send_message_with_notification(data):
         db.session.add(message)
         db.session.commit()
 
-        # 3. Prepare data for the Receiver
         message_data = {
-            'id': message.id,          # Database ID
-            'messageId': message_uuid, # Fingerprint
+            'id': message.id,
+            'messageId': message_uuid,
             'sender_id': sender_id,
             'receiver_id': receiver_id,
             'text': text,
@@ -1044,12 +1046,10 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
 
-        # Emit to receiver
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
 
-        # 4. Confirm to Sender
         emit('message_delivered', {
             'messageId': message_uuid,
             'dbMessageId': message.id,
@@ -1058,8 +1058,10 @@ def handle_send_message_with_notification(data):
 
     except Exception as e:
         db.session.rollback()
+        print(f"❌ [SEND_MESSAGE ERROR] {e}")
+        import traceback
+        traceback.print_exc()
         emit('message_error', {'error': str(e), 'messageId': message_uuid}, room=request.sid)
-
 
 
 @socketio.on('leave_conversation')
