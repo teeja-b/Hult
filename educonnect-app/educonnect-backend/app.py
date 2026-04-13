@@ -977,7 +977,12 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification"""
+    message_id = data.get('messageId')
+    # Check if message with same messageId already exists
+    existing_msg = Message.query.filter_by(id=message_id).first()
+    if existing_msg:
+        print(f"Duplicate message detected: {message_id}")
+        return  
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
