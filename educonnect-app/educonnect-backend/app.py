@@ -974,9 +974,10 @@ def handle_disconnect():
             'status': 'offline'
         }, broadcast=True)
 
+
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    """Handle message sending with FCM notification - FIXED (instant for both)"""
+    """Handle message sending with FCM notification"""
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
@@ -987,18 +988,18 @@ def handle_send_message_with_notification(data):
         file_url = data.get('file_url')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
-        
+
         print(f"\n{'='*70}")
         print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
         print(f"📤 [MESSAGE] Conversation: {conversation_id}")
         print(f"{'='*70}")
-        
+
         # Get or create conversation
         conversation = Conversation.query.filter(
             ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
             ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
         ).first()
-        
+
         if not conversation:
             conversation = Conversation(
                 participant1_id=sender_id,
@@ -1012,7 +1013,7 @@ def handle_send_message_with_notification(data):
         else:
             conversation.last_message = text
             conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-        
+
         # Save message
         message = Message(
             conversation_id=conversation.id,
@@ -1025,13 +1026,13 @@ def handle_send_message_with_notification(data):
         )
         db.session.add(message)
         db.session.commit()
-        
+
         print(f"✅ [MESSAGE] Saved to database with ID: {message.id}")
-        
+
         # Prepare message data
         message_data = {
             'id': message.id,
-            'messageId': message_id,  # ✅ Include temp ID for frontend matching
+            'messageId': message_id,
             'conversationId': conversation_id,
             'sender_id': sender_id,
             'receiver_id': receiver_id,
@@ -1043,7 +1044,7 @@ def handle_send_message_with_notification(data):
             'file_name': file_name
         }
 
-        # Send to receiver only
+        # Send to receiver only — sender already has the message displayed optimistically
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
@@ -1063,8 +1064,9 @@ def handle_send_message_with_notification(data):
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
-        
-      
+
+        print(f"✅ [MESSAGE] Complete\n")
+
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
         import traceback
@@ -1074,6 +1076,7 @@ def handle_send_message_with_notification(data):
             'error': str(e),
             'messageId': data.get('messageId')
         }, room=request.sid)
+
 
 @socketio.on('join_conversation')
 def handle_join_conversation(data):
