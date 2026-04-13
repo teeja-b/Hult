@@ -47,7 +47,7 @@ import urllib.parse
 import requests
 import firebase_admin
 from firebase_admin import credentials, messaging as fcm_messaging
-
+import requests as http_requests
 # Add this after your other imports
 import json
 
@@ -446,227 +446,15 @@ class Booking(db.Model):
 
 @app.route('/api/debug/test-fcm/<int:user_id>', methods=['POST'])
 def test_fcm_direct(user_id):
-    if not FIREBASE_ENABLED:
-        return jsonify({'error': 'Firebase not enabled'}), 500
-    
-    tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-    if not tokens:
-        return jsonify({'error': 'No tokens found', 'user_id': user_id}), 404
-    
-    results = []
-    for token_obj in tokens:
-        try:
-            message = fcm_messaging.Message(
-                notification=fcm_messaging.Notification(
-                    title='Test notification',
-                    body='FCM is working!',
-                ),
-                data={'type': 'test'},
-                android=fcm_messaging.AndroidConfig(
-                    priority='high',
-                    notification=fcm_messaging.AndroidNotification(
-                        channel_id='messages',
-                    )
-                ),
-                token=token_obj.token,
-            )
-            fcm_messaging.send(message)
-            results.append({'token_suffix': token_obj.token[-10:], 'status': 'sent'})
-        except Exception as e:
-            results.append({'token_suffix': token_obj.token[-10:], 'status': 'failed', 'error': str(e)})
-    
-    return jsonify({'results': results}), 200
-def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    if not FIREBASE_ENABLED:
-        return False
-    try:
-        tokens = FCMToken.query.filter_by(user_id=receiver_id, is_active=True).all()
-        if not tokens:
-            return False
-        caller = User.query.get(caller_id)
-        caller_name = caller.full_name if caller else "Someone"
-        for token_obj in tokens:
-            message = fcm_messaging.Message(
-                data={                          # ✅ data only
-                    'type': 'incoming_call',
-                    'meetingId': str(meeting_id),
-                    'joinUrl': join_url or '',
-                    'callerName': caller_name,
-                    'callerId': str(caller_id),
-                },
-                android=fcm_messaging.AndroidConfig(
-                    priority='high',            # ✅ wakes the app
-                ),
-                token=token_obj.token,
-            )
-            try:
-                fcm_messaging.send(message)
-            except Exception as e:
-                print(f"❌ FCM send failed for token: {e}")
-                token_obj.is_active = False
-                db.session.commit()
-        return True
-    except Exception as e:
-        print(f"❌ send_call_notification error: {e}")
-        return False
-def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
-    if not FIREBASE_ENABLED:
-        print(f"⚠️ [FCM] Firebase not enabled, skipping notification for user {user_id}")
-        return False
-    
-    try:
-        tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-        
-        if not tokens:
-            print(f"⚠️ [FCM] No active tokens for user {user_id}")
-            return False
-        
-        print(f"📨 [FCM] Sending {notification_type} notification to user {user_id} ({len(tokens)} tokens)")
-        
-        if notification_type == 'call':
-            android_config = fcm_messaging.AndroidConfig(
-                priority='high',
-                notification=fcm_messaging.AndroidNotification(
-                    channel_id='calls',
-                    priority='high',
-                    default_vibrate_timings=True,
-                    default_sound=False,
-                    sound='ringtone',
-                )
-            )
-        elif notification_type == 'message':
-            android_config = fcm_messaging.AndroidConfig(
-                priority='high',
-                notification=fcm_messaging.AndroidNotification(
-                    channel_id='messages',
-                    priority='high',
-                    default_sound=True,
-                )
-            )
-        else:
-            android_config = fcm_messaging.AndroidConfig(
-                priority='normal',
-                notification=fcm_messaging.AndroidNotification(
-                    channel_id='general',
-                )
-            )
-        
-        success_count = 0
-        failed_count = 0
-        
-        for token_obj in tokens:
-            try:
-                message = fcm_messaging.Message(
-                    notification=fcm_messaging.Notification(
-                        title=title,
-                        body=body,
-                    ),
-                    data={k: str(v) for k, v in (data or {}).items()},
-                    android=android_config,
-                    token=token_obj.token,
-                )
-                
-                fcm_messaging.send(message)
-                token_obj.last_used = datetime.utcnow()
-                success_count += 1
-                print(f"✅ [FCM] Sent to token ...{token_obj.token[-10:]}")
-                
-            except fcm_messaging.UnregisteredError:
-                print(f"⚠️ [FCM] Token unregistered, deactivating: ...{token_obj.token[-10:]}")
-                token_obj.is_active = False
-                failed_count += 1
-                
-            except fcm_messaging.SenderIdMismatchError:
-                print(f"⚠️ [FCM] Sender ID mismatch, deactivating: ...{token_obj.token[-10:]}")
-                token_obj.is_active = False
-                failed_count += 1
-                
-            except Exception as e:
-                print(f"❌ [FCM] Failed for token ...{token_obj.token[-10:]}: {e}")
-                failed_count += 1
-        
-        db.session.commit()
-        
-        print(f"📊 [FCM] Results: {success_count} sent, {failed_count} failed")
-        return success_count > 0
-        
-    except Exception as e:
-        print(f"❌ [FCM] send_fcm_notification error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-@app.route('/api/debug/fcm-tokens/<int:user_id>', methods=['GET'])
-def debug_fcm_tokens(user_id):
-    tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-    return jsonify({
-        'user_id': user_id,
-        'token_count': len(tokens),
-        'tokens': [{'id': t.id, 'device_type': t.device_type, 'last_used': t.last_used.isoformat(), 'created_at': t.created_at.isoformat()} for t in tokens]
-    }), 200
+    success = send_expo_notification(
+        user_id=user_id,
+        title='Test notification',
+        body='Notifications are working!',
+        data={'type': 'test'},
+        channel='messages'
+    )
+    return jsonify({'success': success}), 200 if success else 500
 
-def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
-    if not FIREBASE_ENABLED:
-        return False
-    try:
-        sender = User.query.get(sender_id)
-        sender_name = sender.full_name if sender else "Someone"
-
-        # Send to receiver
-        receiver_tokens = FCMToken.query.filter_by(user_id=receiver_id, is_active=True).all()
-        for token_obj in receiver_tokens:
-            message = fcm_messaging.Message(
-                data={
-                    'type': 'message',
-                    'conversation_id': str(conversation_id),
-                    'sender_id': str(sender_id),
-                    'sender_name': sender_name,
-                },
-                notification=fcm_messaging.Notification(
-                    title=sender_name,
-                    body=message_text[:100] if message_text else 'Sent an attachment',
-                ),
-                android=fcm_messaging.AndroidConfig(
-                    priority='high',
-                    notification=fcm_messaging.AndroidNotification(
-                        channel_id='messages',
-                        priority='high',
-                    )
-                ),
-                token=token_obj.token,
-            )
-            try:
-                fcm_messaging.send(message)
-            except Exception as e:
-                print(f"❌ FCM send failed for receiver token: {e}")
-                token_obj.is_active = False
-                db.session.commit()
-
-        # Send to sender (confirmation / sync across devices)
-        sender_tokens = FCMToken.query.filter_by(user_id=sender_id, is_active=True).all()
-        for token_obj in sender_tokens:
-            message = fcm_messaging.Message(
-                data={
-                    'type': 'message_sent',
-                    'conversation_id': str(conversation_id),
-                    'sender_id': str(sender_id),
-                },
-                # No notification block for sender — silent data-only push
-                android=fcm_messaging.AndroidConfig(
-                    priority='normal',
-                ),
-                token=token_obj.token,
-            )
-            try:
-                fcm_messaging.send(message)
-            except Exception as e:
-                print(f"❌ FCM send failed for sender token: {e}")
-                token_obj.is_active = False
-                db.session.commit()
-
-        return True
-    except Exception as e:
-        print(f"❌ send_message_notification error: {e}")
-        return False
 @app.route('/api/notifications/register-token', methods=['POST'])
 @jwt_required()
 def register_fcm_token():
@@ -749,7 +537,102 @@ def unregister_fcm_token():
 
 
 
+def send_expo_notification(user_id, title, body, data=None, channel='messages'):
+    """Send notification via Expo Push API - works for all devices"""
+    try:
+        tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+        
+        if not tokens:
+            print(f"⚠️ [EXPO] No tokens for user {user_id}")
+            return False
+        
+        messages = []
+        for token_obj in tokens:
+            # Only use Expo tokens
+            if not token_obj.token.startswith('ExponentPushToken'):
+                continue
+            messages.append({
+                "to": token_obj.token,
+                "title": title,
+                "body": body,
+                "data": data or {},
+                "channelId": channel,
+                "priority": "high",
+                "sound": "default"
+            })
+        
+        if not messages:
+            print(f"⚠️ [EXPO] No Expo tokens for user {user_id}")
+            return False
+        
+        response = http_requests.post(
+            "https://exp.host/--/api/v2/push/send",
+            json=messages,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        result = response.json()
+        print(f"✅ [EXPO] Notification sent: {result}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ [EXPO] Error: {e}")
+        return False
 
+
+def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
+    """Send incoming call notification"""
+    try:
+        caller = User.query.get(caller_id)
+        caller_name = caller.full_name if caller else "Someone"
+        
+        return send_expo_notification(
+            user_id=receiver_id,
+            title=f"📞 {caller_name} is calling",
+            body="Tap to answer",
+            data={
+                'type': 'incoming_call',
+                'meetingId': str(meeting_id),
+                'joinUrl': join_url or '',
+                'callerName': caller_name,
+                'callerId': str(caller_id),
+            },
+            channel='calls'
+        )
+    except Exception as e:
+        print(f"❌ send_call_notification error: {e}")
+        return False
+
+
+def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
+    """Send message notification"""
+    try:
+        sender = User.query.get(sender_id)
+        sender_name = sender.full_name if sender else "Someone"
+        
+        return send_expo_notification(
+            user_id=receiver_id,
+            title=sender_name,
+            body=message_text[:100] if message_text else 'Sent an attachment',
+            data={
+                'type': 'message',
+                'conversation_id': str(conversation_id),
+                'sender_id': str(sender_id),
+                'sender_name': sender_name,
+            },
+            channel='messages'
+        )
+    except Exception as e:
+        print(f"❌ send_message_notification error: {e}")
+        return False
+
+
+def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
+    """Wrapper that uses Expo notifications"""
+    channel = 'calls' if notification_type == 'call' else \
+              'messages' if notification_type == 'message' else 'general'
+    
+    return send_expo_notification(user_id, title, body, data, channel)
 # Add this FIXED version to your app.py
 # This version keeps your existing connect/disconnect handlers
 
