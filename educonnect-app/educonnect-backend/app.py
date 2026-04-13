@@ -1078,27 +1078,6 @@ def handle_send_message_with_notification(data):
         }, room=request.sid)
 
 
-@socketio.on('join_conversation')
-def handle_join_conversation(data):
-    """Join a conversation room"""
-    conversation_id = data.get('conversationId')
-    user_id = data.get('userId')
-    
-    if conversation_id and user_id:
-        join_room(conversation_id)
-        
-        if user_id not in user_rooms:
-            user_rooms[user_id] = []
-        
-        if conversation_id not in user_rooms[user_id]:
-            user_rooms[user_id].append(conversation_id)
-        
-        print(f"👥 [SOCKET] User {user_id} joined conversation {conversation_id}")
-        
-        emit('joined_conversation', {
-            'conversationId': conversation_id,
-            'userId': user_id
-        }, room=conversation_id)
 
 
 @socketio.on('leave_conversation')
