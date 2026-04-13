@@ -455,7 +455,13 @@ def test_fcm_direct(user_id):
         channel='messages'
     )
     return jsonify({'success': success}), 200 if success else 500
-
+@app.route('/api/admin/fix-db', methods=['POST'])
+def fix_db():
+    try:
+        db.engine.execute('ALTER TABLE message ADD COLUMN IF NOT EXISTS frontend_uuid VARCHAR(100) UNIQUE')
+        return jsonify({'success': True, 'message': 'Column added!'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/notifications/register-token', methods=['POST'])
 @jwt_required()
 def register_fcm_token():
