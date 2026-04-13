@@ -1229,8 +1229,6 @@ def handle_send_message_with_notification(data):
             print(f"📡 [MESSAGE] Sent to sender: {sender_sid}")
         
         # Fallback: emit to rooms (in case active_connections is out of sync)
-        emit('receive_message', message_data, room=conversation_id)
-        print(f"📡 [MESSAGE] Also emitted to room: {conversation_id}")
         
         # Send FCM notification
         send_message_notification(
