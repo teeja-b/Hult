@@ -458,7 +458,9 @@ def test_fcm_direct(user_id):
 @app.route('/api/admin/fix-db', methods=['POST'])
 def fix_db():
     try:
-        db.engine.execute('ALTER TABLE message ADD COLUMN IF NOT EXISTS frontend_uuid VARCHAR(100) UNIQUE')
+        with db.engine.connect() as conn:
+            conn.execute(db.text('ALTER TABLE message ADD COLUMN IF NOT EXISTS frontend_uuid VARCHAR(100) UNIQUE'))
+            conn.commit()
         return jsonify({'success': True, 'message': 'Column added!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
