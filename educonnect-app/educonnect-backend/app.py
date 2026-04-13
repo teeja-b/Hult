@@ -421,6 +421,7 @@ class Conversation(db.Model):
     last_message_time = db.Column(db.DateTime)
 
 class Message(db.Model):
+    frontend_uuid = db.Column(db.String(100), unique=True, nullable=True)
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'))
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -977,29 +978,29 @@ def handle_disconnect():
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    message_id = data.get('messageId')
-    # Check if message with same messageId already exists
-    existing_msg = Message.query.filter_by(id=message_id).first()
-    if existing_msg:
-        print(f"Duplicate message detected: {message_id}")
-        return  
+    message_uuid = data.get('messageId') # The UUID from frontend
+    
+    # 1. Check if we've already saved this exact message (Deduplication)
+    if message_uuid:
+        existing_msg = Message.query.filter_by(frontend_uuid=message_uuid).first()
+        if existing_msg:
+            print(f"⚠️ Duplicate detected: {message_uuid}")
+            return  
+
     try:
         conversation_id = data.get('conversationId')
         sender_id = data.get('sender_id')
         receiver_id = data.get('receiver_id')
         text = data.get('text')
-        timestamp = data.get('timestamp')
-        message_id = data.get('messageId')
+        timestamp_str = data.get('timestamp')
         file_url = data.get('file_url')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
+        
+        # Parse timestamp safely
+        dt_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
 
-        print(f"\n{'='*70}")
-        print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
-        print(f"📤 [MESSAGE] Conversation: {conversation_id}")
-        print(f"{'='*70}")
-
-        # Get or create conversation
+        # Get/Update Conversation
         conversation = Conversation.query.filter(
             ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
             ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
@@ -1007,24 +1008,22 @@ def handle_send_message_with_notification(data):
 
         if not conversation:
             conversation = Conversation(
-                participant1_id=sender_id,
-                participant2_id=receiver_id,
-                last_message=text,
-                last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                participant1_id=sender_id, participant2_id=receiver_id,
+                last_message=text, last_message_time=dt_timestamp
             )
             db.session.add(conversation)
             db.session.flush()
-            print(f"✅ [MESSAGE] Created new conversation {conversation.id}")
         else:
             conversation.last_message = text
-            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            conversation.last_message_time = dt_timestamp
 
-        # Save message
+        # 2. Save Message with UUID
         message = Message(
             conversation_id=conversation.id,
             sender_id=sender_id,
             text=text,
-            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
+            timestamp=dt_timestamp,
+            frontend_uuid=message_uuid, # CRITICAL: Save the fingerprint
             file_url=file_url,
             file_type=file_type,
             file_name=file_name
@@ -1032,56 +1031,34 @@ def handle_send_message_with_notification(data):
         db.session.add(message)
         db.session.commit()
 
-        print(f"✅ [MESSAGE] Saved to database with ID: {message.id}")
-
-        # Prepare message data
+        # 3. Prepare data for the Receiver
         message_data = {
-            'id': message.id,
-            'messageId': message_id,
-            'conversationId': conversation_id,
+            'id': message.id,          # Database ID
+            'messageId': message_uuid, # Fingerprint
             'sender_id': sender_id,
             'receiver_id': receiver_id,
             'text': text,
-            'timestamp': timestamp,
-            'status': 'delivered',
+            'timestamp': timestamp_str,
             'file_url': file_url,
             'file_type': file_type,
             'file_name': file_name
         }
 
-        # Send to receiver only — sender already has the message displayed optimistically
+        # Emit to receiver
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
-            print(f"📡 [MESSAGE] Sent to receiver: {receiver_sid}")
 
-        # Send FCM notification
-        send_message_notification(
-            sender_id=sender_id,
-            receiver_id=receiver_id,
-            message_text=text or 'Sent a file',
-            conversation_id=conversation.id
-        )
-
-        # Send delivery confirmation to sender only (updates temp message with real DB id)
+        # 4. Confirm to Sender
         emit('message_delivered', {
-            'messageId': message_id,
+            'messageId': message_uuid,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
 
-        print(f"✅ [MESSAGE] Complete\n")
-
     except Exception as e:
-        print(f"❌ [MESSAGE] Error: {e}")
-        import traceback
-        traceback.print_exc()
         db.session.rollback()
-        emit('message_error', {
-            'error': str(e),
-            'messageId': data.get('messageId')
-        }, room=request.sid)
-
+        emit('message_error', {'error': str(e), 'messageId': message_uuid}, room=request.sid)
 
 
 
