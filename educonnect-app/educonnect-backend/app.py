@@ -465,7 +465,7 @@ def test_fcm_direct(user_id):
                 android=fcm_messaging.AndroidConfig(
                     priority='high',
                     notification=fcm_messaging.AndroidNotification(
-                        channel_id='calls_v7',
+                        channel_id='messages',
                     )
                 ),
                 token=token_obj.token,
@@ -527,7 +527,7 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
             android_config = fcm_messaging.AndroidConfig(
                 priority='high',
                 notification=fcm_messaging.AndroidNotification(
-                    channel_id='calls_v7',
+                    channel_id='calls',
                     priority='high',
                     default_vibrate_timings=True,
                     default_sound=False,
