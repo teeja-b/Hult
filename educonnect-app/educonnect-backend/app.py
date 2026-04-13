@@ -905,7 +905,7 @@ def send_test_notification():
 
 
         
-  \
+  
 def check_account_locked(user):
     """Check if account is locked due to failed login attempts"""
     if user.account_locked_until:
