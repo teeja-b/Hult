@@ -903,62 +903,9 @@ def send_test_notification():
             'error': str(e)
         }), 500
 
-def send_password_reset_email(user_email, reset_url):
-    """Send password reset email"""
-    try:
-        sender = app.config.get('MAIL_DEFAULT_SENDER')
-        if not sender:
-            print("❌ CONFIG ERROR: MAIL_DEFAULT_SENDER is None")
-            return False
 
-        msg = EmailMessage(
-            subject="Reset your EduConnect password",
-            to=[user_email],
-            from_email=sender
-        )
-
-        msg.content_subtype = "html"
-        msg.body = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Password Reset Request</h1>
-                </div>
-                
-                <div style="padding: 30px; background: #f7fafc;">
-                    <h2 style="color: #2d3748;">Reset Your Password</h2>
-                    <p style="color: #4a5568; line-height: 1.6;">
-                        We received a request to reset your password. Click the button below to create a new password.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_url}" 
-                           style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                                  color: white; padding: 15px 40px; text-decoration: none; 
-                                  border-radius: 8px; display: inline-block; font-weight: bold;">
-                            Reset Password
-                        </a>
-                    </div>
-                    <p style="color: #718096; font-size: 14px;">
-                        This link will expire in 1 hour. If you didn't request a password reset, ignore this email.
-                    </p>
-                    <p style="color: #718096; font-size: 12px; margin-top: 20px;">
-                        Or copy and paste this link into your browser:<br>
-                        <a href="{reset_url}" style="color: #f093fb;">{reset_url}</a>
-                    </p>
-                </div>
-            </body>
-        </html>
-        """
-
-        msg.send()
-        print(f"✅ [EMAIL] Password reset email sent to {user_email}")
-        return True
         
-    except Exception as e:
-        print(f"❌ [EMAIL ERROR] Failed to send reset email: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+  \
 def check_account_locked(user):
     """Check if account is locked due to failed login attempts"""
     if user.account_locked_until:
@@ -1095,24 +1042,13 @@ def handle_send_message_with_notification(data):
             'file_type': file_type,
             'file_name': file_name
         }
-        
-        # ✅ Send to BOTH sender and receiver
-        # Frontend will handle deduplication
-        
-        # Send to receiver
+
+        # Send to receiver only
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
             print(f"📡 [MESSAGE] Sent to receiver: {receiver_sid}")
-        
-        # Send to sender (so they get the DB ID)
-        sender_sid = active_connections.get(sender_id)
-        if sender_sid:
-            emit('receive_message', message_data, room=sender_sid)
-            print(f"📡 [MESSAGE] Sent to sender: {sender_sid}")
-        
-        # Fallback: emit to rooms (in case active_connections is out of sync)
-        
+
         # Send FCM notification
         send_message_notification(
             sender_id=sender_id,
@@ -1120,16 +1056,15 @@ def handle_send_message_with_notification(data):
             message_text=text or 'Sent a file',
             conversation_id=conversation.id
         )
-        
-        # Send delivery confirmation to sender
+
+        # Send delivery confirmation to sender only (updates temp message with real DB id)
         emit('message_delivered', {
             'messageId': message_id,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
         
-        print(f"✅ [MESSAGE] Complete\n")
-        
+      
     except Exception as e:
         print(f"❌ [MESSAGE] Error: {e}")
         import traceback
