@@ -680,8 +680,8 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
 def handle_initiate_video_call_with_notification(data):
     try:
         meeting_id  = data.get('meetingId')
-        caller_id   = data.get('callerId')
-        receiver_id = data.get('receiverId')
+        receiver_id = str(data.get('receiverId'))
+        caller_id = str(data.get('callerId'))
         caller_name = data.get('callerName')
         join_url    = data.get('joinUrl')
 
@@ -735,8 +735,9 @@ def handle_call_accepted(data):
     try:
         meeting_id = data.get('meetingId')
         accepted_by = data.get('acceptedBy')
-        caller_id = data.get('callerId')
         
+        receiver_id = str(data.get('receiverId'))
+        caller_id = str(data.get('callerId'))
         print(f"✅ [VIDEO] Call {meeting_id} accepted by: {accepted_by}")
         print(f"✅ [VIDEO] Notifying caller: {caller_id}")
         
@@ -963,6 +964,7 @@ def handle_connect(auth):
     user_id = auth.get('userId') if auth else None
     
     if user_id:
+        user_id = str(user_id)
         active_connections[user_id] = request.sid
         user_rooms[user_id] = []
         
@@ -1018,6 +1020,7 @@ def handle_send_message_with_notification(data):
     message_uuid = data.get('messageId')
 
     try:
+        
         # Deduplication check INSIDE try/catch
         if message_uuid:
             existing_msg = Message.query.filter_by(frontend_uuid=message_uuid).first()
@@ -1032,8 +1035,8 @@ def handle_send_message_with_notification(data):
                 return
 
         conversation_id = data.get('conversationId')
-        sender_id = data.get('sender_id')
-        receiver_id = data.get('receiver_id')
+        sender_id = str(data.get('sender_id'))    # ← normalize
+        receiver_id = str(data.get('receiver_id'))  # ← normalize
         text = data.get('text')
         timestamp_str = data.get('timestamp')
         file_url = data.get('file_url')
@@ -1082,7 +1085,7 @@ def handle_send_message_with_notification(data):
             'file_type': file_type,
             'file_name': file_name
         }
-
+        
         receiver_sid = active_connections.get(receiver_id)
         if receiver_sid:
             emit('receive_message', message_data, room=receiver_sid)
