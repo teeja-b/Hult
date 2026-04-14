@@ -147,11 +147,19 @@ update_counter = 0
 
 db = SQLAlchemy()
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',
+    logger=False,
+    engineio_logger=False
+)
+
 active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
 
 
