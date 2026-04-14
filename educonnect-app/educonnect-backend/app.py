@@ -50,7 +50,8 @@ from firebase_admin import credentials, messaging as fcm_messaging
 import requests as http_requests
 # Add this after your other imports
 import json
-from agora_token_builder import RtcTokenBuilder, RtcRole
+from agora_token_builder import RtcTokenBuilder
+PUBLISHER = 1
 FIREBASE_ENABLED = False
 try:
     import firebase_admin
@@ -457,19 +458,22 @@ class Booking(db.Model):
 
 
 @app.route('/api/agora/token', methods=['POST'])
-@login_required
 def agora_token():
-    data        = request.get_json()
-    channel     = data.get('channelName')
-    uid         = int(data.get('uid', 0))
-    role        = RtcRole.PUBLISHER
-    expire_time = int(time.time()) + 3600   # 1-hour token
-
+    data = request.get_json()
+    channel_name = data.get('channelName')
+    uid = int(data.get('uid', 0))
+    
+    expiry = int(time.time()) + 3600  # 1 hour
+    
     token = RtcTokenBuilder.buildTokenWithUid(
-        AGORA_APP_ID, AGORA_APP_CERTIFICATE,
-        channel, uid, role, expire_time
+        AGORA_APP_ID,
+        AGORA_APP_CERTIFICATE,
+        channel_name,
+        uid,
+        1,       # 1 = Publisher role
+        expiry
     )
-    return jsonify({ 'token': token }), 200
+    return jsonify({'token': token})
 @app.route('/api/debug/test-fcm/<int:user_id>', methods=['POST'])
 def test_fcm_direct(user_id):
     success = send_expo_notification(
