@@ -1130,17 +1130,7 @@ def handle_join_conversation(data):
         join_room(conversation_id)
         print(f"👥 [SOCKET] User {user_id} joined room: {conversation_id}")
         
-        # 🔥 FIX: Also join alternative formats for cross-compatibility
-        if partner_id:
-            alt_room_1 = f"conversation:{user_id}:{partner_id}"
-            alt_room_2 = f"conversation:{partner_id}:{user_id}"
-            
-            join_room(alt_room_1)
-            join_room(alt_room_2)
-            
-            print(f"👥 [SOCKET] User {user_id} also joined: {alt_room_1}, {alt_room_2}")
-        else:
-            print(f"⚠️ [SOCKET] No partnerId provided for user {user_id}")
+
         
         if user_id not in user_rooms:
             user_rooms[user_id] = []
@@ -1158,50 +1148,25 @@ def handle_join_conversation(data):
 
 @socketio.on('typing')
 def handle_typing(data):
-    """Handle typing indicators - FIXED VERSION"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
-    
-    print(f"\n⌨️ [TYPING] ===== TYPING EVENT =====")
-    print(f"⌨️ [TYPING] User {user_id} is typing in {conversation_id}")
-    
+
     if conversation_id and user_id:
-        # ✅ Emit to ALL possible room formats
         emit('user_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
-        
-        print(f"⌨️ [TYPING] Emitted to room: {conversation_id}")
-        
-        # ✅ Also broadcast to ALL connected users (fallback)
-        emit('user_typing', {
-            'userId': user_id,
-            'conversationId': conversation_id
-        }, broadcast=True, include_self=False)
-        
-        print(f"⌨️ [TYPING] Also broadcasted to all users")
 
 @socketio.on('stop_typing')
 def handle_stop_typing(data):
-    """Handle stop typing - FIXED VERSION"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
-    
-    print(f"⌨️ [TYPING] User {user_id} stopped typing in {conversation_id}")
-    
+
     if conversation_id and user_id:
-        # Emit to room
         emit('user_stop_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
-        
-        # Also broadcast
-        emit('user_stop_typing', {
-            'userId': user_id,
-            'conversationId': conversation_id
-        }, broadcast=True, include_self=False)
 
 @socketio.on('mark_as_read')
 def handle_mark_as_read(data):
