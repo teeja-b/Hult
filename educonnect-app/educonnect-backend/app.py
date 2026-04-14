@@ -151,6 +151,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
 
 
