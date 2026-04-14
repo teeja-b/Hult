@@ -50,7 +50,7 @@ from firebase_admin import credentials, messaging as fcm_messaging
 import requests as http_requests
 # Add this after your other imports
 import json
-
+from agora_token_builder import RtcTokenBuilder, RtcRole
 FIREBASE_ENABLED = False
 try:
     import firebase_admin
@@ -133,7 +133,8 @@ cloudinary.config(
 # Reduce memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
-
+AGORA_APP_ID = os.environ['AGORA_APP_ID']
+AGORA_APP_CERTIFICATE = os.environ['AGORA_APP_CERTIFICATE'] 
 rl_system = RLTutorMatchingSystem()
 
 MODEL_PATH = 'rl_model.pkl'
@@ -455,7 +456,20 @@ class Booking(db.Model):
     notes = db.Column(db.String(500))
 
 
+@app.route('/api/agora/token', methods=['POST'])
+@login_required
+def agora_token():
+    data        = request.get_json()
+    channel     = data.get('channelName')
+    uid         = int(data.get('uid', 0))
+    role        = RtcRole.PUBLISHER
+    expire_time = int(time.time()) + 3600   # 1-hour token
 
+    token = RtcTokenBuilder.buildTokenWithUid(
+        AGORA_APP_ID, AGORA_APP_CERTIFICATE,
+        channel, uid, role, expire_time
+    )
+    return jsonify({ 'token': token }), 200
 @app.route('/api/debug/test-fcm/<int:user_id>', methods=['POST'])
 def test_fcm_direct(user_id):
     success = send_expo_notification(
