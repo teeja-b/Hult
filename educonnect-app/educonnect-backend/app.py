@@ -1085,16 +1085,20 @@ def handle_send_message_with_notification(data):
             'file_type': file_type,
             'file_name': file_name
         }
-        
-        receiver_sid = active_connections.get(receiver_id)
-        if receiver_sid:
-            emit('receive_message', message_data, room=receiver_sid)
+        emit('receive_message', message_data, room=conversation_id, include_self=False)
 
+        # Also try direct SID as a fallback in case they haven't joined the room
+        receiver_sid = active_connections.get(str(receiver_id))
+        if receiver_sid and receiver_sid != request.sid:
+            emit('receive_message', message_data, room=receiver_sid)
+        
         emit('message_delivered', {
             'messageId': message_uuid,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
+        
+      
 
     except Exception as e:
         db.session.rollback()
