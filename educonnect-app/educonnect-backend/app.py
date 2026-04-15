@@ -1024,7 +1024,7 @@ def handle_send_message_with_notification(data):
         
         # Deduplication check INSIDE try/catch
         if message_uuid:
-            existing_msg = Message.query.filter_by(frontend_uuid=message_uuid).first()
+            existing_msg = Message.query.filter_by(frontend_uuid=str(message_uuid)).first()
             if existing_msg:
                 print(f"⚠️ Duplicate detected: {message_uuid}")
                 # Still confirm to sender so UI doesn't hang
@@ -1073,7 +1073,7 @@ def handle_send_message_with_notification(data):
             sender_id=sender_id,
             text=text,
             timestamp=dt_timestamp,
-            frontend_uuid=message_uuid,
+            frontend_uuid=str(message_uuid) if message_uuid else None,
             file_url=file_url,
             file_type=file_type,
             file_name=file_name
