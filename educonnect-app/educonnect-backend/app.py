@@ -1018,6 +1018,7 @@ def handle_disconnect():
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
     message_uuid = data.get('messageId')
+    
 
     try:
         
@@ -1042,9 +1043,15 @@ def handle_send_message_with_notification(data):
         file_url = data.get('file_url')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
-
+        print(f"DEBUG: receiver_id='{receiver_id}'")
+        print(f"DEBUG: active_connections keys={list(active_connections.keys())}")
         dt_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-
+        print(f"\n{'='*50}")
+        print(f"SEND_MESSAGE: sender={sender_id} receiver={receiver_id}")
+        print(f"active_connections: {active_connections}")
+        receiver_sid = active_connections.get(receiver_id)
+        print(f"receiver_sid lookup result: {receiver_sid}")
+        print(f"{'='*50}\n")
         conversation = Conversation.query.filter(
             ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
             ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
