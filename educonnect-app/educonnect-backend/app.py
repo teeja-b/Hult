@@ -47,11 +47,10 @@ import urllib.parse
 import requests
 import firebase_admin
 from firebase_admin import credentials, messaging as fcm_messaging
-import requests as http_requests
+
 # Add this after your other imports
 import json
-from agora_token_builder import RtcTokenBuilder
-PUBLISHER = 1
+
 FIREBASE_ENABLED = False
 try:
     import firebase_admin
@@ -134,8 +133,7 @@ cloudinary.config(
 # Reduce memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
-AGORA_APP_ID = os.environ['AGORA_APP_ID']
-AGORA_APP_CERTIFICATE = os.environ['AGORA_APP_CERTIFICATE'] 
+
 rl_system = RLTutorMatchingSystem()
 
 MODEL_PATH = 'rl_model.pkl'
@@ -149,21 +147,10 @@ update_counter = 0
 
 db = SQLAlchemy()
 app = Flask(__name__)
-
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode='threading',
-    ping_timeout=60,
-    ping_interval=25,
-    logger=False,
-    engineio_logger=False
-)
-
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
+CORS(app)
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
 
 
@@ -295,6 +282,7 @@ class User(db.Model):
     phone = db.Column(db.String(20))
     location = db.Column(db.String(100))
     date_of_birth = db.Column(db.Date)
+    gender = db.Column(db.String(20))
 
 class FCMToken(db.Model):
     """Store FCM tokens for users"""
@@ -316,7 +304,8 @@ class StudentProfile(db.Model):
     available_time = db.Column(db.String(50))
     preferred_languages = db.Column(db.Text)
     survey_completed = db.Column(db.Boolean, default=False)
-    
+    selected_goals = db.Column(db.Text)          # JSON array
+    tutor_gender_preference = db.Column(db.String(20))
     math_score = db.Column(db.Integer)
     science_score = db.Column(db.Integer)
     language_score = db.Column(db.Integer)
@@ -352,33 +341,11 @@ class TutorProfile(db.Model):
     max_students = db.Column(db.String(10))
     preferred_age_groups = db.Column(db.Text)  # JSON array
 
-# Add these new models to your app.py (around line 200, after existing models)
-
-class CourseSection(db.Model):
-    """Main sections/modules within a course"""
-    id = db.Column(db.Integer, primary_key=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
-    title = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text)
-    order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    materials = db.relationship('CourseMaterial', backref='section', cascade='all, delete-orphan')
-
-# Update the Course model to include new fields
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tutor_id = db.Column(db.Integer, db.ForeignKey('tutor_profile.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
-    
-    # NEW FIELDS for detailed course info
-    overview = db.Column(db.Text)  # Course Overview
-    learning_outcomes = db.Column(db.Text)  # What You'll Learn (JSON array)
-    prerequisites = db.Column(db.Text)  # Prerequisites (JSON array)
-    target_audience = db.Column(db.Text)  # Who is this course for
-    
     category = db.Column(db.String(50))
     level = db.Column(db.String(50))
     duration = db.Column(db.String(50))
@@ -389,18 +356,13 @@ class Course(db.Model):
     published = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationships
-    sections = db.relationship('CourseSection', backref='course', cascade='all, delete-orphan')
     materials = db.relationship('CourseMaterial', backref='course', cascade='all, delete-orphan')
     enrollments = db.relationship('Enrollment', backref='course', cascade='all, delete-orphan')
 
-# Update CourseMaterial model to include section_id
 class CourseMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
-    section_id = db.Column(db.Integer, db.ForeignKey('course_section.id'), nullable=True)  # NEW
     title = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text)  # NEW - Description for each material
     material_type = db.Column(db.String(50))
     file_path = db.Column(db.String(500))
     file_size = db.Column(db.Integer)
@@ -434,7 +396,6 @@ class Conversation(db.Model):
     last_message_time = db.Column(db.DateTime)
 
 class Message(db.Model):
-    frontend_uuid = db.Column(db.String(100), unique=True, nullable=True)
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'))
     sender_id = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -457,42 +418,328 @@ class Booking(db.Model):
     notes = db.Column(db.String(500))
 
 
-@app.route('/api/agora/token', methods=['POST'])
-def agora_token():
-    data = request.get_json()
-    channel_name = data.get('channelName')
-    uid = int(data.get('uid', 0))
+class Assignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tutor_id = db.Column(db.Integer, db.ForeignKey('tutor_profile.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    due_date = db.Column(db.DateTime, nullable=False)
+    max_score = db.Column(db.Integer, default=100)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    expiry = int(time.time()) + 3600  # 1 hour
+    # Relationships
+    submissions = db.relationship('AssignmentSubmission', backref='assignment', cascade='all, delete-orphan')
+
+class AssignmentSubmission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('assignment.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20), default='submitted')  # submitted, graded, late
+    score = db.Column(db.Integer)
+    grade = db.Column(db.String(5))  # A, B+, etc.
+    feedback = db.Column(db.Text)
+    comments = db.Column(db.Text)  # Student's submission comments
+    files = db.Column(db.Text)  # JSON array of file paths
+    rubric_scores = db.Column(db.Text)  # JSON array of rubric scores
+    late_submission = db.Column(db.Boolean, default=False)
     
-    token = RtcTokenBuilder.buildTokenWithUid(
-        AGORA_APP_ID,
-        AGORA_APP_CERTIFICATE,
-        channel_name,
-        uid,
-        1,       # 1 = Publisher role
-        expiry
-    )
-    return jsonify({'token': token})
-@app.route('/api/debug/test-fcm/<int:user_id>', methods=['POST'])
-def test_fcm_direct(user_id):
-    success = send_expo_notification(
-        user_id=user_id,
-        title='Test notification',
-        body='Notifications are working!',
-        data={'type': 'test'},
-        channel='messages'
-    )
-    return jsonify({'success': success}), 200 if success else 500
-@app.route('/api/admin/fix-db', methods=['POST'])
-def fix_db():
+    # Relationships
+    student = db.relationship('User', backref='assignment_submissions')
+
+
+
+def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
+    """
+    Send FCM notification with EduConnect branding (ENHANCED VERSION)
+    """
+    global FIREBASE_ENABLED
+    if not FIREBASE_ENABLED:
+        print("⚠️ Firebase not enabled, skipping notification")
+        return False
+    
     try:
-        with db.engine.connect() as conn:
-            conn.execute(db.text('ALTER TABLE message ADD COLUMN IF NOT EXISTS frontend_uuid VARCHAR(100) UNIQUE'))
-            conn.commit()
-        return jsonify({'success': True, 'message': 'Column added!'}), 200
+        # Get all active FCM tokens for this user
+        tokens = FCMToken.query.filter_by(
+            user_id=user_id,
+            is_active=True
+        ).all()
+        
+        if not tokens:
+            print(f"⚠️ No FCM tokens found for user {user_id}")
+            return False
+        
+        # ✅ YOUR FRONTEND URL (Vercel PWA)
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        # Prepare notification data
+        notification_data = data or {}
+        notification_data['type'] = notification_type
+        notification_data['timestamp'] = datetime.utcnow().isoformat()
+        notification_data['user_id'] = str(user_id)
+        
+        # ✅ BUILD PROPER CLICK URL
+        click_url = notification_data.get('url')
+        
+        if not click_url:
+            # Default URLs based on notification type
+            if notification_type == 'call':
+                meeting_id = notification_data.get('meeting_id', '')
+                click_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
+            elif notification_type == 'message':
+                conversation_id = notification_data.get('conversation_id', '')
+                click_url = f"{frontend_url}/messages"  # ✅ Opens messages in PWA
+            else:
+                click_url = frontend_url
+        
+        # Ensure URL is absolute HTTPS
+        if not click_url.startswith('https://') and not click_url.startswith('http://'):
+            click_url = frontend_url + click_url
+        
+        if click_url.startswith('http://'):
+            click_url = click_url.replace('http://', 'https://')
+        
+        print(f"📍 Click URL: {click_url}")
+        
+        # ✅ EDUCONNECT BRANDING - Icon and Badge URLs
+        # Option 1: Use icons from your Vercel deployment
+        icon_url = f"{frontend_url}/logo192.png"
+        badge_url = f"{frontend_url}/logo192.png"
+        
+        # Option 2: Use direct URLs if icons are in public folder
+        # icon_url = "https://hult-ten.vercel.app/logo192.png"
+        # badge_url = "https://hult-ten.vercel.app/logo192.png"
+        
+        # ✅ CUSTOM EMOJIS AND STYLING BY TYPE
+        notification_styles = {
+            'call': {
+                'emoji': '📞',
+                'color': '#10b981',  # Green for calls
+                'require_interaction': True,
+                'vibrate': [200, 100, 200, 100, 200],
+                'actions': [
+                    {'action': 'answer', 'title': '✅ Answer'},
+                    {'action': 'decline', 'title': '❌ Decline'}
+                ]
+            },
+            'message': {
+                'emoji': '💬',
+                'color': '#8b5cf6',  # Purple (EduConnect brand)
+                'require_interaction': False,
+                'vibrate': [100, 50, 100],
+                'actions': [
+                    {'action': 'reply', 'title': '📝 Reply'},
+                    {'action': 'view', 'title': '👁️ View'}
+                ]
+            },
+            'test': {
+                'emoji': '🔔',
+                'color': '#f59e0b',  # Orange for test
+                'require_interaction': False,
+                'vibrate': [200],
+                'actions': [
+                    {'action': 'open', 'title': '🚀 Open App'}
+                ]
+            },
+            'general': {
+                'emoji': '🔔',
+                'color': '#8b5cf6',  # EduConnect purple
+                'require_interaction': False,
+                'vibrate': [100],
+                'actions': [
+                    {'action': 'open', 'title': '📱 Open'}
+                ]
+            }
+        }
+        
+        style = notification_styles.get(notification_type, notification_styles['general'])
+        
+        # ✅ ADD EMOJI TO TITLE
+        styled_title = f"{style['emoji']} {title}"
+        
+        # Convert all data values to strings (FCM requirement)
+        notification_data = {k: str(v) for k, v in notification_data.items()}
+        
+        # ✅ ADD CLICK ACTION DATA
+        notification_data['click_action'] = click_url
+        notification_data['fcm_options'] = json.dumps({'link': click_url})
+        
+        successful_sends = 0
+        invalid_tokens = []
+        
+        for token_obj in tokens:
+            try:
+                # ✅ CREATE ENHANCED MESSAGE
+                message = fcm_messaging.Message(
+                    notification=fcm_messaging.Notification(
+                        title=styled_title,
+                        body=body,
+                        # image=icon_url  # Optional: Large image (uncomment if needed)
+                    ),
+                    data=notification_data,
+                    token=token_obj.token,
+                    
+                    # ✅ WEB PUSH CONFIGURATION (Desktop/Mobile Browser)
+                    webpush=fcm_messaging.WebpushConfig(
+                        notification=fcm_messaging.WebpushNotification(
+                            title=styled_title,
+                            body=body,
+                            icon=icon_url,
+                            badge=badge_url,
+                            tag=notification_type,  # Groups similar notifications
+                            require_interaction=style['require_interaction'],
+                            vibrate=style['vibrate'],
+                            
+                            # ✅ EDUCONNECT BRANDING - Background color
+                            # Note: This works in some browsers (Chrome Android)
+                            # Format: #RRGGBB
+                            # color='#8b5cf6',  # Uncomment if supported
+                            
+                            # ✅ ACTION BUTTONS
+                            actions=[
+                                fcm_messaging.WebpushNotificationAction(
+                                    action=action['action'],
+                                    title=action['title']
+                                ) for action in style['actions']
+                            ] if style['actions'] else None,
+                            
+                            # ✅ CUSTOM DATA
+                            data={
+                                'url': click_url,
+                                'type': notification_type
+                            }
+                        ),
+                        
+                        # ✅ FCM OPTIONS - CRITICAL FOR PWA REDIRECT
+                        fcm_options=fcm_messaging.WebpushFCMOptions(
+                            link=click_url  # This makes clicking open the PWA!
+                        ),
+                        
+                        # ✅ HEADERS (Optional - for debugging)
+                        headers={
+                            'TTL': '86400',  # 24 hours
+                            'Urgency': 'high' if notification_type == 'call' else 'normal'
+                        }
+                    ),
+                    
+                    # ✅ ANDROID CONFIGURATION (For future native app)
+                    android=fcm_messaging.AndroidConfig(
+                        priority='high',
+                        notification=fcm_messaging.AndroidNotification(
+                            title=styled_title,
+                            body=body,
+                            icon='@drawable/ic_notification',
+                            color=style['color'],
+                            sound='default',
+                            channel_id='educonnect_notifications',
+                            click_action=click_url,
+                            tag=notification_type
+                        ),
+                        data=notification_data
+                    )
+                )
+                
+                # Send message
+                response = fcm_messaging.send(message)
+                print(f"✅ Notification sent: {response}")
+                
+                # Update last_used timestamp
+                token_obj.last_used = datetime.utcnow()
+                successful_sends += 1
+                
+            except fcm_messaging.UnregisteredError:
+                print(f"❌ Invalid token, marking inactive: {token_obj.id}")
+                invalid_tokens.append(token_obj)
+            except fcm_messaging.SenderIdMismatchError:
+                print(f"❌ Token belongs to different project: {token_obj.id}")
+                invalid_tokens.append(token_obj)
+            except Exception as e:
+                print(f"❌ Error sending to token {token_obj.id}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Mark invalid tokens as inactive
+        for invalid_token in invalid_tokens:
+            invalid_token.is_active = False
+        
+        db.session.commit()
+        
+        print(f"📊 Notification results: {successful_sends}/{len(tokens)} successful")
+        return successful_sends > 0
+        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Error sending FCM notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+# ============================================================================
+# UPDATE HELPER FUNCTIONS WITH BETTER MESSAGES
+# ============================================================================
+
+def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
+    """Send incoming call notification with proper action handling"""
+    try:
+        caller = User.query.get(caller_id)
+        if not caller:
+            return False
+        
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        # ✅ Build the video call URL
+        video_call_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
+        
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"Incoming Call from {caller.full_name}",
+            body="Tap to answer the video call",
+            data={
+                'type': 'call',
+                'caller_id': str(caller_id),
+                'caller_name': caller.full_name,
+                'meeting_id': meeting_id,  # ✅ Important for service worker
+                'meetingId': meeting_id,   # ✅ Alternative format
+                'join_url': join_url,
+                'url': video_call_url,     # ✅ This is used by default click
+                'click_action': video_call_url  # ✅ Fallback
+            },
+            notification_type='call'
+        )
+    except Exception as e:
+        print(f"❌ Error sending call notification: {e}")
+        return False
+
+def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
+    """Send new message notification"""
+    try:
+        sender = User.query.get(sender_id)
+        if not sender:
+            return False
+        
+        # Truncate long messages
+        preview = message_text[:50] + '...' if len(message_text) > 50 else message_text
+        
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"New message from {sender.full_name}",
+            body=preview,
+            data={
+                'type': 'message',
+                'sender_id': str(sender_id),
+                'sender_name': sender.full_name,
+                'conversation_id': str(conversation_id),
+                'url': f"{frontend_url}/messages"
+            },
+            notification_type='message'
+        )
+    except Exception as e:
+        print(f"❌ Error sending message notification: {e}")
+        return False
+
 @app.route('/api/notifications/register-token', methods=['POST'])
 @jwt_required()
 def register_fcm_token():
@@ -575,102 +822,7 @@ def unregister_fcm_token():
 
 
 
-def send_expo_notification(user_id, title, body, data=None, channel='messages'):
-    """Send notification via Expo Push API - works for all devices"""
-    try:
-        tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-        
-        if not tokens:
-            print(f"⚠️ [EXPO] No tokens for user {user_id}")
-            return False
-        
-        messages = []
-        for token_obj in tokens:
-            # Only use Expo tokens
-            if not token_obj.token.startswith('ExponentPushToken'):
-                continue
-            messages.append({
-                "to": token_obj.token,
-                "title": title,
-                "body": body,
-                "data": data or {},
-                "channelId": channel,
-                "priority": "high",
-                "sound": "default"
-            })
-        
-        if not messages:
-            print(f"⚠️ [EXPO] No Expo tokens for user {user_id}")
-            return False
-        
-        response = http_requests.post(
-            "https://exp.host/--/api/v2/push/send",
-            json=messages,
-            headers={"Content-Type": "application/json"}
-        )
-        
-        result = response.json()
-        print(f"✅ [EXPO] Notification sent: {result}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ [EXPO] Error: {e}")
-        return False
 
-
-def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    """Send incoming call notification"""
-    try:
-        caller = User.query.get(caller_id)
-        caller_name = caller.full_name if caller else "Someone"
-        
-        return send_expo_notification(
-            user_id=receiver_id,
-            title=f"📞 {caller_name} is calling",
-            body="Tap to answer",
-            data={
-                'type': 'incoming_call',
-                'meetingId': str(meeting_id),
-                'joinUrl': join_url or '',
-                'callerName': caller_name,
-                'callerId': str(caller_id),
-            },
-            channel='calls'
-        )
-    except Exception as e:
-        print(f"❌ send_call_notification error: {e}")
-        return False
-
-
-def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
-    """Send message notification"""
-    try:
-        sender = User.query.get(sender_id)
-        sender_name = sender.full_name if sender else "Someone"
-        
-        return send_expo_notification(
-            user_id=receiver_id,
-            title=sender_name,
-            body=message_text[:100] if message_text else 'Sent an attachment',
-            data={
-                'type': 'message',
-                'conversation_id': str(conversation_id),
-                'sender_id': str(sender_id),
-                'sender_name': sender_name,
-            },
-            channel='messages'
-        )
-    except Exception as e:
-        print(f"❌ send_message_notification error: {e}")
-        return False
-
-
-def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
-    """Wrapper that uses Expo notifications"""
-    channel = 'calls' if notification_type == 'call' else \
-              'messages' if notification_type == 'message' else 'general'
-    
-    return send_expo_notification(user_id, title, body, data, channel)
 # Add this FIXED version to your app.py
 # This version keeps your existing connect/disconnect handlers
 
@@ -678,110 +830,90 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
 
 @socketio.on('initiate_video_call')
 def handle_initiate_video_call_with_notification(data):
+    """Handle video call initiation with FCM notification"""
     try:
-        meeting_id  = data.get('meetingId')
-        receiver_id = str(data.get('receiverId'))
-        caller_id = str(data.get('callerId'))
+        meeting_id = data.get('meetingId')
+        caller_id = data.get('callerId')
+        receiver_id = data.get('receiverId')
         caller_name = data.get('callerName')
-        join_url    = data.get('joinUrl')
-
+        join_url = data.get('joinUrl')
+        
         print(f"\n{'='*70}")
-        print(f"📞 [VIDEO] Caller: {caller_id} → Receiver: {receiver_id}")
+        print(f"📞 [VIDEO] Call initiated with notification")
+        print(f"📞 [VIDEO] Caller: {caller_id} ({caller_name})")
+        print(f"📞 [VIDEO] Receiver: {receiver_id}")
         print(f"{'='*70}")
-
+        
+        # Send Socket.IO event (for users currently online)
         receiver_sid = active_connections.get(receiver_id)
-
+        
         if receiver_sid:
-            # ✅ User is online and app is open — use Socket.IO only
-            # Do NOT send FCM, it would cause double notification
             emit('incoming_video_call', {
-                'meetingId':   meeting_id,
-                'callerId':    caller_id,
-                'callerName':  caller_name,
-                'joinUrl':     join_url
+                'meetingId': meeting_id,
+                'callerId': caller_id,
+                'callerName': caller_name,
+                'joinUrl': join_url
             }, room=receiver_sid)
-
-            print(f"✅ [VIDEO] User online — sent via Socket.IO only (no FCM)")
-            fcm_success = False
-
+            print(f"✅ [VIDEO] Socket notification sent")
+        
+        # ALWAYS send FCM notification (works even when app is closed)
+        fcm_success = send_call_notification(
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+            meeting_id=meeting_id,
+            join_url=join_url
+        )
+        
+        if fcm_success:
+            print(f"✅ [VIDEO] FCM notification sent")
         else:
-            # ✅ User is offline/app is closed — use FCM only
-            # Socket.IO can't reach them, FCM will wake the app
-            fcm_success = send_call_notification(
-                caller_id=caller_id,
-                receiver_id=receiver_id,
-                meeting_id=meeting_id,
-                join_url=join_url
-            )
-            print(f"✅ [VIDEO] User offline — sent via FCM only")
-
+            print(f"⚠️ [VIDEO] FCM notification failed (user may not have notifications enabled)")
+        
         # Confirm to caller
         emit('call_initiated', {
             'meetingId': meeting_id,
-            'status':    'sent',
-            'method':    'socket' if receiver_sid else 'fcm',
-            'fcm_sent':  fcm_success
+            'status': 'sent',
+            'fcm_sent': fcm_success
         }, room=request.sid)
-
+        
     except Exception as e:
         print(f"❌ [VIDEO] Error: {e}")
         import traceback
         traceback.print_exc()
         emit('call_failed', {'error': str(e)}, room=request.sid)
 
+
+# Update call_accepted handler
 @socketio.on('call_accepted')
 def handle_call_accepted(data):
-    """Handle call acceptance - ENHANCED"""
+    """Handle call acceptance - FIXED"""
     try:
         meeting_id = data.get('meetingId')
         accepted_by = data.get('acceptedBy')
+        caller_id = data.get('callerId')  # Add this
         
-        receiver_id = str(data.get('receiverId'))
-        caller_id = str(data.get('callerId'))
         print(f"✅ [VIDEO] Call {meeting_id} accepted by: {accepted_by}")
-        print(f"✅ [VIDEO] Notifying caller: {caller_id}")
         
-        # Get caller's socket ID
-        caller_sid = active_connections.get(caller_id)
-        
-        if caller_sid:
-            print(f"✅ [VIDEO] Found caller socket: {caller_sid}")
-            # Send to specific caller
-            emit('call_accepted', {
-                'meetingId': meeting_id,
-                'acceptedBy': accepted_by
-            }, room=caller_sid)
+        # Notify the caller
+        if caller_id:
+            caller_sid = active_connections.get(caller_id)
+            if caller_sid:
+                emit('call_accepted', {
+                    'meetingId': meeting_id,
+                    'acceptedBy': accepted_by
+                }, room=caller_sid)
+                print(f"✅ [VIDEO] Notified caller {caller_id}")
         else:
-            print(f"⚠️ [VIDEO] Caller {caller_id} not connected, broadcasting")
             # Fallback: broadcast to all
             emit('call_accepted', {
                 'meetingId': meeting_id,
                 'acceptedBy': accepted_by
             }, broadcast=True)
         
-        # ALSO send FCM notification to caller
-        try:
-            accepter = User.query.get(accepted_by)
-            if accepter and caller_id:
-                send_fcm_notification(
-                    user_id=caller_id,
-                    title=f"{accepter.full_name} joined the call",
-                    body="Click to continue the video call",
-                    data={
-                        'type': 'call_accepted',
-                        'meeting_id': meeting_id,
-                        'url': '/'
-                    },
-                    notification_type='call'
-                )
-        except Exception as e:
-            print(f"⚠️ [VIDEO] FCM notification failed: {e}")
-        
     except Exception as e:
         print(f"❌ [VIDEO] Error accepting call: {e}")
-        import traceback
-        traceback.print_exc()
-        
+
+
 # Update call_declined handler
 @socketio.on('call_declined')
 def handle_call_declined(data):
@@ -942,29 +1074,58 @@ def send_test_notification():
             'error': str(e)
         }), 500
 
+def send_password_reset_email(user_email, reset_url):
+    """Send password reset email"""
+    try:
+        sender = app.config.get('MAIL_DEFAULT_SENDER')
+        if not sender:
+            print("❌ CONFIG ERROR: MAIL_DEFAULT_SENDER is None")
+            return False
 
-        
-  
-def check_account_locked(user):
-    """Check if account is locked due to failed login attempts"""
-    if user.account_locked_until:
-        if datetime.utcnow() < user.account_locked_until:
-            remaining = (user.account_locked_until - datetime.utcnow()).seconds // 60
-            return True, remaining
-        else:
-            # Unlock account
-            user.account_locked_until = None
-            user.failed_login_attempts = 0
-            db.session.commit()
-    return False, 0
+        msg = EmailMessage(
+            subject="Reset your EduConnect password",
+            to=[user_email],
+            from_email=sender
+        )
 
+        msg.content_subtype = "html"
+        msg.body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center;">
+                    <h1 style="color: white; margin: 0;">Password Reset Request</h1>
+                </div>
+                
+                <div style="padding: 30px; background: #f7fafc;">
+                    <h2 style="color: #2d3748;">Reset Your Password</h2>
+                    <p style="color: #4a5568; line-height: 1.6;">
+                        We received a request to reset your password. Click the button below to create a new password.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_url}" 
+                           style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                                  color: white; padding: 15px 40px; text-decoration: none; 
+                                  border-radius: 8px; display: inline-block; font-weight: bold;">
+                            Reset Password
+                        </a>
+                    </div>
+                    <p style="color: #718096; font-size: 14px;">
+                        This link will expire in 1 hour. If you didn't request a password reset, ignore this email.
+                    </p>
+                    <p style="color: #718096; font-size: 12px; margin-top: 20px;">
+                        Or copy and paste this link into your browser:<br>
+                        <a href="{reset_url}" style="color: #f093fb;">{reset_url}</a>
+                    </p>
+                </div>
+            </body>
+        </html>
+    
 @socketio.on('connect')
 def handle_connect(auth):
     """Handle client connection"""
     user_id = auth.get('userId') if auth else None
     
     if user_id:
-        user_id = str(user_id)
         active_connections[user_id] = request.sid
         user_rooms[user_id] = []
         
@@ -1014,105 +1175,118 @@ def handle_disconnect():
             'status': 'offline'
         }, broadcast=True)
 
-
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
-    message_uuid = data.get('messageId')
-    
-
+    """Handle message sending with FCM notification"""
     try:
-        
-        # Deduplication check INSIDE try/catch
-        if message_uuid:
-            existing_msg = Message.query.filter_by(frontend_uuid=str(message_uuid)).first()
-            if existing_msg:
-                print(f"⚠️ Duplicate detected: {message_uuid}")
-                # Still confirm to sender so UI doesn't hang
-                emit('message_delivered', {
-                    'messageId': message_uuid,
-                    'dbMessageId': existing_msg.id,
-                    'status': 'delivered'
-                }, room=request.sid)
-                return
-
         conversation_id = data.get('conversationId')
-        sender_id = str(data.get('sender_id'))    # ← normalize
-        receiver_id = str(data.get('receiver_id'))  # ← normalize
+        sender_id = data.get('sender_id')
+        receiver_id = data.get('receiver_id')
         text = data.get('text')
-        timestamp_str = data.get('timestamp')
+        timestamp = data.get('timestamp')
+        message_id = data.get('messageId')
         file_url = data.get('file_url')
         file_type = data.get('file_type')
         file_name = data.get('file_name')
-        print(f"DEBUG: receiver_id='{receiver_id}'")
-        print(f"DEBUG: active_connections keys={list(active_connections.keys())}")
-        dt_timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-        print(f"\n{'='*50}")
-        print(f"SEND_MESSAGE: sender={sender_id} receiver={receiver_id}")
-        print(f"active_connections: {active_connections}")
-        receiver_sid = active_connections.get(receiver_id)
-        print(f"receiver_sid lookup result: {receiver_sid}")
-        print(f"{'='*50}\n")
+        
+        print(f"📤 [MESSAGE] From {sender_id} to {receiver_id}")
+        
+        # Get or create conversation
         conversation = Conversation.query.filter(
             ((Conversation.participant1_id == sender_id) & (Conversation.participant2_id == receiver_id)) |
             ((Conversation.participant1_id == receiver_id) & (Conversation.participant2_id == sender_id))
         ).first()
-
+        
         if not conversation:
             conversation = Conversation(
-                participant1_id=sender_id, participant2_id=receiver_id,
-                last_message=text, last_message_time=dt_timestamp
+                participant1_id=sender_id,
+                participant2_id=receiver_id,
+                last_message=text,
+                last_message_time=datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
             )
             db.session.add(conversation)
             db.session.flush()
         else:
             conversation.last_message = text
-            conversation.last_message_time = dt_timestamp
-
+            conversation.last_message_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        
+        # Save message
         message = Message(
             conversation_id=conversation.id,
             sender_id=sender_id,
             text=text,
-            timestamp=dt_timestamp,
-            frontend_uuid=str(message_uuid) if message_uuid else None,
+            timestamp=datetime.fromisoformat(timestamp.replace('Z', '+00:00')),
             file_url=file_url,
             file_type=file_type,
             file_name=file_name
         )
         db.session.add(message)
         db.session.commit()
-
+        
+        # Broadcast via Socket.IO (for online users)
         message_data = {
             'id': message.id,
-            'messageId': message_uuid,
+            'conversationId': conversation_id,
             'sender_id': sender_id,
             'receiver_id': receiver_id,
             'text': text,
-            'timestamp': timestamp_str,
+            'timestamp': timestamp,
+            'status': 'delivered',
             'file_url': file_url,
             'file_type': file_type,
             'file_name': file_name
         }
-        emit('receive_message', message_data, room=conversation_id, include_self=False)
-
-        # Also try direct SID as a fallback in case they haven't joined the room
-        receiver_sid = active_connections.get(str(receiver_id))
-        if receiver_sid and receiver_sid != request.sid:
-            emit('receive_message', message_data, room=receiver_sid)
         
+        emit('receive_message', message_data, room=conversation_id)
+        
+        # Send FCM notification (for offline users or background tabs)
+        send_message_notification(
+            sender_id=sender_id,
+            receiver_id=receiver_id,
+            message_text=text or 'Sent a file',
+            conversation_id=conversation.id
+        )
+        
+        # Send delivery confirmation to sender
         emit('message_delivered', {
-            'messageId': message_uuid,
+            'messageId': message_id,
             'dbMessageId': message.id,
             'status': 'delivered'
         }, room=request.sid)
         
-      
-
     except Exception as e:
-        db.session.rollback()
-        print(f"❌ [SEND_MESSAGE ERROR] {e}")
+        print(f"❌ [MESSAGE] Error: {e}")
         import traceback
         traceback.print_exc()
-        emit('message_error', {'error': str(e), 'messageId': message_uuid}, room=request.sid)
+        
+        db.session.rollback()
+        
+        emit('message_error', {
+            'error': str(e),
+            'messageId': data.get('messageId')
+        }, room=request.sid)
+
+@socketio.on('join_conversation')
+def handle_join_conversation(data):
+    """Join a conversation room"""
+    conversation_id = data.get('conversationId')
+    user_id = data.get('userId')
+    
+    if conversation_id and user_id:
+        join_room(conversation_id)
+        
+        if user_id not in user_rooms:
+            user_rooms[user_id] = []
+        
+        if conversation_id not in user_rooms[user_id]:
+            user_rooms[user_id].append(conversation_id)
+        
+        print(f"👥 [SOCKET] User {user_id} joined conversation {conversation_id}")
+        
+        emit('joined_conversation', {
+            'conversationId': conversation_id,
+            'userId': user_id
+        }, room=conversation_id)
 
 
 @socketio.on('leave_conversation')
@@ -1144,7 +1318,17 @@ def handle_join_conversation(data):
         join_room(conversation_id)
         print(f"👥 [SOCKET] User {user_id} joined room: {conversation_id}")
         
-
+        # 🔥 FIX: Also join alternative formats for cross-compatibility
+        if partner_id:
+            alt_room_1 = f"conversation:{user_id}:{partner_id}"
+            alt_room_2 = f"conversation:{partner_id}:{user_id}"
+            
+            join_room(alt_room_1)
+            join_room(alt_room_2)
+            
+            print(f"👥 [SOCKET] User {user_id} also joined: {alt_room_1}, {alt_room_2}")
+        else:
+            print(f"⚠️ [SOCKET] No partnerId provided for user {user_id}")
         
         if user_id not in user_rooms:
             user_rooms[user_id] = []
@@ -1159,28 +1343,32 @@ def handle_join_conversation(data):
             'conversationId': conversation_id,
             'userId': user_id
         }, room=conversation_id)
-
 @socketio.on('typing')
 def handle_typing(data):
+    """Handle typing indicators"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
-
+    
     if conversation_id and user_id:
+        # Broadcast to everyone in the room except sender
         emit('user_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
 
+
 @socketio.on('stop_typing')
 def handle_stop_typing(data):
+    """Handle stop typing"""
     conversation_id = data.get('conversationId')
     user_id = data.get('userId')
-
+    
     if conversation_id and user_id:
-        emit('user_stop_typing', {
+        emit('user_stopped_typing', {
             'userId': user_id,
             'conversationId': conversation_id
         }, room=conversation_id, include_self=False)
+
 
 @socketio.on('mark_as_read')
 def handle_mark_as_read(data):
@@ -1447,6 +1635,7 @@ def update_student_profile_enhanced():
     print("✅ [PROFILE UPDATE] Profile updated successfully")
     
     return jsonify({'message': 'Profile updated successfully'}), 200
+
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register_with_verification():
     """Fixed registration endpoint"""
@@ -1489,12 +1678,12 @@ def register_with_verification():
             password_hash=hashed_password,
             full_name=data['name'],
             user_type=data.get('role', 'student'),
-            email_verified=True,  # Auto-verify for now (change to False when email works)
+            email_verified=True,  # Auto-verify for now
             failed_login_attempts=0
         )
         
         db.session.add(new_user)
-        db.session.flush()
+        db.session.flush()  # Get the user ID before committing
         
         print(f"[REGISTER] User created with ID: {new_user.id}")
         
@@ -1517,6 +1706,7 @@ def register_with_verification():
             )
             db.session.add(student_profile)
         
+        # ✅ COMMIT BEFORE trying to send email
         db.session.commit()
         
         print(f"✅ [REGISTER] User {new_user.id} registered successfully")
@@ -1524,13 +1714,15 @@ def register_with_verification():
         # Try to send verification email (but don't fail if it doesn't work)
         email_sent = False
         try:
-            token = generate_verification_token(new_user.email)
-            verification_url = f"{request.host_url}verify-email?token={token}"
-            email_sent = send_verification_email(new_user.email, verification_url)
-            print(f"[REGISTER] Email sent: {email_sent}")
+            token = serializer.dumps(new_user.email, salt=app.config['SECURITY_PASSWORD_SALT'])
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            verification_url = f"{frontend_url}/verify-email?token={token}"
+            
+            # Try to send email (you'd need to implement send_verification_email)
+            # email_sent = send_verification_email(new_user.email, verification_url)
+            print(f"[REGISTER] Verification URL: {verification_url}")
         except Exception as email_error:
             print(f"⚠️ [REGISTER] Email sending failed (non-critical): {email_error}")
-            # Don't fail registration if email fails
         
         print(f"{'='*70}\n")
         
@@ -1547,7 +1739,12 @@ def register_with_verification():
         import traceback
         print(traceback.format_exc())
         print(f"{'='*70}\n")
-        return jsonify({'error': 'Registration failed', 'details': str(e)})
+        return jsonify({'error': 'Registration failed', 'details': str(e)}), 500
+    
+    
+def generate_verification_token(email):
+    """Generate email verification token"""
+    return serializer.dumps(email, salt=app.config['SECURITY_PASSWORD_SALT'])
 """
  @app.route('/api/auth/verify-email', methods=['GET'])
 def verify_email():
@@ -2334,7 +2531,8 @@ def complete_tutor_onboarding():
         if 'availability' in data:
             profile.availability = json.dumps(data['availability'])
             print(f"[ONBOARDING] Updated availability")
-        
+        if 'gender' in data:
+            user.gender = data['gender']
         # ✅ CRITICAL: Set verified to True
         profile.verified = True
         print(f"[ONBOARDING] Set verified = True")
@@ -2467,6 +2665,7 @@ def get_tutor_matches():
                 'availability': json.loads(tutor.availability) if tutor.availability else {},
                 'rating': tutor.rating or 4.0,
                 'total_sessions': tutor.total_sessions or 0,
+                'gender': getattr(tutor.user, 'gender', ''),
                 'teaching_style': getattr(tutor, 'teaching_style', 'adaptive')
             })
         
@@ -2627,8 +2826,297 @@ def test_match():
 
 
 
+# ============================================================================
+# ASSIGNMENT ENDPOINTS
+# ============================================================================
 
-    
+@app.route('/api/student/assignments', methods=['GET'])
+@jwt_required()
+def get_student_assignments():
+    """Get all assignments for a student"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'student':
+            return jsonify({'error': 'Only students can access assignments'}), 403
+        
+        # Get all enrolled courses
+        enrollments = Enrollment.query.filter_by(student_id=user_id).all()
+        course_ids = [e.course_id for e in enrollments]
+        
+        # Get assignments for enrolled courses
+        assignments = Assignment.query.filter(
+            Assignment.course_id.in_(course_ids)
+        ).order_by(Assignment.due_date.desc()).all()
+        
+        assignments_list = []
+        for assignment in assignments:
+            # Get submission if exists
+            submission = AssignmentSubmission.query.filter_by(
+                assignment_id=assignment.id,
+                student_id=user_id
+            ).first()
+            
+            course = Course.query.get(assignment.course_id)
+            
+            # Calculate class average
+            all_submissions = AssignmentSubmission.query.filter_by(
+                assignment_id=assignment.id,
+                status='graded'
+            ).all()
+            
+            class_average = None
+            if all_submissions:
+                scores = [s.score for s in all_submissions if s.score is not None]
+                if scores:
+                    class_average = round(sum(scores) / len(scores), 1)
+            
+            # Determine status
+            status = 'pending'
+            if submission:
+                if submission.status == 'graded':
+                    status = 'graded'
+                elif submission.late_submission:
+                    status = 'late'
+                else:
+                    status = 'submitted'
+            
+            assignment_data = {
+                'id': assignment.id,
+                'title': assignment.title,
+                'description': assignment.description,
+                'course': course.title if course else 'Unknown',
+                'courseCode': course.category if course else 'N/A',
+                'dueDate': assignment.due_date.strftime('%Y-%m-%d'),
+                'submittedDate': submission.submitted_at.strftime('%Y-%m-%d') if submission else None,
+                'status': status,
+                'score': submission.score if submission else None,
+                'maxScore': assignment.max_score,
+                'classAverage': class_average,
+                'grade': submission.grade if submission else None,
+                'feedback': submission.feedback if submission else None,
+                'comments': submission.comments if submission else None,
+                'files': json.loads(submission.files) if submission and submission.files else [],
+                'lateSubmission': submission.late_submission if submission else False,
+                'professor': assignment.tutor.user.full_name if assignment.tutor else 'Unknown',
+                'rubric': json.loads(submission.rubric_scores) if submission and submission.rubric_scores else []
+            }
+            
+            assignments_list.append(assignment_data)
+        
+        return jsonify({'assignments': assignments_list}), 200
+        
+    except Exception as e:
+        print(f"❌ [ASSIGNMENTS ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get assignments'}), 500
+
+
+@app.route('/api/assignments/<int:assignment_id>/submit', methods=['POST'])
+@jwt_required()
+def submit_assignment(assignment_id):
+    """Submit an assignment with Cloudinary upload"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'student':
+            return jsonify({'error': 'Only students can submit assignments'}), 403
+        
+        assignment = Assignment.query.get(assignment_id)
+        if not assignment:
+            return jsonify({'error': 'Assignment not found'}), 404
+        
+        # Check if already submitted
+        existing = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id,
+            student_id=user_id
+        ).first()
+        
+        if existing:
+            return jsonify({'error': 'Assignment already submitted'}), 400
+        
+        # Handle file uploads to Cloudinary
+        uploaded_files = []
+        if 'files' in request.files:
+            files = request.files.getlist('files')
+            
+            print(f"[ASSIGNMENT UPLOAD] 📤 Uploading {len(files)} files to Cloudinary")
+            
+            for file in files:
+                if file.filename:
+                    try:
+                        filename = secure_filename(file.filename)
+                        
+                        # Determine resource type based on file extension
+                        file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+                        
+                        # Videos and audio files need resource_type='video'
+                        # PDFs and documents need resource_type='raw'
+                        # Images use resource_type='image' (default)
+                        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav']:
+                            resource_type = 'video'
+                        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
+                            resource_type = 'raw'
+                        else:
+                            resource_type = 'image'
+                        
+                        print(f"[ASSIGNMENT UPLOAD] Uploading {filename} as {resource_type}")
+                        
+                        # Upload to Cloudinary
+                        upload_result = cloudinary.uploader.upload(
+                            file,
+                            resource_type=resource_type,
+                            folder=f'assignments/{assignment_id}',
+                            public_id=f"student_{user_id}_{datetime.utcnow().timestamp()}_{filename}",
+                            overwrite=False
+                        )
+                        
+                        file_url = upload_result['secure_url']
+                        
+                        uploaded_files.append({
+                            'url': file_url,
+                            'filename': filename,
+                            'size': upload_result.get('bytes', 0),
+                            'type': resource_type
+                        })
+                        
+                        print(f"[ASSIGNMENT UPLOAD] ✅ Uploaded: {file_url}")
+                        
+                    except Exception as upload_error:
+                        print(f"❌ [ASSIGNMENT UPLOAD] Failed to upload {filename}: {upload_error}")
+                        # Continue with other files even if one fails
+                        continue
+        
+        # Get comments
+        comments = request.form.get('comments', '')
+        
+        # Check if late
+        is_late = datetime.utcnow() > assignment.due_date
+        
+        # Create submission
+        submission = AssignmentSubmission(
+            assignment_id=assignment_id,
+            student_id=user_id,
+            status='submitted',
+            comments=comments,
+            files=json.dumps(uploaded_files),  # Store as JSON with URLs and metadata
+            late_submission=is_late
+        )
+        
+        db.session.add(submission)
+        db.session.commit()
+        
+        print(f"✅ [ASSIGNMENT] Submission created: {submission.id}")
+        print(f"✅ [ASSIGNMENT] Files uploaded: {len(uploaded_files)}")
+        
+        return jsonify({
+            'message': 'Assignment submitted successfully',
+            'submission_id': submission.id,
+            'late': is_late,
+            'files_uploaded': len(uploaded_files),
+            'files': uploaded_files
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [SUBMIT ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to submit assignment'}), 500
+
+@app.route('/api/tutor/assignments/create', methods=['POST'])
+@jwt_required()
+def create_assignment():
+    """Create a new assignment (tutor only)"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can create assignments'}), 403
+        
+        tutor_profile = user.tutor_profile
+        if not tutor_profile:
+            return jsonify({'error': 'Tutor profile not found'}), 404
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        if not all(k in data for k in ['title', 'due_date', 'course_id']):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Parse due date
+        due_date = datetime.strptime(data['due_date'], '%Y-%m-%d')
+        
+        assignment = Assignment(
+            tutor_id=tutor_profile.id,
+            course_id=data['course_id'],
+            title=data['title'],
+            description=data.get('description', ''),
+            due_date=due_date,
+            max_score=data.get('max_score', 100)
+        )
+        
+        db.session.add(assignment)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Assignment created successfully',
+            'assignment_id': assignment.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [CREATE ASSIGNMENT ERROR] {str(e)}")
+        return jsonify({'error': 'Failed to create assignment'}), 500
+
+
+@app.route('/api/tutor/assignments/<int:assignment_id>/grade', methods=['POST'])
+@jwt_required()
+def grade_assignment(assignment_id):
+    """Grade a student's assignment submission"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can grade assignments'}), 403
+        
+        data = request.get_json()
+        submission_id = data.get('submission_id')
+        
+        submission = AssignmentSubmission.query.get(submission_id)
+        if not submission:
+            return jsonify({'error': 'Submission not found'}), 404
+        
+        # Check ownership
+        if submission.assignment.tutor.user_id != user_id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        # Update grade
+        submission.score = data.get('score')
+        submission.grade = data.get('grade')
+        submission.feedback = data.get('feedback', '')
+        submission.rubric_scores = json.dumps(data.get('rubric', []))
+        submission.status = 'graded'
+        
+        db.session.commit()
+        
+        return jsonify({'message': 'Assignment graded successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [GRADE ERROR] {str(e)}")
+        return jsonify({'error': 'Failed to grade assignment'}), 500
+
+
 
 @app.route('/api/match/record-outcome', methods=['POST'],endpoint="record-outcome")
 @jwt_required()
@@ -3110,7 +3598,10 @@ def save_student_survey():
             data.get('motivation_level') or 
             7
         )
-        
+        if 'selected_goals' in data:
+            profile.selected_goals = json.dumps(data['selected_goals'])
+        if 'tutor_gender_preference' in data:
+            profile.tutor_gender_preference = data['tutor_gender_preference']
         profile.survey_completed = True
         
         print("[SURVEY] About to commit to database...")
@@ -3196,6 +3687,147 @@ def get_student_profile_enhanced():
     }), 200
 
 
+@app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material')
+@jwt_required()
+def upload_material():
+    """Upload course material to Cloudinary"""
+    
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        print("\n" + "📤"*35)
+        print("📤 MATERIAL UPLOAD TO CLOUDINARY!")
+        print("📤"*35)
+        
+        # Get and validate user
+        user_id_str = get_jwt_identity()
+        if not user_id_str:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can upload materials'}), 403
+        
+        # Validate course_id
+        course_id = request.form.get('course_id')
+        if not course_id:
+            return jsonify({'error': 'Course ID is required'}), 400
+        
+        course_id = int(course_id)
+        course = Course.query.get(course_id)
+        
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Check ownership
+        if course.tutor.user_id != user.id:
+            return jsonify({'error': 'Not authorized to upload to this course'}), 403
+        
+        # Validate file
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Get material metadata
+        material_title = request.form.get('title', file.filename)
+        material_type = request.form.get('type', 'document')
+        order = int(request.form.get('order', 0))
+        duration = request.form.get('duration', 0)
+        
+        print(f"[UPLOAD] File: {file.filename}")
+        print(f"[UPLOAD] Title: {material_title}")
+        print(f"[UPLOAD] Type: {material_type}")
+        print(f"[UPLOAD] Course ID: {course_id}")
+        
+        # Validate file size (500MB max)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > 500 * 1024 * 1024:
+            return jsonify({'error': 'File too large (max 500MB)'}), 400
+        
+        # Determine Cloudinary resource type
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
+            resource_type = 'video'
+        elif file_ext in ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
+            resource_type = 'raw'
+        else:
+            resource_type = 'image'
+        
+        print(f"[UPLOAD] Resource type: {resource_type}")
+        print(f"[UPLOAD] Uploading to Cloudinary...")
+        
+        # Secure filename
+        filename = secure_filename(file.filename)
+        
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type=resource_type,
+            folder=f'course-materials/{course_id}',
+            public_id=f"{datetime.utcnow().timestamp()}_{filename}",
+            overwrite=False
+        )
+        
+        cloudinary_url = upload_result['secure_url']
+        public_id = upload_result['public_id']
+        
+        print(f"[UPLOAD] ✅ Uploaded to Cloudinary: {cloudinary_url}")
+        
+        # Create database record with Cloudinary URL
+        material = CourseMaterial(
+            course_id=course_id,
+            title=material_title,
+            material_type=material_type,
+            file_path=cloudinary_url,  # ✅ Store Cloudinary URL
+            file_size=file_size,
+            order=order,
+            duration=int(duration) if duration else None
+        )
+        
+        db.session.add(material)
+        db.session.commit()
+        
+        print(f"✅ [UPLOAD] Material uploaded successfully with ID: {material.id}")
+        print("📤"*35 + "\n")
+        
+        return jsonify({
+            'message': 'Material uploaded successfully',
+            'material': {
+                'id': material.id,
+                'course_id': course_id,
+                'title': material.title,
+                'type': material.material_type,
+                'file_size': material.file_size,
+                'file_url': cloudinary_url,
+                'public_id': public_id,
+                'order': material.order,
+                'duration': material.duration,
+                'created_at': material.created_at.isoformat()
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [UPLOAD ERROR] Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("📤"*35 + "\n")
+        
+        return jsonify({
+            'error': 'Failed to upload material',
+            'details': str(e)
+        }), 500
 
 @app.route('/api/courses/<int:course_id>/materials', methods=['GET'])
 def get_course_materials(course_id):
@@ -3219,14 +3851,13 @@ def get_course_materials(course_id):
                 'id': material.id,
                 'title': material.title,
                 'type': material.material_type,
-                'file_path': material.file_path,  # ✅ ADD THIS LINE - The Cloudinary URL
                 'file_size': material.file_size,
                 'order': material.order,
                 'duration': material.duration,
                 'created_at': material.created_at.isoformat()
             }
             materials_list.append(material_data)
-            print(f"[MATERIALS] - {material.title} ({material.material_type}) URL: {material.file_path}")
+            print(f"[MATERIALS] - {material.title} ({material.material_type})")
         
         response_data = {
             'course_id': course_id,
@@ -3241,9 +3872,8 @@ def get_course_materials(course_id):
     except Exception as e:
         print(f"[ERROR] Failed to get materials: {str(e)}")
         import traceback
-        traceback.print_exc()
+        print(traceback.format_exc())
         return jsonify({'error': 'Failed to retrieve materials'}), 500
-        
 #================
 # OFFLINE DOWNLOAD ENDPOINTS
 # ============================================================================
@@ -3560,63 +4190,28 @@ def delete_course(course_id):
         if course.tutor.user_id != user.id:
             return jsonify({'error': 'Not authorized to delete this course'}), 403
         
-        # ✅ DELETE RELATED RECORDS FIRST
-        
-        # 1. Delete offline downloads
-        OfflineDownload.query.filter_by(course_id=course_id).delete()
-        print(f"[DELETE] Deleted offline downloads for course {course_id}")
-        
-        # 2. Delete enrollments
-        Enrollment.query.filter_by(course_id=course_id).delete()
-        print(f"[DELETE] Deleted enrollments for course {course_id}")
-        
-        # 3. Delete course materials (and their files from Cloudinary)
+        # Delete all course materials (files and database records)
         materials = CourseMaterial.query.filter_by(course_id=course_id).all()
         for material in materials:
-            # Try to delete from Cloudinary
-            try:
-                if material.file_path and 'cloudinary.com' in material.file_path:
-                    # Extract public_id from Cloudinary URL
-                    parts = material.file_path.split('/')
-                    upload_index = parts.index('upload') if 'upload' in parts else -1
-                    if upload_index > 0 and upload_index < len(parts) - 1:
-                        public_id_parts = parts[upload_index + 2:]
-                        public_id = '/'.join(public_id_parts).rsplit('.', 1)[0]
-                        
-                        # Determine resource type
-                        resource_type = 'raw'
-                        if '/video/' in material.file_path:
-                            resource_type = 'video'
-                        elif '/image/' in material.file_path:
-                            resource_type = 'image'
-                        
-                        cloudinary.uploader.destroy(public_id, resource_type=resource_type)
-                        print(f"[DELETE] Deleted from Cloudinary: {public_id}")
-            except Exception as cloudinary_error:
-                print(f"⚠️ [DELETE] Cloudinary deletion failed (non-critical): {cloudinary_error}")
+            if os.path.exists(material.file_path):
+                os.remove(material.file_path)
         
-        # Delete all materials from database
-        CourseMaterial.query.filter_by(course_id=course_id).delete()
-        print(f"[DELETE] Deleted course materials for course {course_id}")
+        # Delete course materials directory
+        materials_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'materials', str(course_id))
+        if os.path.exists(materials_dir):
+            import shutil
+            shutil.rmtree(materials_dir)
         
-        # 4. Delete course sections (materials are already deleted)
-        CourseSection.query.filter_by(course_id=course_id).delete()
-        print(f"[DELETE] Deleted course sections for course {course_id}")
-        
-        # 5. Finally, delete the course itself
+        # Delete course (cascade will delete materials and enrollments)
         db.session.delete(course)
         db.session.commit()
-        
-        print(f"✅ [DELETE] Course {course_id} deleted successfully")
         
         return jsonify({'message': 'Course deleted successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
-        print(f"❌ [DELETE ERROR] Failed to delete course: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Failed to delete course', 'details': str(e)}), 500
+        print(f"[ERROR] Failed to delete course: {str(e)}")
+        return jsonify({'error': 'Failed to delete course'}), 500
 
 # Add these routes AFTER get_course_materials function
 
@@ -3810,6 +4405,7 @@ def get_tutor_profile_enhanced():
             'teaching_style': getattr(profile, 'teaching_style', 'adaptive'),
             'years_experience': getattr(profile, 'years_experience', ''),
             'education': getattr(profile, 'education', ''),
+            'gender': getattr(user, 'gender', ''),
             'certifications': getattr(profile, 'certifications', ''),
             'specializations': getattr(profile, 'specializations', ''),
             'teaching_philosophy': getattr(profile, 'teaching_philosophy', ''),
@@ -3863,7 +4459,8 @@ def update_tutor_profile_enhanced():
     if 'availability' in data:
         profile.availability = json.dumps(data['availability'])
         print(f"  📅 Updated availability: {sum(data['availability'].values())} slots")
-    
+    if 'gender' in data:
+        user.gender = data['gender']
     # Additional fields - using setattr for safety
     additional_fields = [
         'teaching_style', 'years_experience', 'education', 'certifications',
@@ -4301,370 +4898,43 @@ def debug_tutors():
         })
     
     return jsonify({'tutors': debug_info}), 200
-
-# Add these endpoints to your app.py (around line 1800, after course endpoints)
-
-# ============================================================================
-# COURSE SECTION ENDPOINTS
-# ============================================================================
-
-@app.route('/api/courses/<int:course_id>/sections', methods=['POST'])
+@app.route('/api/courses/create', methods=['POST', 'OPTIONS'], endpoint = "courses_create")
 @jwt_required()
-def create_course_section(course_id):
-    """Create a new section/module within a course"""
-    try:
-        user_id_str = get_jwt_identity()
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-        
-        if not user or user.user_type != 'tutor':
-            return jsonify({'error': 'Only tutors can create sections'}), 403
-        
-        course = Course.query.get(course_id)
-        if not course:
-            return jsonify({'error': 'Course not found'}), 404
-        
-        # Check ownership
-        if course.tutor.user_id != user.id:
-            return jsonify({'error': 'Not authorized'}), 403
-        
-        data = request.get_json()
-        
-        section = CourseSection(
-            course_id=course_id,
-            title=data.get('title', '').strip(),
-            description=data.get('description', '').strip(),
-            order=data.get('order', 0)
-        )
-        
-        db.session.add(section)
-        db.session.commit()
-        
-        print(f"✅ [SECTION] Created section {section.id} for course {course_id}")
-        
-        return jsonify({
-            'message': 'Section created successfully',
-            'section': {
-                'id': section.id,
-                'course_id': section.course_id,
-                'title': section.title,
-                'description': section.description,
-                'order': section.order,
-                'created_at': section.created_at.isoformat()
-            }
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ [SECTION ERROR] {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Failed to create section'}), 500
-
-
-@app.route('/api/courses/<int:course_id>/sections', methods=['GET'])
-def get_course_sections(course_id):
-    """Get all sections for a course with their materials"""
-    try:
-        course = Course.query.get(course_id)
-        if not course:
-            return jsonify({'error': 'Course not found'}), 404
-        
-        sections = CourseSection.query.filter_by(
-            course_id=course_id
-        ).order_by(CourseSection.order).all()
-        
-        sections_list = []
-        for section in sections:
-            materials = CourseMaterial.query.filter_by(
-                section_id=section.id
-            ).order_by(CourseMaterial.order).all()
-            
-            materials_list = []
-            for material in materials:
-                materials_list.append({
-                    'id': material.id,
-                    'title': material.title,
-                    'description': material.description,
-                    'type': material.material_type,
-                    'file_path': material.file_path,
-                    'file_size': material.file_size,
-                    'duration': material.duration,
-                    'order': material.order,
-                    'created_at': material.created_at.isoformat()
-                })
-            
-            sections_list.append({
-                'id': section.id,
-                'title': section.title,
-                'description': section.description,
-                'order': section.order,
-                'materials': materials_list,
-                'material_count': len(materials_list),
-                'created_at': section.created_at.isoformat()
-            })
-        
-        return jsonify({
-            'course_id': course_id,
-            'sections': sections_list,
-            'total_sections': len(sections_list)
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ [GET SECTIONS ERROR] {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Failed to get sections'}), 500
-
-
-@app.route('/api/sections/<int:section_id>', methods=['PUT'])
-@jwt_required()
-def update_section(section_id):
-    """Update a course section including offline availability"""
-    try:
-        user_id_str = get_jwt_identity()
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-        
-        if not user or user.user_type != 'tutor':
-            return jsonify({'error': 'Only tutors can update sections'}), 403
-        
-        section = CourseSection.query.get(section_id)
-        if not section:
-            return jsonify({'error': 'Section not found'}), 404
-        
-        # Check ownership
-        if section.course.tutor.user_id != user.id:
-            return jsonify({'error': 'Not authorized'}), 403
-        
-        data = request.get_json()
-        
-        if 'title' in data:
-            section.title = data['title'].strip()
-        if 'description' in data:
-            section.description = data['description'].strip()
-        if 'order' in data:
-            section.order = int(data['order'])
-
-        
-        db.session.commit()
-        
-        return jsonify({
-            'message': 'Section updated successfully',
-            'section': {
-                'id': section.id,
-                'title': section.title,
-                'description': section.description,
-                'order': section.order,
-                'offline_available': section.offline_available
-            }
-        }), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ [UPDATE SECTION ERROR] {str(e)}")
-        return jsonify({'error': 'Failed to update section'}), 500
-
-@app.route('/api/sections/<int:section_id>', methods=['DELETE'])
-@jwt_required()
-def delete_section(section_id):
-    """Delete a course section and all its materials"""
-    try:
-        user_id_str = get_jwt_identity()
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-        
-        if not user or user.user_type != 'tutor':
-            return jsonify({'error': 'Only tutors can delete sections'}), 403
-        
-        section = CourseSection.query.get(section_id)
-        if not section:
-            return jsonify({'error': 'Section not found'}), 404
-        
-        # Check ownership
-        if section.course.tutor.user_id != user.id:
-            return jsonify({'error': 'Not authorized'}), 403
-        
-        # Delete all materials in section from Cloudinary
-        materials = CourseMaterial.query.filter_by(section_id=section_id).all()
-        for material in materials:
-            try:
-                # Delete from Cloudinary (same logic as before)
-                if 'cloudinary.com' in material.file_path:
-                    # Extract and delete from Cloudinary
-                    pass  # Add Cloudinary deletion logic here
-            except Exception as e:
-                print(f"⚠️ Error deleting material from Cloudinary: {e}")
-        
-        db.session.delete(section)
-        db.session.commit()
-        
-        return jsonify({'message': 'Section deleted successfully'}), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ [DELETE SECTION ERROR] {str(e)}")
-        return jsonify({'error': 'Failed to delete section'}), 500
-
-
-# ============================================================================
-# UPDATE MATERIAL UPLOAD TO SUPPORT SECTIONS
-# ============================================================================
-
-@app.route('/api/upload/material', methods=['POST', 'OPTIONS'], endpoint='upload_material_v2')
-@jwt_required()
-def upload_material_with_section():
-    """Upload course material to a specific section"""
+def create_course():
+    """Create a new course (tutor only)"""
     
     if request.method == 'OPTIONS':
         return '', 200
     
     try:
+        print("\n" + "📚"*35)
+        print("📚 COURSE CREATION ENDPOINT HIT!")
+        print("📚"*35)
+        
+        # Get and validate user
         user_id_str = get_jwt_identity()
+        if not user_id_str:
+            return jsonify({'error': 'Authentication required'}), 401
+        
         user_id = int(user_id_str)
         user = User.query.get(user_id)
         
-        if not user or user.user_type != 'tutor':
-            return jsonify({'error': 'Only tutors can upload materials'}), 403
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-        course_id = request.form.get('course_id')
-        section_id = request.form.get('section_id')  # NEW - Optional
-        
-        if not course_id:
-            return jsonify({'error': 'Course ID is required'}), 400
-        
-        course_id = int(course_id)
-        course = Course.query.get(course_id)
-        
-        if not course or course.tutor.user_id != user.id:
-            return jsonify({'error': 'Not authorized'}), 403
-        
-        # Validate section if provided
-        if section_id:
-            section_id = int(section_id)
-            section = CourseSection.query.get(section_id)
-            if not section or section.course_id != course_id:
-                return jsonify({'error': 'Invalid section'}), 400
-        
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        # Get metadata
-        material_title = request.form.get('title', file.filename)
-        material_description = request.form.get('description', '')  # NEW
-        material_type = request.form.get('type', 'document')
-        order = int(request.form.get('order', 0))
-        duration = request.form.get('duration', 0)
-        
-        # Validate file size
-        file.seek(0, os.SEEK_END)
-        file_size = file.tell()
-        file.seek(0)
-        
-        if file_size > 500 * 1024 * 1024:
-            return jsonify({'error': 'File too large (max 500MB)'}), 400
-        
-        # Determine resource type
-        # Determine resource type
-
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-
-        if file_ext in ['mp4', 'mov', 'avi', 'mkv', 'webm', 'mp3', 'wav', 'ogg']:
-            resource_type = 'video'
-        elif file_ext in ['pdf','doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'zip']:
-            resource_type = 'auto'  # ✅ Let Cloudinary decide (usually allows public access)
-        else:
-            resource_type = 'image'
-
-        
-        # Upload to Cloudinary
-        filename = secure_filename(file.filename)
-        
-        upload_result = cloudinary.uploader.upload(
-            file,
-            resource_type=resource_type,
-            folder=f'course-materials/{course_id}',
-            public_id=f"{datetime.utcnow().timestamp()}_{filename}",
-            overwrite=False
-        )
-        
-        cloudinary_url = upload_result['secure_url']
-        public_id = upload_result['public_id']
-        
-        # Create database record
-        material = CourseMaterial(
-            course_id=course_id,
-            section_id=section_id if section_id else None,  # NEW
-            title=material_title,
-            description=material_description,  # NEW
-            material_type=material_type,
-            file_path=cloudinary_url,
-            file_size=file_size,
-            order=order,
-            duration=int(duration) if duration else None
-        )
-        
-        db.session.add(material)
-        db.session.commit()
-        
-        print(f"✅ [UPLOAD] Material {material.id} uploaded to section {section_id or 'none'}")
-        
-        return jsonify({
-            'message': 'Material uploaded successfully',
-            'material': {
-                'id': material.id,
-                'course_id': course_id,
-                'section_id': section_id,
-                'title': material.title,
-                'description': material.description,
-                'type': material.material_type,
-                'file_size': material.file_size,
-                'file_url': cloudinary_url,
-                'public_id': public_id,
-                'order': material.order,
-                'duration': material.duration,
-                'created_at': material.created_at.isoformat()
-            }
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"❌ [UPLOAD ERROR] {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Failed to upload material'}), 500
-
-
-# ============================================================================
-# UPDATE COURSE CREATION TO INCLUDE NEW FIELDS
-# ============================================================================
-
-@app.route('/api/courses/create', methods=['POST', 'OPTIONS'], endpoint='courses_create_v2')
-@jwt_required()
-def create_course_enhanced():
-    """Create a new course with detailed information"""
-    
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    try:
-        user_id_str = get_jwt_identity()
-        user_id = int(user_id_str)
-        user = User.query.get(user_id)
-        
-        if not user or user.user_type != 'tutor':
+        if user.user_type != 'tutor':
             return jsonify({'error': 'Only tutors can create courses'}), 403
         
+        # Get tutor profile
         tutor_profile = user.tutor_profile
         if not tutor_profile:
             return jsonify({'error': 'Tutor profile not found'}), 404
         
+        print(f"[COURSE] Creating course for tutor: {user.full_name} (ID: {tutor_profile.id})")
+        
+        # Get request data
         data = request.get_json()
+        print(f"[COURSE] Received data: {json.dumps(data, indent=2)}")
         
         # Validate required fields
         required_fields = ['title', 'description', 'category', 'level']
@@ -4676,15 +4946,11 @@ def create_course_enhanced():
                 'missing': missing_fields
             }), 400
         
-        # Create course with new fields
+        # Create course
         course = Course(
             tutor_id=tutor_profile.id,
             title=data['title'].strip(),
             description=data['description'].strip(),
-            overview=data.get('overview', '').strip(),  # NEW
-            learning_outcomes=json.dumps(data.get('learning_outcomes', [])),  # NEW
-            prerequisites=json.dumps(data.get('prerequisites', [])),  # NEW
-            target_audience=data.get('target_audience', '').strip(),  # NEW
             category=data['category'],
             level=data['level'],
             duration=data.get('duration', ''),
@@ -4696,7 +4962,8 @@ def create_course_enhanced():
         db.session.add(course)
         db.session.commit()
         
-        print(f"✅ [COURSE] Enhanced course created with ID: {course.id}")
+        print(f"✅ [COURSE] Course created successfully with ID: {course.id}")
+        print("📚"*35 + "\n")
         
         return jsonify({
             'message': 'Course created successfully',
@@ -4704,10 +4971,6 @@ def create_course_enhanced():
                 'id': course.id,
                 'title': course.title,
                 'description': course.description,
-                'overview': course.overview,
-                'learning_outcomes': json.loads(course.learning_outcomes),
-                'prerequisites': json.loads(course.prerequisites),
-                'target_audience': course.target_audience,
                 'category': course.category,
                 'level': course.level,
                 'duration': course.duration,
@@ -4718,13 +4981,21 @@ def create_course_enhanced():
             }
         }), 201
         
+    except ValueError as e:
+        print(f"❌ [COURSE ERROR] Validation error: {str(e)}")
+        return jsonify({'error': f'Invalid data: {str(e)}'}), 400
+    
     except Exception as e:
         db.session.rollback()
-        print(f"❌ [COURSE ERROR] {str(e)}")
+        print(f"❌ [COURSE ERROR] Exception: {str(e)}")
         import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Failed to create course'}), 500
-
+        print(traceback.format_exc())
+        print("📚"*35 + "\n")
+        
+        return jsonify({
+            'error': 'Failed to create course',
+            'details': str(e)
+        }), 500
 @app.route('/api/debug/users-and-tutors', methods=['GET'])
 def debug_users_and_tutors():
     """Comprehensive debug endpoint"""
@@ -4872,55 +5143,180 @@ def debug_tutor_status():
 
 
 
-# ----------------------------------
-# Tutor profile viewer
-@app.route('/api/tutors/<int:tutor_id>/profile', methods=['GET'])
-def get_tutor_full_profile(tutor_id):
-    """Get complete tutor profile for viewing"""
+
+
+
+
+
+
+
+
+###############################################################################
+@app.route('/api/tutor/assignments/<int:assignment_id>/submissions', methods=['GET'])
+@jwt_required()
+def get_assignment_submissions(assignment_id):
+    """Get all submissions for an assignment"""
     try:
-        # tutor_id here is the tutor_profile.id, not user_id
-        tutor_profile = TutorProfile.query.get(tutor_id)
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
         
-        if not tutor_profile:
-            return jsonify({'error': 'Tutor not found'}), 404
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can view submissions'}), 403
         
-        user = User.query.get(tutor_profile.user_id)
+        assignment = Assignment.query.get(assignment_id)
+        if not assignment:
+            return jsonify({'error': 'Assignment not found'}), 404
         
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+        # Check ownership
+        if assignment.tutor.user_id != user_id:
+            return jsonify({'error': 'Not authorized'}), 403
         
-        return jsonify({
-            'tutor': {
-                'id': tutor_profile.id,
-                'user_id': tutor_profile.user_id,
-                'name': user.full_name,
-                'email': user.email,
-                'bio': tutor_profile.bio,
-                'expertise': json.loads(tutor_profile.expertise or '[]'),
-                'languages': json.loads(tutor_profile.languages or '[]'),
-                'hourly_rate': tutor_profile.hourly_rate,
-                'rating': tutor_profile.rating,
-                'total_sessions': tutor_profile.total_sessions,
-                'availability': json.loads(tutor_profile.availability or '{}'),
-                'verified': tutor_profile.verified,
-                'teaching_style': getattr(tutor_profile, 'teaching_style', 'adaptive'),
-                'years_experience': getattr(tutor_profile, 'years_experience', ''),
-                'education': getattr(tutor_profile, 'education', ''),
-                'certifications': getattr(tutor_profile, 'certifications', ''),
-                'specializations': getattr(tutor_profile, 'specializations', ''),
-                'teaching_philosophy': getattr(tutor_profile, 'teaching_philosophy', ''),
-                'min_session_length': getattr(tutor_profile, 'min_session_length', '30'),
-                'max_students': getattr(tutor_profile, 'max_students', '10'),
-                'preferred_age_groups': json.loads(getattr(tutor_profile, 'preferred_age_groups', '[]') or '[]')
-            }
-        }), 200
+        submissions = AssignmentSubmission.query.filter_by(
+            assignment_id=assignment_id
+        ).order_by(AssignmentSubmission.submitted_at.desc()).all()
+        
+        submissions_list = []
+        for submission in submissions:
+            student = User.query.get(submission.student_id)
+            
+            submissions_list.append({
+                'id': submission.id,
+                'assignment_id': assignment_id,
+                'student_id': submission.student_id,
+                'student_name': student.full_name if student else 'Unknown',
+                'submitted_at': submission.submitted_at.isoformat(),
+                'status': submission.status,
+                'score': submission.score,
+                'max_score': assignment.max_score,
+                'grade': submission.grade,
+                'feedback': submission.feedback,
+                'comments': submission.comments,
+                'files': json.loads(submission.files) if submission.files else [],
+                'late_submission': submission.late_submission
+            })
+        
+        return jsonify({'submissions': submissions_list}), 200
         
     except Exception as e:
-        print(f"❌ [TUTOR PROFILE ERROR] {str(e)}")
+        print(f"❌ [SUBMISSIONS ERROR] {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': 'Failed to get tutor profile'}), 500
+        return jsonify({'error': 'Failed to get submissions'}), 500
+    
+###########################################################################################
 
+@app.route('/api/create-test-assignment', methods=['POST'])
+@jwt_required()
+def create_test_assignment():
+    """Create a test assignment for grading testing"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can create assignments'}), 403
+        
+        # Get the tutor profile
+        tutor = TutorProfile.query.filter_by(user_id=user_id).first()
+        if not tutor:
+            return jsonify({'error': 'Tutor profile not found'}), 404
+        
+        # Get first available course
+        course = Course.query.filter_by(tutor_id=tutor.id).first()
+        if not course:
+            # If no course exists, create a test course
+            course = Course(
+                tutor_id=tutor.id,
+                name="Test Course - Python Programming",
+                description="Test course for assignment grading",
+                category="Programming",
+                level="Beginner"
+            )
+            db.session.add(course)
+            db.session.commit()
+        
+        # Create test assignment
+        assignment = Assignment(
+            tutor_id=tutor.id,
+            course_id=course.id,
+            title="Test Assignment: Essay on Python Programming",
+            description="Write a 500-word essay about the benefits of Python programming. Include examples of real-world applications.",
+            due_date=datetime.now() + timedelta(days=7),
+            max_score=100
+        )
+        
+        db.session.add(assignment)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Test assignment created successfully',
+            'assignment': {
+                'id': assignment.id,
+                'title': assignment.title,
+                'course_name': course.name
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f"❌ [TEST ASSIGNMENT ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create test assignment'}), 500
+
+
+@app.route('/api/tutor/assignments', methods=['GET'])
+@jwt_required()
+def get_tutor_assignments():
+    """Get all assignments created by the tutor"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can view assignments'}), 403
+        
+        tutor = TutorProfile.query.filter_by(user_id=user_id).first()
+        if not tutor:
+            return jsonify({'error': 'Tutor profile not found'}), 404
+        
+        assignments = Assignment.query.filter_by(tutor_id=tutor.id).all()
+        
+        assignments_list = []
+        for assignment in assignments:
+            # Count submissions
+            submissions_count = AssignmentSubmission.query.filter_by(
+                assignment_id=assignment.id
+            ).count()
+            
+            # Count graded submissions
+            graded_count = AssignmentSubmission.query.filter_by(
+                assignment_id=assignment.id,
+                status='graded'
+            ).count()
+            
+            assignments_list.append({
+                'id': assignment.id,
+                'title': assignment.title,
+                'description': assignment.description,
+                'due_date': assignment.due_date.isoformat(),
+                'max_score': assignment.max_score,
+                'created_at': assignment.created_at.isoformat(),
+                'submissions_count': submissions_count,
+                'graded_count': graded_count,
+                'course_name': assignment.course.title if assignment.course else 'No Course'  # ✅ FIXED: Use 'title' instead of 'name'
+            })
+        
+        return jsonify({'assignments': assignments_list}), 200
+        
+    except Exception as e:
+        print(f"❌ [TUTOR ASSIGNMENTS ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to get assignments'}), 500
 
 
 
