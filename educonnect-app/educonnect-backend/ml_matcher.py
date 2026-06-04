@@ -326,10 +326,27 @@ class RLTutorMatchingSystem:
                 l.lower().strip() 
                 for l in (student_profile.get('preferred_languages') or ['english']) 
                 if l
-            ]
+            ],
+            'selected_goals': [
+                g.lower().strip()
+                for g in (student_profile.get('selected_goals') or [])
+                if g
+        ],
+        'tutor_gender_preference': (
+            student_profile.get('tutor_gender_preference') or 'no_preference'
+        ).lower(),
         }
         return features
-
+        
+    def calculate_gender_match(self, student_preference, tutor_gender):
+    """Return 1.0 if no preference or match, 0.0 if mismatch"""
+    if not student_preference or student_preference == 'no_preference':
+        return 1.0
+    tutor_gender = (tutor_gender or '').lower().strip()
+    if not tutor_gender:
+        return 0.8  # tutor gender unknown, slight penalty
+    return 1.0 if student_preference == tutor_gender else 0.0
+    
     def prepare_tutor_features(self, tutor_profile):
         """Enhanced tutor feature extraction with None safety"""
         features = {
@@ -346,7 +363,8 @@ class RLTutorMatchingSystem:
             'availability': tutor_profile.get('availability') or {},
             'rating': max(0.0, min(5.0, tutor_profile.get('rating', 4.0) or 4.0)),
             'total_sessions': max(0, tutor_profile.get('total_sessions', 0) or 0),
-            'teaching_style': (tutor_profile.get('teaching_style') or 'adaptive').lower()
+            'teaching_style': (tutor_profile.get('teaching_style') or 'adaptive').lower(),
+            'gender': (tutor_profile.get('gender') or '').lower().strip(),
         }
         return features
     
@@ -512,6 +530,14 @@ class RLTutorMatchingSystem:
             weights = self.base_weights.copy()
         
         matches = []
+        gender_pref = student_features.get('tutor_gender_preference', 'no_preference')
+        tutor_gender = tutor_features.get('gender', '')
+        if (
+            gender_pref != 'no_preference'
+            and tutor_gender  # only filter if tutor gender is known
+            and gender_pref != tutor_gender
+        ):
+        continue
         
         for tutor in tutors_list:
             tutor_id = tutor.get('id')
