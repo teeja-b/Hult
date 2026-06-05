@@ -343,13 +343,13 @@ class RLTutorMatchingSystem:
         return features
         
     def calculate_gender_match(self, student_preference, tutor_gender):
-    """Return 1.0 if no preference or match, 0.0 if mismatch"""
-    if not student_preference or student_preference == 'no_preference':
-        return 1.0
-    tutor_gender = (tutor_gender or '').lower().strip()
-    if not tutor_gender:
-        return 0.8  # tutor gender unknown, slight penalty
-    return 1.0 if student_preference == tutor_gender else 0.0
+        """Return 1.0 if no preference or match, 0.0 if mismatch"""
+        if not student_preference or student_preference == 'no_preference':
+            return 1.0
+        tutor_gender = (tutor_gender or '').lower().strip()
+        if not tutor_gender:
+            return 0.8  # tutor gender unknown, slight penalty
+        return 1.0 if student_preference == tutor_gender else 0.0
     
     def prepare_tutor_features(self, tutor_profile):
         """Enhanced tutor feature extraction with None safety"""
