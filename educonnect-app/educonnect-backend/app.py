@@ -311,6 +311,8 @@ class StudentProfile(db.Model):
     language_score = db.Column(db.Integer)
     tech_score = db.Column(db.Integer)
     motivation_level = db.Column(db.Integer)
+    tutor_gender_preference = db.Column(db.String(20), default='no_preference')
+    selected_goals = db.Column(db.Text)  
 
     bio = db.Column(db.Text)
     weekly_study_hours = db.Column(db.String(20))
@@ -1629,7 +1631,10 @@ def update_student_profile_enhanced():
         profile.preferred_session_length = data['preferred_session_length']
     if 'learning_pace' in data:
         profile.learning_pace = data['learning_pace']
-    
+    if 'tutor_gender_preference' in data:
+        profile.tutor_gender_preference = data['tutor_gender_preference']
+    if 'selected_goals' in data:
+        profile.selected_goals = json.dumps(data['selected_goals'])
     db.session.commit()
     
     print("✅ [PROFILE UPDATE] Profile updated successfully")
@@ -3602,7 +3607,11 @@ def save_student_survey():
             profile.selected_goals = json.dumps(data['selected_goals'])
         if 'tutor_gender_preference' in data:
             profile.tutor_gender_preference = data['tutor_gender_preference']
+        if 'selected_goals' in data:
+            profile.selected_goals = json.dumps(data['selected_goals'])
         profile.survey_completed = True
+        
+
         
         print("[SURVEY] About to commit to database...")
         
@@ -3677,6 +3686,8 @@ def get_student_profile_enhanced():
             'language_score': profile.language_score,
             'tech_score': profile.tech_score,
             'motivation_level': profile.motivation_level,
+            'selected_goals': json.loads(profile.selected_goals or '[]'),
+            'tutor_gender_preference': profile.tutor_gender_preference or 'no_preference',
             
             # Additional fields (add these to StudentProfile model)
             'bio': getattr(profile, 'bio', ''),
@@ -4671,7 +4682,8 @@ def get_all_tutors():
                 'rating': tutor.rating,
                 'total_sessions': tutor.total_sessions,
                 'languages': json.loads(tutor.languages or '[]'),
-                'verified': tutor.verified
+                'verified': tutor.verified,
+                'gender': getattr(user, 'gender', ''),
             })
             
             print(f"[TUTORS] Added: {user.full_name}")
