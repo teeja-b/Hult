@@ -280,7 +280,11 @@ class RLTutorMatchingSystem:
             'learning_style_match': self.calculate_learning_style_match(
                 student_features['learning_style'],
                 tutor_features['teaching_style']
-            )
+            ),
+            'gender_match': self.calculate_gender_match(
+                student_features.get('tutor_gender_preference', 'no_preference'),
+                tutor_features.get('gender', '')
+            ),
         }
         
         # Update weight adjustments based on correlation with reward
