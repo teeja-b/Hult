@@ -1120,7 +1120,7 @@ def send_password_reset_email(user_email, reset_url):
                     </p>
                 </div>
             </body>
-        </html>
+        </html>"""
     
 @socketio.on('connect')
 def handle_connect(auth):
