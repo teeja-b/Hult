@@ -1076,51 +1076,7 @@ def send_test_notification():
             'error': str(e)
         }), 500
 
-def send_password_reset_email(user_email, reset_url):
-    """Send password reset email"""
-    try:
-        sender = app.config.get('MAIL_DEFAULT_SENDER')
-        if not sender:
-            print("❌ CONFIG ERROR: MAIL_DEFAULT_SENDER is None")
-            return False
 
-        msg = EmailMessage(
-            subject="Reset your EduConnect password",
-            to=[user_email],
-            from_email=sender
-        )
-
-        msg.content_subtype = "html"
-        msg.body = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center;">
-                    <h1 style="color: white; margin: 0;">Password Reset Request</h1>
-                </div>
-                
-                <div style="padding: 30px; background: #f7fafc;">
-                    <h2 style="color: #2d3748;">Reset Your Password</h2>
-                    <p style="color: #4a5568; line-height: 1.6;">
-                        We received a request to reset your password. Click the button below to create a new password.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_url}" 
-                           style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                                  color: white; padding: 15px 40px; text-decoration: none; 
-                                  border-radius: 8px; display: inline-block; font-weight: bold;">
-                            Reset Password
-                        </a>
-                    </div>
-                    <p style="color: #718096; font-size: 14px;">
-                        This link will expire in 1 hour. If you didn't request a password reset, ignore this email.
-                    </p>
-                    <p style="color: #718096; font-size: 12px; margin-top: 20px;">
-                        Or copy and paste this link into your browser:<br>
-                        <a href="{reset_url}" style="color: #f093fb;">{reset_url}</a>
-                    </p>
-                </div>
-            </body>
-        </html>"""
     
 @socketio.on('connect')
 def handle_connect(auth):
