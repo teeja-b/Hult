@@ -520,116 +520,113 @@ class RLTutorMatchingSystem:
         normalized = rating / 5.0
         return min(0.92, normalized * 0.90 + 0.02)
     
-   def match_student_to_tutors(self, student_id, student_profile, tutors_list, 
-                            use_rl=True):
-    """
-    Enhanced matching with RL and performance-based differentiation
-    """
-    student_features = self.prepare_student_features(student_profile)
+    def match_student_to_tutors(self, student_id, student_profile, tutors_list,use_rl=True):
+ 
+        student_features = self.prepare_student_features(student_profile)
     
-    # Get personalized or base weights
-    if use_rl and student_id:
-        weights = self.get_personalized_weights(student_id, self.base_weights)
-    else:
-        weights = self.base_weights.copy()
-    
-    matches = []
-    
-    for tutor in tutors_list:
-        tutor_id = tutor.get('id')
-        tutor_features = self.prepare_tutor_features(tutor)
-
-        # Hard gender filter — must be inside the loop after tutor_features is defined
-        gender_pref = student_features.get('tutor_gender_preference', 'no_preference')
-        tutor_gender = tutor_features.get('gender', '')
-        if (
-            gender_pref != 'no_preference'
-            and tutor_gender
-            and gender_pref != tutor_gender
-        ):
-            continue
-        
-        # Calculate base feature scores
-        subject_score = self.calculate_subject_match(
-            student_features['preferred_subjects'],
-            tutor_features['expertise']
-        )
-        
-        skill_score = self.calculate_skill_compatibility(
-            student_features,
-            tutor_features['total_sessions'],
-            student_features['skill_level']
-        )
-        
-        schedule_score = self.calculate_schedule_match(
-            student_features['available_time'],
-            tutor_features['availability']
-        )
-        
-        language_score = self.calculate_language_match(
-            student_features['preferred_languages'],
-            tutor_features['languages']
-        )
-        
-        learning_style_score = self.calculate_learning_style_match(
-            student_features['learning_style'],
-            tutor_features['teaching_style']
-        )
-        
-        rating_score = self.normalize_rating(tutor_features['rating'])
-        
-        # Calculate base weighted score
-        base_score = (
-            weights['subject_match'] * subject_score +
-            weights['skill_compatibility'] * skill_score +
-            weights['schedule_match'] * schedule_score +
-            weights['language_match'] * language_score +
-            weights['learning_style_match'] * learning_style_score +
-            weights['rating'] * rating_score
-        )
-        
-        # Add RL-based performance score
-        if use_rl:
-            performance_score = self.calculate_tutor_performance_score(tutor_id)
-            final_score = 0.70 * base_score + 0.30 * performance_score
+        # Get personalized or base weights
+        if use_rl and student_id:
+            weights = self.get_personalized_weights(student_id, self.base_weights)
         else:
-            final_score = base_score
-        
-        # Add small random exploration bonus
-        if use_rl and np.random.random() < 0.1:
-            final_score += np.random.uniform(0, 0.05)
-        
-        match_percentage = int(final_score * 100)
-        
-        breakdown = {
-            'subject_match': int(subject_score * 100),
-            'skill_compatibility': int(skill_score * 100),
-            'schedule_match': int(schedule_score * 100),
-            'language_match': int(language_score * 100),
-            'learning_style_match': int(learning_style_score * 100),
-            'rating': int(rating_score * 100)
-        }
-        
-        if use_rl:
-            breakdown['performance_score'] = int(performance_score * 100)
-        
-        matches.append({
-            'tutor_id': tutor_id,
-            'tutor_name': tutor.get('name'),
-            'match_score': match_percentage,
-            'breakdown': breakdown,
-            'weights_used': {k: round(v, 3) for k, v in weights.items()},
-            'total_matches': self.tutor_performance[tutor_id]['total_matches'],
-            'success_rate': (
-                self.tutor_performance[tutor_id]['successful_matches'] /
-                max(self.tutor_performance[tutor_id]['total_matches'], 1)
-            ) if use_rl else None
-        })
+            weights = self.base_weights.copy()
     
-    # Sort by match score
-    matches.sort(key=lambda x: x['match_score'], reverse=True)
+        matches = []
     
-    return matches
+        for tutor in tutors_list:
+            tutor_id = tutor.get('id')
+            tutor_features = self.prepare_tutor_features(tutor)
+    
+            # Hard gender filter — must be inside the loop after tutor_features is defined
+            gender_pref = student_features.get('tutor_gender_preference', 'no_preference')
+            tutor_gender = tutor_features.get('gender', '')
+            if (
+                gender_pref != 'no_preference'
+                and tutor_gender
+                and gender_pref != tutor_gender
+            ):
+                continue
+            
+            # Calculate base feature scores
+            subject_score = self.calculate_subject_match(
+                student_features['preferred_subjects'],
+                tutor_features['expertise']
+            )
+            
+            skill_score = self.calculate_skill_compatibility(
+                student_features,
+                tutor_features['total_sessions'],
+                student_features['skill_level']
+            )
+            
+            schedule_score = self.calculate_schedule_match(
+                student_features['available_time'],
+                tutor_features['availability']
+            )
+            
+            language_score = self.calculate_language_match(
+                student_features['preferred_languages'],
+                tutor_features['languages']
+            )
+            
+            learning_style_score = self.calculate_learning_style_match(
+                student_features['learning_style'],
+                tutor_features['teaching_style']
+            )
+            
+            rating_score = self.normalize_rating(tutor_features['rating'])
+            
+            # Calculate base weighted score
+            base_score = (
+                weights['subject_match'] * subject_score +
+                weights['skill_compatibility'] * skill_score +
+                weights['schedule_match'] * schedule_score +
+                weights['language_match'] * language_score +
+                weights['learning_style_match'] * learning_style_score +
+                weights['rating'] * rating_score
+            )
+            
+            # Add RL-based performance score
+            if use_rl:
+                performance_score = self.calculate_tutor_performance_score(tutor_id)
+                final_score = 0.70 * base_score + 0.30 * performance_score
+            else:
+                final_score = base_score
+            
+            # Add small random exploration bonus
+            if use_rl and np.random.random() < 0.1:
+                final_score += np.random.uniform(0, 0.05)
+            
+            match_percentage = int(final_score * 100)
+            
+            breakdown = {
+                'subject_match': int(subject_score * 100),
+                'skill_compatibility': int(skill_score * 100),
+                'schedule_match': int(schedule_score * 100),
+                'language_match': int(language_score * 100),
+                'learning_style_match': int(learning_style_score * 100),
+                'rating': int(rating_score * 100)
+            }
+            
+            if use_rl:
+                breakdown['performance_score'] = int(performance_score * 100)
+            
+            matches.append({
+                'tutor_id': tutor_id,
+                'tutor_name': tutor.get('name'),
+                'match_score': match_percentage,
+                'breakdown': breakdown,
+                'weights_used': {k: round(v, 3) for k, v in weights.items()},
+                'total_matches': self.tutor_performance[tutor_id]['total_matches'],
+                'success_rate': (
+                    self.tutor_performance[tutor_id]['successful_matches'] /
+                    max(self.tutor_performance[tutor_id]['total_matches'], 1)
+                ) if use_rl else None
+            })
+        
+        # Sort by match score
+        matches.sort(key=lambda x: x['match_score'], reverse=True)
+        
+        return matches
     
     def save_model(self, filepath):
         """Save model with RL state"""
