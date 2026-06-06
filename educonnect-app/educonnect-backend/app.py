@@ -2616,6 +2616,82 @@ def get_tutor_matches():
         
         student_profile = data.get('student_profile')
         use_rl = data.get('use_rl', True)
+
+        if not student_profile:
+            return jsonify({'error': 'Student profile required'}), 400
+
+        # Always enrich from DB to ensure gender pref and goals are present
+        from_db = StudentProfile.query.filter_by(user_id=int(student_id)).first()
+        if from_db:
+            if 'tutor_gender_preference' not in student_profile or not student_profile.get('tutor_gender_preference'):
+                student_profile['tutor_gender_preference'] = from_db.tutor_gender_preference or 'no_preference'
+            if 'selected_goals' not in student_profile:
+                student_profile['selected_goals'] = json.loads(from_db.selected_goals or '[]')
+
+        print(f"[MATCH] tutor_gender_preference: {student_profile.get('tutor_gender_preference')}")
+
+        # Get all tutors from database
+        tutors = db.session.query(TutorProfile).join(User).filter(
+            User.user_type == 'tutor',
+            TutorProfile.verified == True
+        ).all()
+
+        # Convert to dict format for matching system
+        tutors_list = []
+        for tutor in tutors:
+            tutors_list.append({
+                'id': tutor.user_id,
+                'name': tutor.user.full_name,
+                'expertise': json.loads(tutor.expertise) if tutor.expertise else [],
+                'languages': json.loads(tutor.languages) if tutor.languages else [],
+                'availability': json.loads(tutor.availability) if tutor.availability else {},
+                'rating': tutor.rating if tutor.rating else None,
+                'total_sessions': tutor.total_sessions or 0,
+                'gender': getattr(tutor.user, 'gender', '') or '',
+                'teaching_style': getattr(tutor, 'teaching_style', 'adaptive') or 'adaptive'
+            })
+
+        # Get matches using RL system
+        matches = rl_system.match_student_to_tutors(
+            student_id,
+            student_profile,
+            tutors_list,
+            use_rl=use_rl
+        )
+
+        # Enhance with additional tutor info
+        enhanced_matches = []
+        for match in matches[:10]:  # Top 10
+            tutor = next((t for t in tutors if t.user_id == match['tutor_id']), None)
+            if tutor:
+                enhanced_matches.append({
+                    **match,
+                    'bio': tutor.bio,
+                    'hourly_rate': tutor.hourly_rate,
+                    'years_experience': getattr(tutor, 'years_experience', ''),
+                    'education': getattr(tutor, 'education', '')
+                })
+
+        return jsonify({
+            'success': True,
+            'matches': enhanced_matches,
+            'using_rl': use_rl
+        }), 200
+
+    except Exception as e:
+        print(f"Error in get_tutor_matches: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    """
+    Get RL-enhanced tutor recommendations
+    """
+    try:
+        student_id = get_jwt_identity()
+        data = request.get_json()
+        
+        student_profile = data.get('student_profile')
+        use_rl = data.get('use_rl', True)
         if 'tutor_gender_preference' not in student_profile:
             from_db = StudentProfile.query.filter_by(user_id=int(student_id)).first()
             if from_db:
