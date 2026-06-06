@@ -304,8 +304,6 @@ class StudentProfile(db.Model):
     available_time = db.Column(db.String(50))
     preferred_languages = db.Column(db.Text)
     survey_completed = db.Column(db.Boolean, default=False)
-    selected_goals = db.Column(db.Text)          # JSON array
-    tutor_gender_preference = db.Column(db.String(20))
     math_score = db.Column(db.Integer)
     science_score = db.Column(db.Integer)
     language_score = db.Column(db.Integer)
@@ -2637,7 +2635,7 @@ def get_tutor_matches():
                 'expertise': json.loads(tutor.expertise) if tutor.expertise else [],
                 'languages': json.loads(tutor.languages) if tutor.languages else [],
                 'availability': json.loads(tutor.availability) if tutor.availability else {},
-                'rating': tutor.rating or 4.0,
+                'rating': tutor.rating if tutor.rating else None,
                 'total_sessions': tutor.total_sessions or 0,
                 'gender': getattr(tutor.user, 'gender', ''),
                 'teaching_style': getattr(tutor, 'teaching_style', 'adaptive')
@@ -3597,7 +3595,9 @@ def save_student_survey():
                 'preferred_subjects': json.loads(profile.preferred_subjects or '[]'),
                 'skill_level': profile.skill_level,
                 'available_time': profile.available_time,
-                'survey_completed': profile.survey_completed
+                'survey_completed': profile.survey_completed,
+                'tutor_gender_preference': profile.tutor_gender_preference,  # ← add this
+                'selected_goals': json.loads(profile.selected_goals or '[]')
             }
         }
         
