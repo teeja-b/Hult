@@ -87,6 +87,78 @@ class RLTutorMatchingSystem:
         )
         
         return state
+    def calculate_missing_penalty(self, tutor_profile, tutor_id):
+        """
+        Each absent critical field subtracts a fixed amount.
+        Penalties stack — a tutor missing 3 fields can lose 0.19 points
+        before confidence is even applied.
+        """
+        penalty = 0.0
+        perf = self.tutor_performance[tutor_id]
+    
+        if tutor_profile.get('rating') is None:
+            penalty += 0.08   # No rating: significant unknown
+    
+        if not tutor_profile.get('availability'):
+            penalty += 0.06   # Unavailable or unspecified
+    
+        if not tutor_profile.get('expertise'):
+            penalty += 0.10   # No subject data: near-disqualifying
+    
+        if not tutor_profile.get('languages'):
+            penalty += 0.04   # Minor but real
+    
+        if perf['total_matches'] == 0:
+            penalty += 0.05   # No history: extra cold-start tax
+
+        return penalty
+    def calculate_confidence(self, tutor_id, tutor_profile):
+        """
+        Confidence reflects how much we can trust a tutor's score.
+        Three sub-components, each 0–1, combined with fixed weights.
+        """
+        perf = self.tutor_performance[tutor_id]
+        n_matches  = perf['total_matches']
+        n_ratings  = perf.get('n_ratings', 0)
+    
+        # Sub-component 1: match volume (saturates at 20 matches)
+        match_conf = min(1.0, n_matches / 20)
+    
+        # Sub-component 2: feedback volume (saturates at 10 ratings)
+        feedback_conf = min(1.0, n_ratings / 10)
+    
+        # Sub-component 3: feature completeness
+        tutor_features = self.prepare_tutor_features(tutor_profile)
+        present = sum([
+            bool(tutor_features['expertise']),
+            bool(tutor_features['availability']),
+            bool(tutor_features['languages']),
+            tutor_profile.get('rating') is not None,
+            n_matches > 0,
+        ])
+        feature_completeness = present / 5.0
+    
+        confidence = (
+            0.40 * match_conf +
+            0.40 * feedback_conf +
+            0.20 * feature_completeness
+        )
+        return confidence
+
+    def calculate_rl_gate(self, tutor_id):
+        """
+        RL only contributes once sufficient real data exists.
+        Gate = 0 means RL adds nothing. Gate = 1 means full RL weight.
+        Requires at least 10 matches AND 5 ratings before RL kicks in.
+        """
+        perf = self.tutor_performance[tutor_id]
+        n_matches = perf['total_matches']
+        n_ratings = perf.get('n_ratings', 0)
+    
+        match_gate    = min(1.0, n_matches / 10)
+        feedback_gate = min(1.0, n_ratings / 5)
+    
+        return match_gate * feedback_gate  # Both must ramp up together
     
     def calculate_tutor_performance_score(self, tutor_id):
         """
@@ -519,113 +591,119 @@ class RLTutorMatchingSystem:
         """Rating normalization"""
         normalized = rating / 5.0
         return min(0.92, normalized * 0.90 + 0.02)
+        
+    def compute_final_score(self, base_score, confidence, rl_gate, rl_score, missing_penalty):
+        """
+        Final ranking formula:
+          final = (base × base_w + rl × rl_w) × conf_weight − penalty
     
-    def match_student_to_tutors(self, student_id, student_profile, tutors_list,use_rl=True):
- 
+        conf_weight has a floor of 0.15 to avoid total collapse for
+        feature-complete new tutors; the 0.85 factor caps the ceiling
+        below 1.0 unless confidence is genuinely high.
+    
+        rl_weight shrinks to 0 when rl_gate = 0, so the formula
+        degrades gracefully to: base × conf_weight − penalty
+        """
+        conf_weight = 0.85 * confidence + 0.15  # Range: [0.15, 1.0]
+        rl_weight   = 0.30 * rl_gate            # Range: [0.00, 0.30]
+        base_weight = 1.0 - rl_weight           # Range: [0.70, 1.00]
+    
+        raw = (
+            base_score * base_weight * conf_weight
+            + rl_score * rl_weight * conf_weight
+            - missing_penalty
+        )
+        return float(np.clip(raw, 0.0, 1.0))
+    
+   def match_student_to_tutors(self, student_id, student_profile, tutors_list, use_rl=True):
         student_features = self.prepare_student_features(student_profile)
-    
-        # Get personalized or base weights
-        if use_rl and student_id:
-            weights = self.get_personalized_weights(student_id, self.base_weights)
-        else:
-            weights = self.base_weights.copy()
+        weights = (
+            self.get_personalized_weights(student_id, self.base_weights)
+            if use_rl and student_id else self.base_weights.copy()
+        )
     
         matches = []
     
         for tutor in tutors_list:
-            tutor_id = tutor.get('id')
+            tutor_id      = tutor.get('id')
             tutor_features = self.prepare_tutor_features(tutor)
     
-            # Hard gender filter — must be inside the loop after tutor_features is defined
-            gender_pref = student_features.get('tutor_gender_preference', 'no_preference')
+            # Hard filter: gender preference
+            gender_pref  = student_features.get('tutor_gender_preference', 'no_preference')
             tutor_gender = tutor_features.get('gender', '')
-            if (
-                gender_pref != 'no_preference'
-                and tutor_gender
-                and gender_pref != tutor_gender
-            ):
+            if (gender_pref != 'no_preference' and tutor_gender
+                    and gender_pref != tutor_gender):
                 continue
-            
-            # Calculate base feature scores
+    
+            # --- Feature scores (use 0.1 floor when data absent, not 0.5) ---
             subject_score = self.calculate_subject_match(
                 student_features['preferred_subjects'],
-                tutor_features['expertise']
+                tutor_features['expertise']          # returns 0.1 if either empty
             )
-            
             skill_score = self.calculate_skill_compatibility(
                 student_features,
                 tutor_features['total_sessions'],
                 student_features['skill_level']
             )
-            
             schedule_score = self.calculate_schedule_match(
                 student_features['available_time'],
-                tutor_features['availability']
+                tutor_features['availability']       # returns 0.2 if dict empty
             )
-            
             language_score = self.calculate_language_match(
                 student_features['preferred_languages'],
                 tutor_features['languages']
             )
-            
-            learning_style_score = self.calculate_learning_style_match(
+            style_score = self.calculate_learning_style_match(
                 student_features['learning_style'],
                 tutor_features['teaching_style']
             )
-            
-            rating_score = self.normalize_rating(tutor_features['rating'])
-            
-            # Calculate base weighted score
-            base_score = (
-                weights['subject_match'] * subject_score +
-                weights['skill_compatibility'] * skill_score +
-                weights['schedule_match'] * schedule_score +
-                weights['language_match'] * language_score +
-                weights['learning_style_match'] * learning_style_score +
-                weights['rating'] * rating_score
+    
+            # Rating: use 0.0 when absent, not 4.0
+            raw_rating = tutor.get('rating')        # None if not provided
+            rating_score = (
+                self.normalize_rating(raw_rating)
+                if raw_rating is not None else 0.0
             )
-            
-            # Add RL-based performance score
-            if use_rl:
-                performance_score = self.calculate_tutor_performance_score(tutor_id)
-                final_score = 0.70 * base_score + 0.30 * performance_score
-            else:
-                final_score = base_score
-            
-            # Add small random exploration bonus
-            if use_rl and np.random.random() < 0.1:
-                final_score += np.random.uniform(0, 0.05)
-            
-            match_percentage = int(final_score * 100)
-            
-            breakdown = {
-                'subject_match': int(subject_score * 100),
-                'skill_compatibility': int(skill_score * 100),
-                'schedule_match': int(schedule_score * 100),
-                'language_match': int(language_score * 100),
-                'learning_style_match': int(learning_style_score * 100),
-                'rating': int(rating_score * 100)
-            }
-            
-            if use_rl:
-                breakdown['performance_score'] = int(performance_score * 100)
-            
+    
+            base_score = (
+                weights['subject_match']        * subject_score  +
+                weights['skill_compatibility']  * skill_score    +
+                weights['schedule_match']       * schedule_score +
+                weights['language_match']       * language_score +
+                weights['learning_style_match'] * style_score    +
+                weights['rating']               * rating_score
+            )
+    
+            # --- Confidence, RL gate, penalty ---
+            confidence      = self.calculate_confidence(tutor_id, tutor)
+            rl_gate         = self.calculate_rl_gate(tutor_id) if use_rl else 0.0
+            rl_score        = self.calculate_tutor_performance_score(tutor_id)
+            missing_penalty = self.calculate_missing_penalty(tutor, tutor_id)
+    
+            final_score = self.compute_final_score(
+                base_score, confidence, rl_gate, rl_score, missing_penalty
+            )
+    
             matches.append({
-                'tutor_id': tutor_id,
-                'tutor_name': tutor.get('name'),
-                'match_score': match_percentage,
-                'breakdown': breakdown,
-                'weights_used': {k: round(v, 3) for k, v in weights.items()},
-                'total_matches': self.tutor_performance[tutor_id]['total_matches'],
-                'success_rate': (
-                    self.tutor_performance[tutor_id]['successful_matches'] /
-                    max(self.tutor_performance[tutor_id]['total_matches'], 1)
-                ) if use_rl else None
+                'tutor_id':    tutor_id,
+                'tutor_name':  tutor.get('name'),
+                'match_score': int(final_score * 100),
+                'confidence':  round(confidence, 3),
+                'rl_gate':     round(rl_gate, 3),
+                'breakdown': {
+                    'subject_match':        int(subject_score  * 100),
+                    'skill_compatibility':  int(skill_score    * 100),
+                    'schedule_match':       int(schedule_score * 100),
+                    'language_match':       int(language_score * 100),
+                    'learning_style_match': int(style_score    * 100),
+                    'rating':               int(rating_score   * 100),
+                    'confidence':           int(confidence     * 100),
+                    'missing_penalty':      int(missing_penalty * 100),
+                    'rl_gate':              int(rl_gate        * 100),
+                }
             })
-        
-        # Sort by match score
+    
         matches.sort(key=lambda x: x['match_score'], reverse=True)
-        
         return matches
     
     def save_model(self, filepath):
