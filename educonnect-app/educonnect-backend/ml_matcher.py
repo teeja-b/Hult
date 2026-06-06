@@ -632,6 +632,7 @@ class RLTutorMatchingSystem:
             # Unknown tutor gender is treated as a mismatch when preference is set
             gender_pref  = student_features.get('tutor_gender_preference', 'no_preference')
             tutor_gender = tutor_features.get('gender', '')
+            print(f"[gender] pref={gender_pref!r} tutor_gender={tutor_gender!r} tutor={tutor.get('name')}")
             if gender_pref != 'no_preference':
                 if not tutor_gender or gender_pref != tutor_gender:
                     continue
@@ -660,9 +661,10 @@ class RLTutorMatchingSystem:
             )
     
             # Rating: None → 0.0 score + 'missing' source, never assume 4.0
-            raw_rating   = tutor.get('rating')
-            rating_score = self.normalize_rating(raw_rating) if raw_rating is not None else 0.0
-            rating_source = 'verified' if raw_rating is not None else 'missing'
+            raw_rating = tutor.get('rating') or None
+            rating_score = self.normalize_rating(raw_rating) if raw_rating else 0.0
+            rating_source = 'verified' if raw_rating else 'missing'
+                    
     
             base_score = (
                 weights['subject_match']        * subject_score  +
