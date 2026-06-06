@@ -615,7 +615,7 @@ class RLTutorMatchingSystem:
         )
         return float(np.clip(raw, 0.0, 1.0))
     
-    def match_student_to_tutors (self, student_id, student_profile, tutors_list, use_rl=True) :
+    def match_student_to_tutors(self, student_id, student_profile, tutors_list, use_rl=True):
         student_features = self.prepare_student_features(student_profile)
         weights = (
             self.get_personalized_weights(student_id, self.base_weights)
@@ -625,20 +625,21 @@ class RLTutorMatchingSystem:
         matches = []
     
         for tutor in tutors_list:
-            tutor_id      = tutor.get('id')
+            tutor_id       = tutor.get('id')
             tutor_features = self.prepare_tutor_features(tutor)
     
             # Hard filter: gender preference
+            # Unknown tutor gender is treated as a mismatch when preference is set
             gender_pref  = student_features.get('tutor_gender_preference', 'no_preference')
             tutor_gender = tutor_features.get('gender', '')
-            if (gender_pref != 'no_preference' and tutor_gender
-                    and gender_pref != tutor_gender):
-                continue
+            if gender_pref != 'no_preference':
+                if not tutor_gender or gender_pref != tutor_gender:
+                    continue
     
-            # --- Feature scores (use 0.1 floor when data absent, not 0.5) ---
+            # Feature scores — 0.1 floor when data absent, never 0.5 neutral
             subject_score = self.calculate_subject_match(
                 student_features['preferred_subjects'],
-                tutor_features['expertise']          # returns 0.1 if either empty
+                tutor_features['expertise']
             )
             skill_score = self.calculate_skill_compatibility(
                 student_features,
@@ -647,7 +648,7 @@ class RLTutorMatchingSystem:
             )
             schedule_score = self.calculate_schedule_match(
                 student_features['available_time'],
-                tutor_features['availability']       # returns 0.2 if dict empty
+                tutor_features['availability']
             )
             language_score = self.calculate_language_match(
                 student_features['preferred_languages'],
@@ -658,12 +659,10 @@ class RLTutorMatchingSystem:
                 tutor_features['teaching_style']
             )
     
-            # Rating: use 0.0 when absent, not 4.0
-            raw_rating = tutor.get('rating')        # None if not provided
-            rating_score = (
-                self.normalize_rating(raw_rating)
-                if raw_rating is not None else 0.0
-            )
+            # Rating: None → 0.0 score + 'missing' source, never assume 4.0
+            raw_rating   = tutor.get('rating')
+            rating_score = self.normalize_rating(raw_rating) if raw_rating is not None else 0.0
+            rating_source = 'verified' if raw_rating is not None else 'missing'
     
             base_score = (
                 weights['subject_match']        * subject_score  +
@@ -674,7 +673,7 @@ class RLTutorMatchingSystem:
                 weights['rating']               * rating_score
             )
     
-            # --- Confidence, RL gate, penalty ---
+            # Confidence, RL gate, missing-data penalty
             confidence      = self.calculate_confidence(tutor_id, tutor)
             rl_gate         = self.calculate_rl_gate(tutor_id) if use_rl else 0.0
             rl_score        = self.calculate_tutor_performance_score(tutor_id)
@@ -697,6 +696,7 @@ class RLTutorMatchingSystem:
                     'language_match':       int(language_score * 100),
                     'learning_style_match': int(style_score    * 100),
                     'rating':               int(rating_score   * 100),
+                    'rating_source':        rating_source,
                     'confidence':           int(confidence     * 100),
                     'missing_penalty':      int(missing_penalty * 100),
                     'rl_gate':              int(rl_gate        * 100),
@@ -705,7 +705,6 @@ class RLTutorMatchingSystem:
     
         matches.sort(key=lambda x: x['match_score'], reverse=True)
         return matches
-    
     def save_model(self, filepath):
         """Save model with RL state"""
         model_data = {
