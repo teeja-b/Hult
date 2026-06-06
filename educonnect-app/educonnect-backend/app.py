@@ -361,9 +361,20 @@ class Course(db.Model):
     materials = db.relationship('CourseMaterial', backref='course', cascade='all, delete-orphan')
     enrollments = db.relationship('Enrollment', backref='course', cascade='all, delete-orphan')
 
+class CourseSection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    materials = db.relationship('CourseMaterial', backref='section', cascade='all, delete-orphan')
+    
 class CourseMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('course_section.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     material_type = db.Column(db.String(50))
     file_path = db.Column(db.String(500))
@@ -3750,7 +3761,8 @@ def upload_material():
         public_id = upload_result['public_id']
         
         print(f"[UPLOAD] ✅ Uploaded to Cloudinary: {cloudinary_url}")
-        
+        section_id_raw = request.form.get('section_id')
+        section_id = int(section_id_raw) if section_id_raw else None
         # Create database record with Cloudinary URL
         material = CourseMaterial(
             course_id=course_id,
