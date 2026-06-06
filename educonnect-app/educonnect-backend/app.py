@@ -2616,9 +2616,14 @@ def get_tutor_matches():
         
         student_profile = data.get('student_profile')
         use_rl = data.get('use_rl', True)
-        
-        if not student_profile:
-            return jsonify({'error': 'Student profile required'}), 400
+        if 'tutor_gender_preference' not in student_profile:
+            from_db = StudentProfile.query.filter_by(user_id=int(student_id)).first()
+            if from_db:
+                student_profile['tutor_gender_preference'] = from_db.tutor_gender_preference or 'no_preference'
+                student_profile['selected_goals'] = json.loads(from_db.selected_goals or '[]')
+                
+                if not student_profile:
+                    return jsonify({'error': 'Student profile required'}), 400
         
         # Get all tutors from database
         tutors = db.session.query(TutorProfile).join(User).filter(
