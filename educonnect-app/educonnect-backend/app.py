@@ -2248,6 +2248,8 @@ def get_student_enrollments():
             'id': enrollment.id,
             'course_id': course.id,
             'course_title': course.title,
+            'category': course.category,     # add this
+            'description': course.description,
             'tutor_name': tutor_name,
             'progress': enrollment.progress,
             'completed': enrollment.completed,
@@ -3766,6 +3768,7 @@ def upload_material():
         # Create database record with Cloudinary URL
         material = CourseMaterial(
             course_id=course_id,
+            section_id=section_id,
             title=material_title,
             material_type=material_type,
             file_path=cloudinary_url,  # ✅ Store Cloudinary URL
@@ -3807,7 +3810,114 @@ def upload_material():
             'error': 'Failed to upload material',
             'details': str(e)
         }), 500
+# GET sections for a course
+@app.route('/api/courses/<int:course_id>/sections', methods=['GET'])
+def get_course_sections(course_id):
+    try:
+        course = Course.query.get(course_id)
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        sections = CourseSection.query.filter_by(
+            course_id=course_id
+        ).order_by(CourseSection.order).all()
+        
+        sections_list = []
+        for section in sections:
+            materials = CourseMaterial.query.filter_by(
+                section_id=section.id
+            ).order_by(CourseMaterial.order).all()
+            
+            sections_list.append({
+                'id': section.id,
+                'title': section.title,
+                'description': section.description,
+                'order': section.order,
+                'material_count': len(materials),
+                'materials': [{
+                    'id': m.id,
+                    'title': m.title,
+                    'type': m.material_type,
+                    'file_path': m.file_path,
+                    'file_size': m.file_size,
+                    'duration': m.duration,
+                    'order': m.order,
+                } for m in materials]
+            })
+        
+        return jsonify({'sections': sections_list}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
+
+# POST create a section
+@app.route('/api/courses/<int:course_id>/sections', methods=['POST'])
+@jwt_required()
+def create_course_section(course_id):
+    try:
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can create sections'}), 403
+        
+        course = Course.query.get(course_id)
+        if not course or course.tutor.user_id != user_id:
+            return jsonify({'error': 'Course not found or not authorized'}), 404
+        
+        data = request.get_json()
+        if not data.get('title'):
+            return jsonify({'error': 'Section title is required'}), 400
+        
+        section = CourseSection(
+            course_id=course_id,
+            title=data['title'],
+            description=data.get('description', ''),
+            order=data.get('order', 0)
+        )
+        db.session.add(section)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Section created successfully',
+            'section': {
+                'id': section.id,
+                'title': section.title,
+                'description': section.description,
+                'order': section.order,
+                'material_count': 0,
+                'materials': []
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# DELETE a section
+@app.route('/api/sections/<int:section_id>', methods=['DELETE'])
+@jwt_required()
+def delete_section(section_id):
+    try:
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        
+        if not user or user.user_type != 'tutor':
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        section = CourseSection.query.get(section_id)
+        if not section:
+            return jsonify({'error': 'Section not found'}), 404
+        
+        if section.course.tutor.user_id != user_id:
+            return jsonify({'error': 'Not authorized'}), 403
+        
+        db.session.delete(section)
+        db.session.commit()
+        return jsonify({'message': 'Section deleted'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/courses/<int:course_id>/materials', methods=['GET'])
 def get_course_materials(course_id):
     """Get all materials for a course"""
