@@ -3239,7 +3239,7 @@ def record_match_outcome():
         student_id = get_jwt_identity()
         data = request.get_json()
         
-        tutor_id = data.get('tutor_id')
+        tutor_id = int(data.get('tutor_id'))
         outcome = data.get('outcome')
         student_profile = data.get('student_profile')
         
@@ -3316,7 +3316,7 @@ def record_quick_feedback():
         student_id = get_jwt_identity()
         data = request.get_json()
         
-        tutor_id = data.get('tutor_id')
+        tutor_id = int(data.get('tutor_id'))
         
         completed = data.get('completed', True)
         
@@ -3385,7 +3385,7 @@ def get_tutor_performance(tutor_id):
     Get detailed performance metrics for a tutor
     """
     try:
-        perf = rl_system.tutor_performance[tutor_id]
+        perf = rl_system.tutor_performance[int(tutor_id)]
         
         if perf['total_matches'] == 0:
             return jsonify({
