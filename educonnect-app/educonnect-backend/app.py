@@ -2603,7 +2603,77 @@ def save_model_if_needed():
         rl_system.save_model(MODEL_PATH)
         print(f"✓ Auto-saved RL model (update #{update_counter})")
 
+# ============================================================================
+# AGORA TOKEN ENDPOINT
+# ============================================================================
 
+@app.route('/api/agora/token', methods=['POST'])
+def generate_agora_token():
+    """
+    Generate a short-lived Agora RTC token for a caller/callee.
+
+    Body:
+        channelName  – Agora channel (== meetingId used by VoiceCall)
+        uid          – numeric uid the client will join with (int)
+        role         – 'publisher' | 'subscriber'  (default: publisher)
+
+    Returns:
+        { "token": "<agora-rtc-token>", "uid": <int>, "channel": "<name>" }
+
+    Setup:
+        1. pip install agora-token-builder
+        2. Set AGORA_APP_ID and AGORA_APP_CERTIFICATE in your Render env vars.
+           (AGORA_APP_ID is already in the frontend — add AGORA_APP_CERTIFICATE
+            from Agora Console → Project Management → your project → Certificate.)
+    """
+    try:
+        data         = request.get_json() or {}
+        channel_name = data.get('channelName', '').strip()
+        uid          = int(data.get('uid', 0))
+        role_str     = data.get('role', 'publisher')
+
+        if not channel_name:
+            return jsonify({'error': 'channelName is required'}), 400
+
+        agora_app_id   = os.getenv('AGORA_APP_ID', '56b7bde5aa344709a6727b7a343ad954')
+        agora_app_cert = os.getenv('AGORA_APP_CERTIFICATE', '')
+
+        # ── No certificate → return a null token (works for Agora projects
+        #    that have App-Certificate disabled in the console) ──────────────
+        if not agora_app_cert:
+            print('[AGORA] WARNING: AGORA_APP_CERTIFICATE not set — returning null token.')
+            print('[AGORA] Token-based auth is DISABLED for this project in Agora console.')
+            return jsonify({'token': None, 'uid': uid, 'channel': channel_name}), 200
+
+        try:
+            from agora_token_builder import RtcTokenBuilder
+        except ImportError:
+            print('[AGORA] agora-token-builder not installed — pip install agora-token-builder')
+            return jsonify({'token': None, 'uid': uid, 'channel': channel_name}), 200
+
+        # Role: 1 = publisher, 2 = subscriber
+        role = 1 if role_str == 'publisher' else 2
+
+        # Token valid for 1 hour (matches session limit)
+        expire_ts = int(time.time()) + 3600
+
+        token = RtcTokenBuilder.buildTokenWithUid(
+            agora_app_id,
+            agora_app_cert,
+            channel_name,
+            uid,
+            role,
+            expire_ts,
+        )
+
+        print(f'[AGORA] Token generated for channel={channel_name} uid={uid}')
+        return jsonify({'token': token, 'uid': uid, 'channel': channel_name}), 200
+
+    except Exception as e:
+        print(f'[AGORA] Token generation error: {e}')
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+        
 @app.route('/api/match/tutors', methods=['POST'], endpoint="match")
 @jwt_required()
 def get_tutor_matches():
