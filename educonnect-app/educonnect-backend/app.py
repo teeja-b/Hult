@@ -2689,7 +2689,7 @@ def get_tutor_matches():
                 'expertise': json.loads(tutor.expertise) if tutor.expertise else [],
                 'languages': json.loads(tutor.languages) if tutor.languages else [],
                 'availability': json.loads(tutor.availability) if tutor.availability else {},
-                'rating': tutor.rating if tutor.rating else None,
+                'rating': tutor.rating if tutor.rating is not None else None,
                 'total_sessions': tutor.total_sessions or 0,
                 'gender': getattr(tutor.user, 'gender', '') or '',
                 'teaching_style': getattr(tutor, 'teaching_style', 'adaptive') or 'adaptive'
