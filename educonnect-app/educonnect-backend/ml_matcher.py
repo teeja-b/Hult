@@ -634,7 +634,9 @@ class RLTutorMatchingSystem:
             tutor_gender = tutor_features.get('gender', '')
             print(f"[gender] pref={gender_pref!r} tutor_gender={tutor_gender!r} tutor={tutor.get('name')}")
             if gender_pref != 'no_preference':
-                if not tutor_gender or gender_pref != tutor_gender:
+                # Only exclude if tutor has a known gender that doesn't match
+                # If gender is unknown/empty, include them
+                if tutor_gender and tutor_gender != gender_pref:
                     continue
     
             # Feature scores — 0.1 floor when data absent, never 0.5 neutral
