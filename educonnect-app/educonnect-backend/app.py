@@ -3381,6 +3381,11 @@ def record_quick_feedback():
             'reward': round(reward, 3),
             'message': 'Feedback recorded'
         }), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/tutor/performance/<tutor_id>', methods=['GET'])
