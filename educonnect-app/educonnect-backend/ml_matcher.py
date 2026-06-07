@@ -45,7 +45,8 @@ class RLTutorMatchingSystem:
             'completion_rate': 0.0,
             'student_retention': 0.0,
             'response_time_score': 1.0,
-            'reliability_score': 1.0
+            'reliability_score': 1.0,
+            'n_ratings': 0
         })
         
         # Personalized student preferences (learned over time)
@@ -270,6 +271,8 @@ class RLTutorMatchingSystem:
         # Update tutor performance metrics
         perf = self.tutor_performance[tutor_id]
         perf['total_matches'] += 1
+        if outcome_data.get('satisfaction_rating') is not None:
+            perf['n_ratings'] = perf.get('n_ratings', 0) + 1
         
         if reward > 0.6:  # Consider it successful
             perf['successful_matches'] += 1
@@ -749,7 +752,8 @@ class RLTutorMatchingSystem:
             'completion_rate': 0.0,
             'student_retention': 0.0,
             'response_time_score': 1.0,
-            'reliability_score': 1.0
+            'reliability_score': 1.0,
+            'n_ratings': 0,  
         }, model_data.get('tutor_performance', {}))
         self.student_preferences = defaultdict(lambda: {
             'weight_adjustments': {},
