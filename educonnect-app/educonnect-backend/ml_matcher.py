@@ -670,7 +670,7 @@ class RLTutorMatchingSystem:
             )
     
             # Rating: None → 0.0 score + 'missing' source, never assume 4.0
-            raw_rating = tutor.get('rating') or None
+            raw_rating = tutor.get('rating') if tutor.get('rating') is not None else None
             rating_score = self.normalize_rating(raw_rating) if raw_rating else 0.0
             rating_source = 'verified' if raw_rating else 'missing'
                     
