@@ -3356,26 +3356,31 @@ def record_quick_feedback():
             'teaching_style': tutor.teaching_style or 'adaptive'
         }
         
-        # Record in RL system
-        reward = rl_system.record_match_outcome(
+       reward = rl_system.record_match_outcome(
             student_id,
             tutor_id,
             student_profile,
             tutor_profile,
             outcome
         )
-        
+
+        # Sync to DB
+        tutor.total_sessions = rl_system.tutor_performance[tutor_id]['total_matches']
+        satisfaction = outcome.get('satisfaction_rating', 3) / 5.0
+        n = tutor.total_sessions
+        if tutor.rating and n > 1:
+            tutor.rating = (tutor.rating * (n - 1) + (satisfaction * 5)) / n
+        else:
+            tutor.rating = satisfaction * 5
+        db.session.commit()
+
         save_model_if_needed()
-        
+
         return jsonify({
             'success': True,
             'reward': round(reward, 3),
             'message': 'Feedback recorded'
         }), 200
-        
-    except Exception as e:
-        print(f"Error in record_quick_feedback: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/tutor/performance/<tutor_id>', methods=['GET'])
@@ -5343,7 +5348,8 @@ def debug_tutor_status():
                 'verified_type': str(type(tutor.verified)),
                 'has_expertise': bool(tutor.expertise),
                 'has_bio': bool(tutor.bio),
-                'created_at': user.created_at.isoformat() if user else None
+                'created_at': user.created_at.isoformat() if user else None,
+                'rating': tutor.rating, 
             })
         
         return jsonify({
