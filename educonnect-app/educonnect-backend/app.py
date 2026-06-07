@@ -3356,7 +3356,7 @@ def record_quick_feedback():
             'teaching_style': tutor.teaching_style or 'adaptive'
         }
         
-       reward = rl_system.record_match_outcome(
+        reward = rl_system.record_match_outcome(
             student_id,
             tutor_id,
             student_profile,
