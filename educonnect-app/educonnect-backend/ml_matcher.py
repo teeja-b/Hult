@@ -504,11 +504,11 @@ class RLTutorMatchingSystem:
         student_capability = 0.6 * skill_value + 0.4 * normalized_score
         
         if tutor_sessions > 200:
-            compatibility = 0.95
+            experience_score = 1.0
         elif tutor_sessions > 100:
-            compatibility = 0.95 if student_capability > 0.4 else 0.80
+            experience_score = 0.85
         elif tutor_sessions > 30:
-            compatibility = 0.85
+            experience_score = 0.70
         else:
             compatibility = 0.90 if student_capability < 0.5 else 0.65
         
@@ -573,7 +573,13 @@ class RLTutorMatchingSystem:
         tutor_style = tutor_style.lower()
         
         if tutor_style == 'adaptive':
-            return 0.90
+            adaptive_scores = {
+            'visual': 0.85,
+            'auditory': 0.80,
+            'kinesthetic': 0.85,
+            'hands-on': 0.90
+        }
+        return adaptive_scores.get(student_style, 0.75)
         
         if student_style == tutor_style:
             return 0.95
