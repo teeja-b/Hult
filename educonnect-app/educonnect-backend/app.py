@@ -832,7 +832,51 @@ def unregister_fcm_token():
         return jsonify({'error': 'Failed to unregister token'}), 500
 
 
+@app.route('/api/tutors/<int:tutor_id>/profile', methods=['GET'])
+def get_public_tutor_profile(tutor_id):
+    """Public tutor profile — used by TutorProfileViewer and AITutorMatcher"""
+    try:
+        tutor = TutorProfile.query.filter_by(user_id=tutor_id).first()
+        if not tutor:
+            # also try by profile id
+            tutor = TutorProfile.query.get(tutor_id)
+        if not tutor:
+            return jsonify({'error': 'Tutor not found'}), 404
 
+        user = User.query.get(tutor.user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        return jsonify({
+            'tutor': {
+                'id': tutor.id,
+                'user_id': tutor.user_id,
+                'name': user.full_name,
+                'bio': tutor.bio or '',
+                'expertise': json.loads(tutor.expertise or '[]'),
+                'languages': json.loads(tutor.languages or '[]'),
+                'availability': json.loads(tutor.availability or '{}'),
+                'hourly_rate': tutor.hourly_rate,
+                'rating': tutor.rating,
+                'total_sessions': tutor.total_sessions or 0,
+                'verified': tutor.verified,
+                'teaching_style': getattr(tutor, 'teaching_style', 'adaptive') or 'adaptive',
+                'years_experience': getattr(tutor, 'years_experience', ''),
+                'education': getattr(tutor, 'education', ''),
+                'certifications': getattr(tutor, 'certifications', ''),
+                'specializations': getattr(tutor, 'specializations', ''),
+                'teaching_philosophy': getattr(tutor, 'teaching_philosophy', ''),
+                'min_session_length': getattr(tutor, 'min_session_length', '30'),
+                'max_students': getattr(tutor, 'max_students', ''),
+                'preferred_age_groups': json.loads(
+                    getattr(tutor, 'preferred_age_groups', '[]') or '[]'
+                ),
+                'gender': getattr(user, 'gender', ''),
+            }
+        }), 200
+    except Exception as e:
+        print(f"[TUTOR PROFILE] Error: {e}")
+        return jsonify({'error': 'Failed to fetch tutor profile'}), 500
 
 # Add this FIXED version to your app.py
 # This version keeps your existing connect/disconnect handlers
