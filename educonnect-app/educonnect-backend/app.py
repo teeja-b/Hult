@@ -685,7 +685,229 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
         traceback.print_exc()
         return False
 
+# ============================================================================
+# TUTORING SESSION TIME-LIMIT MODEL & ENDPOINTS
+# ============================================================================
 
+class TutoringSession(db.Model):
+    """Tracks a 1-hour tutoring session between a student and tutor."""
+    id              = db.Column(db.Integer, primary_key=True)
+    student_id      = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    tutor_user_id   = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'), nullable=True)
+    started_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at      = db.Column(db.DateTime, nullable=False)
+    status          = db.Column(db.String(20), default='active')
+    # status: 'active' | 'expired' | 'reopened'
+    reopened_at     = db.Column(db.DateTime, nullable=True)
+    reopened_by     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    SESSION_MINUTES = 60  # change to any value for testing
+
+
+@app.route('/api/sessions/start', methods=['POST'])
+@jwt_required()
+def start_tutoring_session():
+    """
+    Student or tutor calls this when a conversation first opens.
+    If an active/reopened session already exists between the pair it is returned
+    unchanged; otherwise a fresh 1-hour session is created.
+
+    Body: { "tutor_user_id": <int>, "conversation_id": <int|null> }
+    """
+    try:
+        caller_id      = int(get_jwt_identity())
+        data           = request.get_json() or {}
+        tutor_user_id  = data.get('tutor_user_id')
+        conversation_id = data.get('conversation_id')
+
+        if not tutor_user_id:
+            return jsonify({'error': 'tutor_user_id is required'}), 400
+
+        # Determine canonical student / tutor ids regardless of who calls
+        caller = User.query.get(caller_id)
+        if caller.user_type == 'tutor':
+            student_id_    = data.get('student_id', caller_id)
+            tutor_user_id_ = caller_id
+        else:
+            student_id_    = caller_id
+            tutor_user_id_ = int(tutor_user_id)
+
+        # Check for an existing non-expired session
+        existing = TutoringSession.query.filter(
+            TutoringSession.student_id    == student_id_,
+            TutoringSession.tutor_user_id == tutor_user_id_,
+            TutoringSession.status.in_(['active', 'reopened'])
+        ).order_by(TutoringSession.started_at.desc()).first()
+
+        if existing:
+            # If clock ran out but DB status not yet updated, expire it now
+            if existing.expires_at < datetime.utcnow() and existing.status == 'active':
+                existing.status = 'expired'
+                db.session.commit()
+                _push_session_status(existing)
+            else:
+                return jsonify(_session_dict(existing)), 200
+
+        # Create fresh session
+        now        = datetime.utcnow()
+        expires_at = now + timedelta(minutes=TutoringSession.SESSION_MINUTES)
+        session    = TutoringSession(
+            student_id      = student_id_,
+            tutor_user_id   = tutor_user_id_,
+            conversation_id = conversation_id,
+            started_at      = now,
+            expires_at      = expires_at,
+            status          = 'active'
+        )
+        db.session.add(session)
+        db.session.commit()
+
+        print(f"✅ [SESSION] Started session {session.id} — expires {expires_at}")
+        return jsonify(_session_dict(session)), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [SESSION START] {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sessions/status', methods=['GET'])
+@jwt_required()
+def get_session_status():
+    """
+    Poll for the current session state.
+    Query params: tutor_user_id=<int>  (student calls this)
+                  student_id=<int>     (tutor calls this)
+    """
+    try:
+        caller_id = int(get_jwt_identity())
+        caller    = User.query.get(caller_id)
+
+        if caller.user_type == 'student':
+            tutor_user_id = request.args.get('tutor_user_id', type=int)
+            if not tutor_user_id:
+                return jsonify({'error': 'tutor_user_id required'}), 400
+            student_id_    = caller_id
+            tutor_user_id_ = tutor_user_id
+        else:
+            student_id = request.args.get('student_id', type=int)
+            if not student_id:
+                return jsonify({'error': 'student_id required'}), 400
+            student_id_    = student_id
+            tutor_user_id_ = caller_id
+
+        session = TutoringSession.query.filter(
+            TutoringSession.student_id    == student_id_,
+            TutoringSession.tutor_user_id == tutor_user_id_
+        ).order_by(TutoringSession.started_at.desc()).first()
+
+        if not session:
+            return jsonify({'session': None}), 200
+
+        # Auto-expire if clock ran out
+        if session.status == 'active' and session.expires_at < datetime.utcnow():
+            session.status = 'expired'
+            db.session.commit()
+            _push_session_status(session)
+
+        return jsonify(_session_dict(session)), 200
+
+    except Exception as e:
+        print(f"❌ [SESSION STATUS] {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sessions/<int:session_id>/reopen', methods=['POST'])
+@jwt_required()
+def reopen_tutoring_session():
+    """
+    Tutor-only. Reopen an expired session, giving the student another
+    SESSION_MINUTES of access.
+    """
+    try:
+        caller_id = int(get_jwt_identity())
+        caller    = User.query.get(caller_id)
+
+        if not caller or caller.user_type != 'tutor':
+            return jsonify({'error': 'Only tutors can reopen sessions'}), 403
+
+        session = TutoringSession.query.get(session_id)
+        if not session:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if session.tutor_user_id != caller_id:
+            return jsonify({'error': 'Not authorised'}), 403
+
+        now            = datetime.utcnow()
+        session.status      = 'reopened'
+        session.reopened_at = now
+        session.reopened_by = caller_id
+        session.expires_at  = now + timedelta(minutes=TutoringSession.SESSION_MINUTES)
+        db.session.commit()
+
+        # Push live update to student
+        _push_session_status(session)
+
+        print(f"✅ [SESSION] Tutor {caller_id} reopened session {session_id}")
+        return jsonify(_session_dict(session)), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [SESSION REOPEN] {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _session_dict(s):
+    """Serialise a TutoringSession to a plain dict."""
+    now    = datetime.utcnow()
+    active = s.status in ('active', 'reopened') and s.expires_at > now
+    return {
+        'id':              s.id,
+        'student_id':      s.student_id,
+        'tutor_user_id':   s.tutor_user_id,
+        'conversation_id': s.conversation_id,
+        'started_at':      s.started_at.isoformat(),
+        'expires_at':      s.expires_at.isoformat(),
+        'status':          s.status,
+        'is_active':       active,
+        'seconds_remaining': max(0, int((s.expires_at - now).total_seconds())) if active else 0,
+        'reopened_at':     s.reopened_at.isoformat() if s.reopened_at else None,
+    }
+
+
+def _push_session_status(session):
+    """Emit session_status_update via Socket.IO to both participants."""
+    payload = _session_dict(session)
+    for uid in (session.student_id, session.tutor_user_id):
+        sid = active_connections.get(uid) or active_connections.get(str(uid))
+        if sid:
+            socketio.emit('session_status_update', payload, room=sid)
+            print(f"  📡 [SESSION] Pushed status '{session.status}' to user {uid}")
+
+
+@socketio.on('check_session_expired')
+def handle_check_session_expired(data):
+    """
+    Client-side timer fires this when it reaches zero.
+    We confirm expiry in the DB and push the update to both parties.
+    """
+    session_id = data.get('sessionId')
+    if not session_id:
+        return
+
+    session = TutoringSession.query.get(session_id)
+    if not session:
+        return
+
+    if session.status == 'active' and session.expires_at <= datetime.utcnow():
+        session.status = 'expired'
+        db.session.commit()
+        _push_session_status(session)
+        print(f"✅ [SESSION] Session {session_id} confirmed expired via socket event")
 # ============================================================================
 # UPDATE HELPER FUNCTIONS WITH BETTER MESSAGES
 # ============================================================================
@@ -832,7 +1054,51 @@ def unregister_fcm_token():
         return jsonify({'error': 'Failed to unregister token'}), 500
 
 
+@app.route('/api/tutors/<int:tutor_id>/profile', methods=['GET'])
+def get_public_tutor_profile(tutor_id):
+    """Public tutor profile — used by TutorProfileViewer and AITutorMatcher"""
+    try:
+        tutor = TutorProfile.query.filter_by(user_id=tutor_id).first()
+        if not tutor:
+            # also try by profile id
+            tutor = TutorProfile.query.get(tutor_id)
+        if not tutor:
+            return jsonify({'error': 'Tutor not found'}), 404
 
+        user = User.query.get(tutor.user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        return jsonify({
+            'tutor': {
+                'id': tutor.id,
+                'user_id': tutor.user_id,
+                'name': user.full_name,
+                'bio': tutor.bio or '',
+                'expertise': json.loads(tutor.expertise or '[]'),
+                'languages': json.loads(tutor.languages or '[]'),
+                'availability': json.loads(tutor.availability or '{}'),
+                'hourly_rate': tutor.hourly_rate,
+                'rating': tutor.rating,
+                'total_sessions': tutor.total_sessions or 0,
+                'verified': tutor.verified,
+                'teaching_style': getattr(tutor, 'teaching_style', 'adaptive') or 'adaptive',
+                'years_experience': getattr(tutor, 'years_experience', ''),
+                'education': getattr(tutor, 'education', ''),
+                'certifications': getattr(tutor, 'certifications', ''),
+                'specializations': getattr(tutor, 'specializations', ''),
+                'teaching_philosophy': getattr(tutor, 'teaching_philosophy', ''),
+                'min_session_length': getattr(tutor, 'min_session_length', '30'),
+                'max_students': getattr(tutor, 'max_students', ''),
+                'preferred_age_groups': json.loads(
+                    getattr(tutor, 'preferred_age_groups', '[]') or '[]'
+                ),
+                'gender': getattr(user, 'gender', ''),
+            }
+        }), 200
+    except Exception as e:
+        print(f"[TUTOR PROFILE] Error: {e}")
+        return jsonify({'error': 'Failed to fetch tutor profile'}), 500
 
 # Add this FIXED version to your app.py
 # This version keeps your existing connect/disconnect handlers
@@ -2715,7 +2981,7 @@ def get_tutor_matches():
                 'expertise': json.loads(tutor.expertise) if tutor.expertise else [],
                 'languages': json.loads(tutor.languages) if tutor.languages else [],
                 'availability': json.loads(tutor.availability) if tutor.availability else {},
-                'rating': tutor.rating if tutor.rating else None,
+                'rating': tutor.rating if tutor.rating is not None else None,
                 'total_sessions': tutor.total_sessions or 0,
                 'gender': getattr(tutor.user, 'gender', '') or '',
                 'teaching_style': getattr(tutor, 'teaching_style', 'adaptive') or 'adaptive'
@@ -3265,7 +3531,7 @@ def record_match_outcome():
         student_id = get_jwt_identity()
         data = request.get_json()
         
-        tutor_id = data.get('tutor_id')
+        tutor_id = int(data.get('tutor_id'))
         outcome = data.get('outcome')
         student_profile = data.get('student_profile')
         
@@ -3342,7 +3608,7 @@ def record_quick_feedback():
         student_id = get_jwt_identity()
         data = request.get_json()
         
-        tutor_id = data.get('tutor_id')
+        tutor_id = int(data.get('tutor_id'))
         
         completed = data.get('completed', True)
         
@@ -3382,7 +3648,6 @@ def record_quick_feedback():
             'teaching_style': tutor.teaching_style or 'adaptive'
         }
         
-        # Record in RL system
         reward = rl_system.record_match_outcome(
             student_id,
             tutor_id,
@@ -3390,17 +3655,28 @@ def record_quick_feedback():
             tutor_profile,
             outcome
         )
-        
+
+        # Sync to DB
+        tutor.total_sessions = rl_system.tutor_performance[tutor_id]['total_matches']
+        satisfaction = outcome.get('satisfaction_rating', 3) / 5.0
+        n = tutor.total_sessions
+        if tutor.rating and n > 1:
+            tutor.rating = (tutor.rating * (n - 1) + (satisfaction * 5)) / n
+        else:
+            tutor.rating = satisfaction * 5
+        db.session.commit()
+
         save_model_if_needed()
-        
+
         return jsonify({
             'success': True,
             'reward': round(reward, 3),
             'message': 'Feedback recorded'
         }), 200
-        
     except Exception as e:
-        print(f"Error in record_quick_feedback: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 
@@ -3411,7 +3687,7 @@ def get_tutor_performance(tutor_id):
     Get detailed performance metrics for a tutor
     """
     try:
-        perf = rl_system.tutor_performance[tutor_id]
+        perf = rl_system.tutor_performance[int(tutor_id)]
         
         if perf['total_matches'] == 0:
             return jsonify({
@@ -5369,7 +5645,8 @@ def debug_tutor_status():
                 'verified_type': str(type(tutor.verified)),
                 'has_expertise': bool(tutor.expertise),
                 'has_bio': bool(tutor.bio),
-                'created_at': user.created_at.isoformat() if user else None
+                'created_at': user.created_at.isoformat() if user else None,
+                'rating': tutor.rating, 
             })
         
         return jsonify({

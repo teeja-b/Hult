@@ -45,7 +45,8 @@ class RLTutorMatchingSystem:
             'completion_rate': 0.0,
             'student_retention': 0.0,
             'response_time_score': 1.0,
-            'reliability_score': 1.0
+            'reliability_score': 1.0,
+            'n_ratings': 0
         })
         
         # Personalized student preferences (learned over time)
@@ -270,6 +271,8 @@ class RLTutorMatchingSystem:
         # Update tutor performance metrics
         perf = self.tutor_performance[tutor_id]
         perf['total_matches'] += 1
+        if outcome_data.get('satisfaction_rating') is not None:
+            perf['n_ratings'] = perf.get('n_ratings', 0) + 1
         
         if reward > 0.6:  # Consider it successful
             perf['successful_matches'] += 1
@@ -504,11 +507,11 @@ class RLTutorMatchingSystem:
         student_capability = 0.6 * skill_value + 0.4 * normalized_score
         
         if tutor_sessions > 200:
-            compatibility = 0.95
+            experience_score = 1.0
         elif tutor_sessions > 100:
-            compatibility = 0.95 if student_capability > 0.4 else 0.80
+            experience_score = 0.85
         elif tutor_sessions > 30:
-            compatibility = 0.85
+            experience_score = 0.70
         else:
             compatibility = 0.90 if student_capability < 0.5 else 0.65
         
@@ -573,7 +576,13 @@ class RLTutorMatchingSystem:
         tutor_style = tutor_style.lower()
         
         if tutor_style == 'adaptive':
-            return 0.90
+            adaptive_scores = {
+            'visual': 0.85,
+            'auditory': 0.80,
+            'kinesthetic': 0.85,
+            'hands-on': 0.90
+        }
+        return adaptive_scores.get(student_style, 0.75)
         
         if student_style == tutor_style:
             return 0.95
@@ -663,7 +672,7 @@ class RLTutorMatchingSystem:
             )
     
             # Rating: None → 0.0 score + 'missing' source, never assume 4.0
-            raw_rating = tutor.get('rating') or None
+            raw_rating = tutor.get('rating') if tutor.get('rating') is not None else None
             rating_score = self.normalize_rating(raw_rating) if raw_rating else 0.0
             rating_source = 'verified' if raw_rating else 'missing'
                     
@@ -745,7 +754,8 @@ class RLTutorMatchingSystem:
             'completion_rate': 0.0,
             'student_retention': 0.0,
             'response_time_score': 1.0,
-            'reliability_score': 1.0
+            'reliability_score': 1.0,
+            'n_ratings': 0,  
         }, model_data.get('tutor_performance', {}))
         self.student_preferences = defaultdict(lambda: {
             'weight_adjustments': {},
