@@ -727,7 +727,9 @@ def start_tutoring_session():
         # Determine canonical student / tutor ids regardless of who calls
         caller = User.query.get(caller_id)
         if caller.user_type == 'tutor':
-            student_id_    = data.get('student_id', caller_id)
+            student_id_ = data.get('student_id')
+            if not student_id_:
+                return jsonify({'error': 'student_id is required'}), 400
             tutor_user_id_ = caller_id
         else:
             student_id_    = caller_id
