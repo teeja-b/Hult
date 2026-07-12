@@ -5844,7 +5844,7 @@ def get_tutor_assignments():
 # INITIALIZE DATABASE
 # ============================================================================
 
-with app.app_context():
+
     
 
 
