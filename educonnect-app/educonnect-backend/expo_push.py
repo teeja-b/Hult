@@ -17,6 +17,7 @@ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 _TYPE_SETTINGS = {
     "call":    {"channelId": "incoming_calls_v2",    "priority": "high",    "categoryId": "incoming_call", "ttl": 45},
     "message": {"channelId": "messages", "priority": "high",    "categoryId": None,            "ttl": 86400},
+    "call_cancelled": {"channelId": "incoming_calls_v2", "priority": "high", "categoryId": None, "ttl": 60},
 }
 _DEFAULT = {"channelId": "general", "priority": "default", "categoryId": None, "ttl": 86400}
 
@@ -39,20 +40,38 @@ def send_expo_push(tokens, title, body, data=None, notification_type="general"):
     payload_data = {k: v for k, v in (data or {}).items() if v is not None}
     payload_data["type"] = notification_type
 
+    # Calls (and call cancellations) are sent *data-only*: the app receives them
+    # in a background task and draws the notification itself, which is what
+    # lets it attach the Accept / Decline buttons. Everything else is a normal
+    # visible notification.
+    data_only = notification_type in ("call", "call_cancelled")
+    if data_only:
+        payload_data.setdefault("title", title)
+        payload_data.setdefault("body", body)
+
     messages = []
     for token in tokens:
-        msg = {
-            "to": token,
-            "title": title,
-            "body": body,
-            "data": payload_data,
-            "sound": "default",
-            "channelId": settings["channelId"],
-            "priority": settings["priority"],
-            "ttl": settings["ttl"],       # a call push older than 45 s is useless
-        }
-        if settings["categoryId"]:
-            msg["categoryId"] = settings["categoryId"]   # Accept / Decline buttons
+        if data_only:
+            msg = {
+                "to": token,
+                "data": payload_data,
+                "priority": "high",
+                "ttl": settings["ttl"],
+                "_contentAvailable": True,   # iOS background delivery
+            }
+        else:
+            msg = {
+                "to": token,
+                "title": title,
+                "body": body,
+                "data": payload_data,
+                "sound": "default",
+                "channelId": settings["channelId"],
+                "priority": settings["priority"],
+                "ttl": settings["ttl"],
+            }
+            if settings["categoryId"]:
+                msg["categoryId"] = settings["categoryId"]
         messages.append(msg)
 
     ok = 0
