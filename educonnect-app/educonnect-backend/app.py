@@ -1117,37 +1117,35 @@ def handle_call_declined(data):
         print(f"❌ [VIDEO] Error declining call: {e}")
 
 
-# Update end_video_call handler
 @socketio.on('end_video_call')
 def handle_end_video_call(data):
-    """Handle video call ending - FIXED"""
+    """Handle video call ending"""
     try:
         meeting_id = data.get('meetingId')
         ended_by = data.get('endedBy')
-        other_user_id = data.get('otherUserId')  # Add this
-        
+        other_user_id = data.get('otherUserId')
+ 
         print(f"🔴 [VIDEO] Call {meeting_id} ended by: {ended_by}")
-        
-        # Notify the other participant
+ 
         if other_user_id:
-            other_sid = active_connections.get(other_user_id)
+            other_sid = active_connections.get(other_user_id) or active_connections.get(str(other_user_id))
             if other_sid:
-                emit('call_ended', {
-                    'meetingId': meeting_id,
-                    'endedBy': ended_by
-                }, room=other_sid)
+                emit('call_ended', {'meetingId': meeting_id, 'endedBy': ended_by}, room=other_sid)
                 print(f"✅ [VIDEO] Notified other user {other_user_id}")
+ 
+            # Remove the ringing notification on their phone (app open or closed)
+            try:
+                tokens = [t.token for t in FCMToken.query.filter_by(
+                    user_id=int(other_user_id), is_active=True).all() if is_expo_token(t.token)]
+                if tokens:
+                    send_expo_push(tokens, 'Call ended', '', {'meetingId': meeting_id}, 'call_cancelled')
+            except Exception as push_err:
+                print(f"⚠️ [VIDEO] call_cancelled push failed: {push_err}")
         else:
-            # Fallback: broadcast to all
-            emit('call_ended', {
-                'meetingId': meeting_id,
-                'endedBy': ended_by
-            }, broadcast=True)
-        
+            emit('call_ended', {'meetingId': meeting_id, 'endedBy': ended_by}, broadcast=True)
+ 
     except Exception as e:
         print(f"❌ [VIDEO] Error ending call: {e}")
-
-
 # Add debug endpoint to check online users
 @app.route('/api/socket/online-users', methods=['GET'])
 def get_online_users():
