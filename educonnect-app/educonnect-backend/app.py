@@ -47,6 +47,7 @@ import urllib.parse
 import requests
 import firebase_admin
 from firebase_admin import credentials, messaging as fcm_messaging
+from expo_push import is_expo_token, send_expo_push
 
 # Add this after your other imports
 import json
@@ -462,229 +463,156 @@ class AssignmentSubmission(db.Model):
 
 
 def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
-    """
-    Send FCM notification with EduConnect branding (ENHANCED VERSION)
-    """
-    global FIREBASE_ENABLED
-    if not FIREBASE_ENABLED:
-        print("⚠️ Firebase not enabled, skipping notification")
-        return False
-    
+    """Send a push to every active device of a user (phone via Expo, browser via FCM)."""
     try:
-        # Get all active FCM tokens for this user
-        tokens = FCMToken.query.filter_by(
-            user_id=user_id,
-            is_active=True
-        ).all()
-        
-        if not tokens:
-            print(f"⚠️ No FCM tokens found for user {user_id}")
+        all_tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+        if not all_tokens:
+            print(f"⚠️ No push tokens found for user {user_id}")
             return False
-        
-        # ✅ YOUR FRONTEND URL (Vercel PWA)
-        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
-        
-        # Prepare notification data
-        notification_data = data or {}
-        notification_data['type'] = notification_type
-        notification_data['timestamp'] = datetime.utcnow().isoformat()
-        notification_data['user_id'] = str(user_id)
-        
-        # ✅ BUILD PROPER CLICK URL
-        click_url = notification_data.get('url')
-        
-        if not click_url:
-            # Default URLs based on notification type
-            if notification_type == 'call':
-                meeting_id = notification_data.get('meeting_id', '')
-                click_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
-            elif notification_type == 'message':
-                conversation_id = notification_data.get('conversation_id', '')
-                click_url = f"{frontend_url}/messages"  # ✅ Opens messages in PWA
+
+        expo_tokens = [t for t in all_tokens if is_expo_token(t.token)]
+        web_tokens = [t for t in all_tokens if not is_expo_token(t.token)]
+
+        base_data = dict(data or {})
+        base_data['type'] = notification_type
+        base_data['timestamp'] = datetime.utcnow().isoformat()
+        base_data['user_id'] = str(user_id)
+
+        # ── Phones (Expo) ────────────────────────────────────────────────────
+        expo_ok = 0
+        if expo_tokens:
+            emoji = {'call': '📞', 'message': '💬'}.get(notification_type, '🔔')
+            expo_ok, dead = send_expo_push(
+                [t.token for t in expo_tokens],
+                f"{emoji} {title}", body, base_data, notification_type,
+            )
+            for t in expo_tokens:
+                if t.token in dead:
+                    t.is_active = False
+                else:
+                    t.last_used = datetime.utcnow()
+            db.session.commit()
+
+        # ── Browsers (FCM web push) ──────────────────────────────────────────
+        web_ok = 0
+        if web_tokens:
+            if not FIREBASE_ENABLED:
+                print("⚠️ Firebase not enabled — skipping browser push")
             else:
-                click_url = frontend_url
-        
-        # Ensure URL is absolute HTTPS
-        if not click_url.startswith('https://') and not click_url.startswith('http://'):
-            click_url = frontend_url + click_url
-        
-        if click_url.startswith('http://'):
-            click_url = click_url.replace('http://', 'https://')
-        
-        print(f"📍 Click URL: {click_url}")
-        
-        # ✅ EDUCONNECT BRANDING - Icon and Badge URLs
-        # Option 1: Use icons from your Vercel deployment
-        icon_url = f"{frontend_url}/logo192.png"
-        badge_url = f"{frontend_url}/logo192.png"
-        
-        # Option 2: Use direct URLs if icons are in public folder
-        # icon_url = "https://hult-ten.vercel.app/logo192.png"
-        # badge_url = "https://hult-ten.vercel.app/logo192.png"
-        
-        # ✅ CUSTOM EMOJIS AND STYLING BY TYPE
-        notification_styles = {
-            'call': {
-                'emoji': '📞',
-                'color': '#10b981',  # Green for calls
-                'require_interaction': True,
-                'vibrate': [200, 100, 200, 100, 200],
-                'actions': [
-                    {'action': 'answer', 'title': '✅ Answer'},
-                    {'action': 'decline', 'title': '❌ Decline'}
-                ]
-            },
-            'message': {
-                'emoji': '💬',
-                'color': '#8b5cf6',  # Purple (EduConnect brand)
-                'require_interaction': False,
-                'vibrate': [100, 50, 100],
-                'actions': [
-                    {'action': 'reply', 'title': '📝 Reply'},
-                    {'action': 'view', 'title': '👁️ View'}
-                ]
-            },
-            'test': {
-                'emoji': '🔔',
-                'color': '#f59e0b',  # Orange for test
-                'require_interaction': False,
-                'vibrate': [200],
-                'actions': [
-                    {'action': 'open', 'title': '🚀 Open App'}
-                ]
-            },
-            'general': {
-                'emoji': '🔔',
-                'color': '#8b5cf6',  # EduConnect purple
-                'require_interaction': False,
-                'vibrate': [100],
-                'actions': [
-                    {'action': 'open', 'title': '📱 Open'}
-                ]
-            }
-        }
-        
-        style = notification_styles.get(notification_type, notification_styles['general'])
-        
-        # ✅ ADD EMOJI TO TITLE
-        styled_title = f"{style['emoji']} {title}"
-        
-        # Convert all data values to strings (FCM requirement)
-        notification_data = {k: str(v) for k, v in notification_data.items()}
-        
-        # ✅ ADD CLICK ACTION DATA
-        notification_data['click_action'] = click_url
-        notification_data['fcm_options'] = json.dumps({'link': click_url})
-        
-        successful_sends = 0
-        invalid_tokens = []
-        
-        for token_obj in tokens:
-            try:
-                # ✅ CREATE ENHANCED MESSAGE
-                message = fcm_messaging.Message(
-                    notification=fcm_messaging.Notification(
-                        title=styled_title,
-                        body=body,
-                        # image=icon_url  # Optional: Large image (uncomment if needed)
-                    ),
-                    data=notification_data,
-                    token=token_obj.token,
-                    
-                    # ✅ WEB PUSH CONFIGURATION (Desktop/Mobile Browser)
-                    webpush=fcm_messaging.WebpushConfig(
-                        notification=fcm_messaging.WebpushNotification(
-                            title=styled_title,
-                            body=body,
-                            icon=icon_url,
-                            badge=badge_url,
-                            tag=notification_type,  # Groups similar notifications
-                            require_interaction=style['require_interaction'],
-                            vibrate=style['vibrate'],
-                            
-                            # ✅ EDUCONNECT BRANDING - Background color
-                            # Note: This works in some browsers (Chrome Android)
-                            # Format: #RRGGBB
-                            # color='#8b5cf6',  # Uncomment if supported
-                            
-                            # ✅ ACTION BUTTONS
-                            actions=[
-                                fcm_messaging.WebpushNotificationAction(
-                                    action=action['action'],
-                                    title=action['title']
-                                ) for action in style['actions']
-                            ] if style['actions'] else None,
-                            
-                            # ✅ CUSTOM DATA
-                            data={
-                                'url': click_url,
-                                'type': notification_type
-                            }
-                        ),
-                        
-                        # ✅ FCM OPTIONS - CRITICAL FOR PWA REDIRECT
-                        fcm_options=fcm_messaging.WebpushFCMOptions(
-                            link=click_url  # This makes clicking open the PWA!
-                        ),
-                        
-                        # ✅ HEADERS (Optional - for debugging)
-                        headers={
-                            'TTL': '86400',  # 24 hours
-                            'Urgency': 'high' if notification_type == 'call' else 'normal'
-                        }
-                    ),
-                    
-                    # ✅ ANDROID CONFIGURATION (For future native app)
-                    android=fcm_messaging.AndroidConfig(
-                        priority='high',
-                        notification=fcm_messaging.AndroidNotification(
-                            title=styled_title,
-                            body=body,
-                            icon='@drawable/ic_notification',
-                            color=style['color'],
-                            sound='default',
-                            channel_id='educonnect_notifications',
-                            click_action=click_url,
-                            tag=notification_type
-                        ),
-                        data=notification_data
-                    )
-                )
-                
-                # Send message
-                response = fcm_messaging.send(message)
-                print(f"✅ Notification sent: {response}")
-                
-                # Update last_used timestamp
-                token_obj.last_used = datetime.utcnow()
-                successful_sends += 1
-                
-            except fcm_messaging.UnregisteredError:
-                print(f"❌ Invalid token, marking inactive: {token_obj.id}")
-                invalid_tokens.append(token_obj)
-            except fcm_messaging.SenderIdMismatchError:
-                print(f"❌ Token belongs to different project: {token_obj.id}")
-                invalid_tokens.append(token_obj)
-            except Exception as e:
-                print(f"❌ Error sending to token {token_obj.id}: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # Mark invalid tokens as inactive
-        for invalid_token in invalid_tokens:
-            invalid_token.is_active = False
-        
-        db.session.commit()
-        
-        print(f"📊 Notification results: {successful_sends}/{len(tokens)} successful")
-        return successful_sends > 0
-        
+                frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+                click_url = base_data.get('url') or frontend_url
+                if not click_url.startswith('http'):
+                    click_url = frontend_url + click_url
+                click_url = click_url.replace('http://', 'https://')
+                string_data = {k: str(v) for k, v in base_data.items() if v is not None}
+                channel = {'call': 'calls', 'message': 'messages'}.get(notification_type, 'general')
+
+                invalid = []
+                for token_obj in web_tokens:
+                    try:
+                        message = fcm_messaging.Message(
+                            notification=fcm_messaging.Notification(title=title, body=body),
+                            data=string_data,
+                            token=token_obj.token,
+                            webpush=fcm_messaging.WebpushConfig(
+                                notification=fcm_messaging.WebpushNotification(
+                                    title=title, body=body,
+                                    icon=f"{frontend_url}/logo192.png",
+                                    tag=notification_type,
+                                    require_interaction=(notification_type == 'call'),
+                                ),
+                                fcm_options=fcm_messaging.WebpushFCMOptions(link=click_url),
+                                headers={'TTL': '45' if notification_type == 'call' else '86400',
+                                         'Urgency': 'high' if notification_type == 'call' else 'normal'},
+                            ),
+                            android=fcm_messaging.AndroidConfig(
+                                priority='high',
+                                notification=fcm_messaging.AndroidNotification(
+                                    title=title, body=body, sound='default', channel_id=channel,
+                                ),
+                            ),
+                        )
+                        fcm_messaging.send(message)
+                        token_obj.last_used = datetime.utcnow()
+                        web_ok += 1
+                    except (fcm_messaging.UnregisteredError, fcm_messaging.SenderIdMismatchError):
+                        invalid.append(token_obj)
+                    except Exception as e:
+                        print(f"❌ Error sending web push to token {token_obj.id}: {e}")
+                for t in invalid:
+                    t.is_active = False
+                db.session.commit()
+
+        print(f"📊 Push results for user {user_id}: phone {expo_ok}/{len(expo_tokens)}, web {web_ok}/{len(web_tokens)}")
+        return (expo_ok + web_ok) > 0
+
     except Exception as e:
-        print(f"❌ Error sending FCM notification: {e}")
+        db.session.rollback()
+        print(f"❌ Error sending notification: {e}")
         import traceback
         traceback.print_exc()
         return False
 
+
+# ── 3. REPLACE the whole `def send_call_notification(...)` function ──────────
+#    (adds the camelCase keys the app reads when Accept/Decline is tapped)
+
+def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
+    """Send incoming call notification (with Accept / Decline buttons on phones)."""
+    try:
+        caller = User.query.get(caller_id)
+        if not caller:
+            return False
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"Incoming call from {caller.full_name}",
+            body="Tap to answer",
+            data={
+                'type': 'call',
+                'meetingId': meeting_id,
+                'meeting_id': meeting_id,
+                'callerId': str(caller_id),
+                'caller_id': str(caller_id),
+                'callerName': caller.full_name,
+                'caller_name': caller.full_name,
+                'joinUrl': join_url or '',
+                'url': f"{frontend_url}/video-call?meetingId={meeting_id}",
+            },
+            notification_type='call',
+        )
+    except Exception as e:
+        print(f"❌ Error sending call notification: {e}")
+        return False
+
+
+# ── 4. ADD this endpoint (anywhere with the other routes) ────────────────────
+#    Used when "Decline" is tapped on the notification while the app is closed
+#    (no socket connection), so the caller's phone stops ringing.
+
+@app.route('/api/calls/decline', methods=['POST'])
+@jwt_required()
+def decline_call_http():
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.get_json() or {}
+        meeting_id = data.get('meetingId')
+        caller_id = data.get('callerId')
+        if not meeting_id or caller_id is None:
+            return jsonify({'error': 'meetingId and callerId are required'}), 400
+
+        payload = {'meetingId': meeting_id, 'declinedBy': user_id}
+        # active_connections keys may be int or str depending on the client
+        caller_sid = active_connections.get(caller_id) \
+            or active_connections.get(str(caller_id)) \
+            or (active_connections.get(int(caller_id)) if str(caller_id).isdigit() else None)
+        if caller_sid:
+            socketio.emit('call_declined', payload, room=caller_sid)
+            print(f"❌ [VIDEO] Call {meeting_id} declined by {user_id} (from notification)")
+        return jsonify({'success': True, 'caller_notified': bool(caller_sid)}), 200
+    except Exception as e:
+        print(f"❌ [VIDEO] decline error: {e}")
+        return jsonify({'error': str(e)}), 500
 # ============================================================================
 # TUTORING SESSION TIME-LIMIT MODEL & ENDPOINTS
 # ============================================================================
