@@ -15,7 +15,7 @@ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 # Android channel + action buttons per notification type. The channel ids and
 # the "incoming_call" category are created by the app (src/firebaseConfig.js).
 _TYPE_SETTINGS = {
-    "call":    {"channelId": "calls",    "priority": "high",    "categoryId": "incoming_call", "ttl": 45},
+    "call":    {"channelId": "incoming_calls_v2",    "priority": "high",    "categoryId": "incoming_call", "ttl": 45},
     "message": {"channelId": "messages", "priority": "high",    "categoryId": None,            "ttl": 86400},
 }
 _DEFAULT = {"channelId": "general", "priority": "default", "categoryId": None, "ttl": 86400}
