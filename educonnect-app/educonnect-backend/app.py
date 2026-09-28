@@ -838,41 +838,6 @@ def handle_check_session_expired(data):
         db.session.commit()
         _push_session_status(session)
         print(f"✅ [SESSION] Session {session_id} confirmed expired via socket event")
-# ============================================================================
-# UPDATE HELPER FUNCTIONS WITH BETTER MESSAGES
-# ============================================================================
-
-def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
-    """Send incoming call notification with proper action handling"""
-    try:
-        caller = User.query.get(caller_id)
-        if not caller:
-            return False
-        
-        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
-        
-        # ✅ Build the video call URL
-        video_call_url = f"{frontend_url}/video-call?meetingId={meeting_id}"
-        
-        return send_fcm_notification(
-            user_id=receiver_id,
-            title=f"Incoming Call from {caller.full_name}",
-            body="Tap to answer the video call",
-            data={
-                'type': 'call',
-                'caller_id': str(caller_id),
-                'caller_name': caller.full_name,
-                'meeting_id': meeting_id,  # ✅ Important for service worker
-                'meetingId': meeting_id,   # ✅ Alternative format
-                'join_url': join_url,
-                'url': video_call_url,     # ✅ This is used by default click
-                'click_action': video_call_url  # ✅ Fallback
-            },
-            notification_type='call'
-        )
-    except Exception as e:
-        print(f"❌ Error sending call notification: {e}")
-        return False
 
 def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
     """Send new message notification"""
