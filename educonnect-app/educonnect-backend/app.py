@@ -469,15 +469,15 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
         if not all_tokens:
             print(f"⚠️ No push tokens found for user {user_id}")
             return False
-
+ 
         expo_tokens = [t for t in all_tokens if is_expo_token(t.token)]
         web_tokens = [t for t in all_tokens if not is_expo_token(t.token)]
-
+ 
         base_data = dict(data or {})
         base_data['type'] = notification_type
         base_data['timestamp'] = datetime.utcnow().isoformat()
         base_data['user_id'] = str(user_id)
-
+ 
         # ── Phones (Expo) ────────────────────────────────────────────────────
         expo_ok = 0
         if expo_tokens:
@@ -492,7 +492,7 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
                 else:
                     t.last_used = datetime.utcnow()
             db.session.commit()
-
+ 
         # ── Browsers (FCM web push) ──────────────────────────────────────────
         web_ok = 0
         if web_tokens:
@@ -505,8 +505,8 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
                     click_url = frontend_url + click_url
                 click_url = click_url.replace('http://', 'https://')
                 string_data = {k: str(v) for k, v in base_data.items() if v is not None}
-                channel = {'call': 'calls', 'message': 'messages'}.get(notification_type, 'general')
-
+                channel = {'call': 'incoming_calls_v2', 'message': 'messages'}.get(notification_type, 'general')
+ 
                 invalid = []
                 for token_obj in web_tokens:
                     try:
@@ -542,21 +542,21 @@ def send_fcm_notification(user_id, title, body, data=None, notification_type='ge
                 for t in invalid:
                     t.is_active = False
                 db.session.commit()
-
+ 
         print(f"📊 Push results for user {user_id}: phone {expo_ok}/{len(expo_tokens)}, web {web_ok}/{len(web_tokens)}")
         return (expo_ok + web_ok) > 0
-
+ 
     except Exception as e:
         db.session.rollback()
         print(f"❌ Error sending notification: {e}")
         import traceback
         traceback.print_exc()
         return False
-
-
+ 
+ 
 # ── 3. REPLACE the whole `def send_call_notification(...)` function ──────────
 #    (adds the camelCase keys the app reads when Accept/Decline is tapped)
-
+ 
 def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
     """Send incoming call notification (with Accept / Decline buttons on phones)."""
     try:
@@ -584,12 +584,12 @@ def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
     except Exception as e:
         print(f"❌ Error sending call notification: {e}")
         return False
-
-
+ 
+ 
 # ── 4. ADD this endpoint (anywhere with the other routes) ────────────────────
 #    Used when "Decline" is tapped on the notification while the app is closed
 #    (no socket connection), so the caller's phone stops ringing.
-
+ 
 @app.route('/api/calls/decline', methods=['POST'])
 @jwt_required()
 def decline_call_http():
@@ -600,7 +600,7 @@ def decline_call_http():
         caller_id = data.get('callerId')
         if not meeting_id or caller_id is None:
             return jsonify({'error': 'meetingId and callerId are required'}), 400
-
+ 
         payload = {'meetingId': meeting_id, 'declinedBy': user_id}
         # active_connections keys may be int or str depending on the client
         caller_sid = active_connections.get(caller_id) \
