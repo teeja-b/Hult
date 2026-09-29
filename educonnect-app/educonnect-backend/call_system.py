@@ -663,6 +663,13 @@ def register_call_system(app, db, socketio, User, FCMToken, active_connections=N
                 db.session.add(FCMToken(user_id=uid, token=token, device_type=platform))
             if previous and previous != token:
                 FCMToken.query.filter_by(token=previous).update({"is_active": False})
+                        # Old app builds registered an Expo token for this phone; the new build
+            # uses the native FCM token. Keeping both makes every call ring twice.
+            if platform == "android" and not push.is_expo_token(token):
+                for old in FCMToken.query.filter_by(user_id=uid, device_type="android", is_active=True).all():
+                    if old.token != token and push.is_expo_token(old.token):
+                        old.is_active = False
+                        push.log("deactivated legacy Expo token", user=uid, token_id=old.id)
             db.session.commit()
         except Exception as e:                                  # noqa: BLE001
             db.session.rollback()
