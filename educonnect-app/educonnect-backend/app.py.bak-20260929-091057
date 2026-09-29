@@ -45,11 +45,87 @@ import time
 import uuid
 import urllib.parse
 import requests
+import firebase_admin
+from firebase_admin import credentials, messaging as fcm_messaging
+from expo_push import is_expo_token, send_expo_push
 
 # Add this after your other imports
 import json
 
+FIREBASE_ENABLED = False
+try:
+    import firebase_admin
+    from firebase_admin import credentials, messaging as fcm_messaging
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    print("⚠️ firebase-admin not installed. Run: pip install firebase-admin")
+    FIREBASE_AVAILABLE = False
 
+def initialize_firebase():
+    """
+    Initialize Firebase Admin SDK for PRODUCTION
+    
+    Setup Instructions:
+    1. Go to Firebase Console > Project Settings > Service Accounts
+    2. Click "Generate New Private Key"
+    3. Copy the ENTIRE JSON content
+    4. In Render.com dashboard:
+       - Go to Environment Variables
+       - Add: FIREBASE_CREDENTIALS
+       - Paste the entire JSON as the value
+    """
+    
+    try:
+        firebase_creds = os.getenv('FIREBASE_CREDENTIALS')
+        
+        if not firebase_creds:
+            print("❌ FIREBASE_CREDENTIALS not found in environment variables")
+            print("⚠️  Push notifications will NOT work!")
+            return False
+        
+        # Parse JSON from environment variable
+        cred_dict = json.loads(firebase_creds)
+        cred = credentials.Certificate(cred_dict)
+        
+        firebase_admin.initialize_app(cred)
+        print("✅ Firebase Admin initialized successfully (PRODUCTION)")
+        return True  # ✅ RETURN True on success
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in FIREBASE_CREDENTIALS: {e}")
+        print("⚠️  Check your environment variable formatting")
+        return False
+    except Exception as e:
+        print(f"❌ Firebase Admin initialization failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def init_firebase_global():
+    """Initialize Firebase and set global variable"""
+    global FIREBASE_ENABLED  # ✅ Explicitly declare we're modifying the global
+    
+    print("\n" + "="*70)
+    print("Initializing Firebase Admin SDK...")
+    print("="*70)
+    
+    try:
+        FIREBASE_ENABLED = initialize_firebase()
+        
+        if FIREBASE_ENABLED:
+            print("✅ FIREBASE_ENABLED set to True")
+        else:
+            print("⚠️ FIREBASE_ENABLED set to False")
+            
+    except Exception as e:
+        print(f"❌ Failed to initialize Firebase: {e}")
+        FIREBASE_ENABLED = False
+    
+    print(f"📊 Final FIREBASE_ENABLED status: {FIREBASE_ENABLED}")
+    print("="*70 + "\n")
+
+# Call the initialization function
+init_firebase_global()
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
     api_key=os.getenv('CLOUDINARY_API_KEY'),
@@ -77,6 +153,8 @@ active_connections = {}  # {user_id: sid}
 user_rooms = {}  # {user_id: [room_ids]}
 CORS(app)
 DAILY_API_KEY = os.getenv('DAILY_API_KEY')
+
+
 
 
 # Configuration
@@ -169,11 +247,13 @@ def token_required(f):
     return decorated
 
 
+
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_size': 10,
     'pool_recycle': 3600,
     'pool_pre_ping': True
 }
+
 
 
 # ============================================================================
@@ -319,6 +399,7 @@ class OfflineDownload(db.Model):
     expires_at = db.Column(db.DateTime)
 
 
+
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     participant1_id = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -380,6 +461,158 @@ class AssignmentSubmission(db.Model):
     student = db.relationship('User', backref='assignment_submissions')
 
 
+
+def send_fcm_notification(user_id, title, body, data=None, notification_type='general'):
+    """Send a push to every active device of a user (phone via Expo, browser via FCM)."""
+    try:
+        all_tokens = FCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+        if not all_tokens:
+            print(f"⚠️ No push tokens found for user {user_id}")
+            return False
+ 
+        expo_tokens = [t for t in all_tokens if is_expo_token(t.token)]
+        web_tokens = [t for t in all_tokens if not is_expo_token(t.token)]
+ 
+        base_data = dict(data or {})
+        base_data['type'] = notification_type
+        base_data['timestamp'] = datetime.utcnow().isoformat()
+        base_data['user_id'] = str(user_id)
+ 
+        # ── Phones (Expo) ────────────────────────────────────────────────────
+        expo_ok = 0
+        if expo_tokens:
+            emoji = {'call': '📞', 'message': '💬'}.get(notification_type, '🔔')
+            expo_ok, dead = send_expo_push(
+                [t.token for t in expo_tokens],
+                f"{emoji} {title}", body, base_data, notification_type,
+            )
+            for t in expo_tokens:
+                if t.token in dead:
+                    t.is_active = False
+                else:
+                    t.last_used = datetime.utcnow()
+            db.session.commit()
+ 
+        # ── Browsers (FCM web push) ──────────────────────────────────────────
+        web_ok = 0
+        if web_tokens:
+            if not FIREBASE_ENABLED:
+                print("⚠️ Firebase not enabled — skipping browser push")
+            else:
+                frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+                click_url = base_data.get('url') or frontend_url
+                if not click_url.startswith('http'):
+                    click_url = frontend_url + click_url
+                click_url = click_url.replace('http://', 'https://')
+                string_data = {k: str(v) for k, v in base_data.items() if v is not None}
+                channel = {'call': 'incoming_calls_v2', 'message': 'messages'}.get(notification_type, 'general')
+ 
+                invalid = []
+                for token_obj in web_tokens:
+                    try:
+                        message = fcm_messaging.Message(
+                            notification=fcm_messaging.Notification(title=title, body=body),
+                            data=string_data,
+                            token=token_obj.token,
+                            webpush=fcm_messaging.WebpushConfig(
+                                notification=fcm_messaging.WebpushNotification(
+                                    title=title, body=body,
+                                    icon=f"{frontend_url}/logo192.png",
+                                    tag=notification_type,
+                                    require_interaction=(notification_type == 'call'),
+                                ),
+                                fcm_options=fcm_messaging.WebpushFCMOptions(link=click_url),
+                                headers={'TTL': '45' if notification_type == 'call' else '86400',
+                                         'Urgency': 'high' if notification_type == 'call' else 'normal'},
+                            ),
+                            android=fcm_messaging.AndroidConfig(
+                                priority='high',
+                                notification=fcm_messaging.AndroidNotification(
+                                    title=title, body=body, sound='default', channel_id=channel,
+                                ),
+                            ),
+                        )
+                        fcm_messaging.send(message)
+                        token_obj.last_used = datetime.utcnow()
+                        web_ok += 1
+                    except (fcm_messaging.UnregisteredError, fcm_messaging.SenderIdMismatchError):
+                        invalid.append(token_obj)
+                    except Exception as e:
+                        print(f"❌ Error sending web push to token {token_obj.id}: {e}")
+                for t in invalid:
+                    t.is_active = False
+                db.session.commit()
+ 
+        print(f"📊 Push results for user {user_id}: phone {expo_ok}/{len(expo_tokens)}, web {web_ok}/{len(web_tokens)}")
+        return (expo_ok + web_ok) > 0
+ 
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error sending notification: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+ 
+ 
+# ── 3. REPLACE the whole `def send_call_notification(...)` function ──────────
+#    (adds the camelCase keys the app reads when Accept/Decline is tapped)
+ 
+def send_call_notification(caller_id, receiver_id, meeting_id, join_url):
+    """Send incoming call notification (with Accept / Decline buttons on phones)."""
+    try:
+        caller = User.query.get(caller_id)
+        if not caller:
+            return False
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"Incoming call from {caller.full_name}",
+            body="Tap to answer",
+            data={
+                'type': 'call',
+                'meetingId': meeting_id,
+                'meeting_id': meeting_id,
+                'callerId': str(caller_id),
+                'caller_id': str(caller_id),
+                'callerName': caller.full_name,
+                'caller_name': caller.full_name,
+                'joinUrl': join_url or '',
+                'url': f"{frontend_url}/video-call?meetingId={meeting_id}",
+            },
+            notification_type='call',
+        )
+    except Exception as e:
+        print(f"❌ Error sending call notification: {e}")
+        return False
+ 
+ 
+# ── 4. ADD this endpoint (anywhere with the other routes) ────────────────────
+#    Used when "Decline" is tapped on the notification while the app is closed
+#    (no socket connection), so the caller's phone stops ringing.
+ 
+@app.route('/api/calls/decline', methods=['POST'])
+@jwt_required()
+def decline_call_http():
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.get_json() or {}
+        meeting_id = data.get('meetingId')
+        caller_id = data.get('callerId')
+        if not meeting_id or caller_id is None:
+            return jsonify({'error': 'meetingId and callerId are required'}), 400
+ 
+        payload = {'meetingId': meeting_id, 'declinedBy': user_id}
+        # active_connections keys may be int or str depending on the client
+        caller_sid = active_connections.get(caller_id) \
+            or active_connections.get(str(caller_id)) \
+            or (active_connections.get(int(caller_id)) if str(caller_id).isdigit() else None)
+        if caller_sid:
+            socketio.emit('call_declined', payload, room=caller_sid)
+            print(f"❌ [VIDEO] Call {meeting_id} declined by {user_id} (from notification)")
+        return jsonify({'success': True, 'caller_notified': bool(caller_sid)}), 200
+    except Exception as e:
+        print(f"❌ [VIDEO] decline error: {e}")
+        return jsonify({'error': str(e)}), 500
 # ============================================================================
 # TUTORING SESSION TIME-LIMIT MODEL & ENDPOINTS
 # ============================================================================
@@ -606,6 +839,115 @@ def handle_check_session_expired(data):
         _push_session_status(session)
         print(f"✅ [SESSION] Session {session_id} confirmed expired via socket event")
 
+def send_message_notification(sender_id, receiver_id, message_text, conversation_id):
+    """Send new message notification"""
+    try:
+        sender = User.query.get(sender_id)
+        if not sender:
+            return False
+        
+        # Truncate long messages
+        preview = message_text[:50] + '...' if len(message_text) > 50 else message_text
+        
+        frontend_url = os.getenv('FRONTEND_URL', 'https://hult-ten.vercel.app')
+        
+        return send_fcm_notification(
+            user_id=receiver_id,
+            title=f"New message from {sender.full_name}",
+            body=preview,
+            data={
+                'type': 'message',
+                'sender_id': str(sender_id),
+                'sender_name': sender.full_name,
+                'conversation_id': str(conversation_id),
+                'url': f"{frontend_url}/messages"
+            },
+            notification_type='message'
+        )
+    except Exception as e:
+        print(f"❌ Error sending message notification: {e}")
+        return False
+
+@app.route('/api/notifications/register-token', methods=['POST'])
+@jwt_required()
+def register_fcm_token():
+    """Register or update FCM token for user"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        
+        data = request.get_json()
+        token = data.get('token')
+        device_type = data.get('device_type', 'web')
+        
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        print(f"[FCM] Registering token for user {user_id}")
+        
+        # Check if token already exists
+        existing_token = FCMToken.query.filter_by(token=token).first()
+        
+        if existing_token:
+            # Update existing token
+            existing_token.user_id = user_id
+            existing_token.device_type = device_type
+            existing_token.last_used = datetime.utcnow()
+            existing_token.is_active = True
+            print(f"[FCM] Updated existing token")
+        else:
+            # Create new token
+            new_token = FCMToken(
+                user_id=user_id,
+                token=token,
+                device_type=device_type
+            )
+            db.session.add(new_token)
+            print(f"[FCM] Created new token")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Token registered successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [FCM] Error registering token: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Failed to register token'}), 500
+
+
+@app.route('/api/notifications/unregister-token', methods=['POST'])
+@jwt_required()
+def unregister_fcm_token():
+    """Unregister FCM token (on logout)"""
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        token_obj = FCMToken.query.filter_by(token=token).first()
+        
+        if token_obj:
+            token_obj.is_active = False
+            db.session.commit()
+            print(f"[FCM] Token unregistered successfully")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Token unregistered successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ [FCM] Error unregistering token: {e}")
+        return jsonify({'error': 'Failed to unregister token'}), 500
+
 
 @app.route('/api/tutors/<int:tutor_id>/profile', methods=['GET'])
 def get_public_tutor_profile(tutor_id):
@@ -653,7 +995,157 @@ def get_public_tutor_profile(tutor_id):
         print(f"[TUTOR PROFILE] Error: {e}")
         return jsonify({'error': 'Failed to fetch tutor profile'}), 500
 
+# Add this FIXED version to your app.py
+# This version keeps your existing connect/disconnect handlers
 
+# Replace ONLY the initiate_video_call handler
+
+@socketio.on('initiate_video_call')
+def handle_initiate_video_call_with_notification(data):
+    """Handle video call initiation with FCM notification"""
+    try:
+        meeting_id = data.get('meetingId')
+        caller_id = data.get('callerId')
+        receiver_id = data.get('receiverId')
+        caller_name = data.get('callerName')
+        join_url = data.get('joinUrl')
+        
+        print(f"\n{'='*70}")
+        print(f"📞 [VIDEO] Call initiated with notification")
+        print(f"📞 [VIDEO] Caller: {caller_id} ({caller_name})")
+        print(f"📞 [VIDEO] Receiver: {receiver_id}")
+        print(f"{'='*70}")
+        
+        # Send Socket.IO event (for users currently online)
+        receiver_sid = active_connections.get(receiver_id)
+        
+        if receiver_sid:
+            emit('incoming_video_call', {
+                'meetingId': meeting_id,
+                'callerId': caller_id,
+                'callerName': caller_name,
+                'joinUrl': join_url
+            }, room=receiver_sid)
+            print(f"✅ [VIDEO] Socket notification sent")
+        
+        # ALWAYS send FCM notification (works even when app is closed)
+        fcm_success = send_call_notification(
+            caller_id=caller_id,
+            receiver_id=receiver_id,
+            meeting_id=meeting_id,
+            join_url=join_url
+        )
+        
+        if fcm_success:
+            print(f"✅ [VIDEO] FCM notification sent")
+        else:
+            print(f"⚠️ [VIDEO] FCM notification failed (user may not have notifications enabled)")
+        
+        # Confirm to caller
+        emit('call_initiated', {
+            'meetingId': meeting_id,
+            'status': 'sent',
+            'fcm_sent': fcm_success
+        }, room=request.sid)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        emit('call_failed', {'error': str(e)}, room=request.sid)
+
+
+# Update call_accepted handler
+@socketio.on('call_accepted')
+def handle_call_accepted(data):
+    """Handle call acceptance - FIXED"""
+    try:
+        meeting_id = data.get('meetingId')
+        accepted_by = data.get('acceptedBy')
+        caller_id = data.get('callerId')  # Add this
+        
+        print(f"✅ [VIDEO] Call {meeting_id} accepted by: {accepted_by}")
+        
+        # Notify the caller
+        if caller_id:
+            caller_sid = active_connections.get(caller_id)
+            if caller_sid:
+                emit('call_accepted', {
+                    'meetingId': meeting_id,
+                    'acceptedBy': accepted_by
+                }, room=caller_sid)
+                print(f"✅ [VIDEO] Notified caller {caller_id}")
+        else:
+            # Fallback: broadcast to all
+            emit('call_accepted', {
+                'meetingId': meeting_id,
+                'acceptedBy': accepted_by
+            }, broadcast=True)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error accepting call: {e}")
+
+
+# Update call_declined handler
+@socketio.on('call_declined')
+def handle_call_declined(data):
+    """Handle call decline - FIXED"""
+    try:
+        meeting_id = data.get('meetingId')
+        declined_by = data.get('declinedBy')
+        caller_id = data.get('callerId')  # Add this
+        
+        print(f"❌ [VIDEO] Call {meeting_id} declined by: {declined_by}")
+        
+        # Notify the caller
+        if caller_id:
+            caller_sid = active_connections.get(caller_id)
+            if caller_sid:
+                emit('call_declined', {
+                    'meetingId': meeting_id,
+                    'declinedBy': declined_by
+                }, room=caller_sid)
+                print(f"✅ [VIDEO] Notified caller {caller_id} of decline")
+        else:
+            # Fallback: broadcast to all
+            emit('call_declined', {
+                'meetingId': meeting_id,
+                'declinedBy': declined_by
+            }, broadcast=True)
+        
+    except Exception as e:
+        print(f"❌ [VIDEO] Error declining call: {e}")
+
+
+@socketio.on('end_video_call')
+def handle_end_video_call(data):
+    """Handle video call ending"""
+    try:
+        meeting_id = data.get('meetingId')
+        ended_by = data.get('endedBy')
+        other_user_id = data.get('otherUserId')
+ 
+        print(f"🔴 [VIDEO] Call {meeting_id} ended by: {ended_by}")
+ 
+        if other_user_id:
+            other_sid = active_connections.get(other_user_id) or active_connections.get(str(other_user_id))
+            if other_sid:
+                emit('call_ended', {'meetingId': meeting_id, 'endedBy': ended_by}, room=other_sid)
+                print(f"✅ [VIDEO] Notified other user {other_user_id}")
+ 
+            # Remove the ringing notification on their phone (app open or closed)
+            try:
+                tokens = [t.token for t in FCMToken.query.filter_by(
+                    user_id=int(other_user_id), is_active=True).all() if is_expo_token(t.token)]
+                if tokens:
+                    send_expo_push(tokens, 'Call ended', '', {'meetingId': meeting_id}, 'call_cancelled')
+            except Exception as push_err:
+                print(f"⚠️ [VIDEO] call_cancelled push failed: {push_err}")
+        else:
+            emit('call_ended', {'meetingId': meeting_id, 'endedBy': ended_by}, broadcast=True)
+ 
+    except Exception as e:
+        print(f"❌ [VIDEO] Error ending call: {e}")
 # Add debug endpoint to check online users
 @app.route('/api/socket/online-users', methods=['GET'])
 def get_online_users():
@@ -664,6 +1156,150 @@ def get_online_users():
         'connections': {str(k): v for k, v in active_connections.items()}
     }), 200
 
+
+# Add debug endpoint to test call notification
+@app.route('/api/debug/test-call-notification/<int:receiver_id>', methods=['POST'])
+@jwt_required()
+def test_call_notification(receiver_id):
+    """Test if we can send notification to a specific user"""
+    try:
+        caller_id = int(get_jwt_identity())
+        
+        receiver_sid = active_connections.get(receiver_id)
+        
+        if not receiver_sid:
+            return jsonify({
+                'success': False,
+                'error': 'Receiver not online',
+                'receiver_id': receiver_id,
+                'online_users': list(active_connections.keys())
+            }), 404
+        
+        # Send test notification directly to sid
+        socketio.emit('test_notification', {
+            'message': 'Test notification from API',
+            'from': caller_id,
+            'timestamp': datetime.utcnow().isoformat()
+        }, room=receiver_sid)
+        
+        return jsonify({
+            'success': True,
+            'receiver_id': receiver_id,
+            'receiver_sid': receiver_sid,
+            'message': 'Test notification sent to receiver sid'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+@app.route('/api/notifications/test', methods=['POST'])
+@jwt_required()
+def send_test_notification():
+    """Send test notification to current user"""
+    try:
+        user_id_str = get_jwt_identity()
+        user_id = int(user_id_str)
+        
+        data = request.get_json() or {}
+        
+        # Get target user (default to self)
+        target_user_id = data.get('userId', user_id)
+        
+        print(f"\n{'='*70}")
+        print(f"[TEST NOTIF] Sending test notification to user {target_user_id}")
+        print(f"{'='*70}")
+        
+        # Send FCM notification
+        success = send_fcm_notification(
+            user_id=target_user_id,
+            title=data.get('title', '🔔 Test Notification'),
+            body=data.get('body', 'This is a test notification from EduConnect!'),
+            data={
+                'type': data.get('type', 'test'),
+                'url': '/',
+                'timestamp': datetime.utcnow().isoformat()
+            },
+            notification_type='test'
+        )
+        
+        if success:
+            print(f"✅ [TEST NOTIF] Notification sent successfully")
+            return jsonify({
+                'success': True,
+                'message': 'Test notification sent successfully',
+                'user_id': target_user_id
+            }), 200
+        else:
+            print(f"❌ [TEST NOTIF] Failed to send notification")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to send notification. User may not have notifications enabled.'
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ [TEST NOTIF] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+    
+@socketio.on('connect')
+def handle_connect(auth):
+    """Handle client connection"""
+    user_id = auth.get('userId') if auth else None
+    
+    if user_id:
+        active_connections[user_id] = request.sid
+        user_rooms[user_id] = []
+        
+        print(f"✅ [SOCKET] User {user_id} connected with sid {request.sid}")
+        
+        # Notify others that user is online
+        emit('user_status', {
+            'userId': user_id,
+            'status': 'online'
+        }, broadcast=True, include_self=False)
+        
+        # Send list of online users to newly connected user
+        emit('users_online', list(active_connections.keys()))
+    else:
+        print(f"⚠️ [SOCKET] Connection without userId")
+    
+    return True
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    sid = request.sid
+    
+    # Find user_id for this sid
+    user_id = None
+    for uid, s in active_connections.items():
+        if s == sid:
+            user_id = uid
+            break
+    
+    if user_id:
+        # Remove from active connections
+        del active_connections[user_id]
+        
+        # Leave all rooms
+        if user_id in user_rooms:
+            for room in user_rooms[user_id]:
+                leave_room(room)
+            del user_rooms[user_id]
+        
+        print(f"❌ [SOCKET] User {user_id} disconnected")
+        
+        # Notify others that user is offline
+        emit('user_status', {
+            'userId': user_id,
+            'status': 'offline'
+        }, broadcast=True)
 
 @socketio.on('send_message')
 def handle_send_message_with_notification(data):
@@ -730,7 +1366,7 @@ def handle_send_message_with_notification(data):
         emit('receive_message', message_data, room=conversation_id)
         
         # Send FCM notification (for offline users or background tabs)
-        call_system.notify_new_message(
+        send_message_notification(
             sender_id=sender_id,
             receiver_id=receiver_id,
             message_text=text or 'Sent a file',
@@ -792,6 +1428,8 @@ def handle_leave_conversation(data):
             user_rooms[user_id].remove(conversation_id)
         
         print(f"👋 [SOCKET] User {user_id} left conversation {conversation_id}")
+
+
 
 
 @socketio.on('join_conversation')
@@ -986,6 +1624,9 @@ def health_check():
         'message': 'Server is running',
         'routes_loaded': True
     }), 200
+
+
+
 
 
 @app.route('/api/debug/routes', methods=['GET'])
@@ -1967,9 +2608,11 @@ def get_student_conversations(student_id):
         return jsonify({'error': 'Failed to retrieve conversations'}), 500
 
 
+
 # ============================================================================
 # AUTHENTICATION ROUTES
 # ============================================================================
+
 
 
 @app.route('/api/tutor/onboarding', methods=['POST', 'OPTIONS'])
@@ -2103,6 +2746,8 @@ def login_alt():
     if request.method == 'OPTIONS':
         return '', 200
     return login()
+
+
 
 
 # ============================================================================
@@ -2459,6 +3104,8 @@ def test_match():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    
+
 
 
 # ============================================================================
@@ -2750,6 +3397,7 @@ def grade_assignment(assignment_id):
         db.session.rollback()
         print(f"❌ [GRADE ERROR] {str(e)}")
         return jsonify({'error': 'Failed to grade assignment'}), 500
+
 
 
 @app.route('/api/match/record-outcome', methods=['POST'],endpoint="record-outcome")
@@ -3060,6 +3708,7 @@ def debug_check_profile(profile_id):
         return jsonify({'error': str(e)}), 500
 
 
+
 # ============================================================================
 # TEST/DEBUG ENDPOINTS
 # ============================================================================
@@ -3248,8 +3897,9 @@ def save_student_survey():
         if 'selected_goals' in data:
             profile.selected_goals = json.dumps(data['selected_goals'])
         profile.survey_completed = True
+        
 
-
+        
         print("[SURVEY] About to commit to database...")
         
         # Commit to database
@@ -3794,6 +4444,8 @@ def remove_offline_download(course_id):
 # ============================================================================
 
 
+
+
 @app.route('/api/materials/<int:material_id>', methods=['DELETE'])
 @jwt_required()
 def delete_material(material_id):
@@ -4068,8 +4720,9 @@ def download_material(material_id):
             as_attachment=True,
             download_name=f"{material.title}.{file_ext}"
         )
-
-
+        
+        
+        
         print(f"✅ [DOWNLOAD] File sent successfully")
         
         return response
@@ -4898,6 +5551,17 @@ def debug_tutor_status():
         return jsonify({'error': str(e)}), 500
 
 
+
+
+
+
+
+
+
+
+
+
+
 ###############################################################################
 @app.route('/api/tutor/assignments/<int:assignment_id>/submissions', methods=['GET'])
 @jwt_required()
@@ -5066,23 +5730,14 @@ def get_tutor_assignments():
         return jsonify({'error': 'Failed to get assignments'}), 500
 
 
+
 # ============================================================================
 # INITIALIZE DATABASE
 # ============================================================================
 
 
-# ============================================================================
-# CALLS + PUSH NOTIFICATIONS  (call_system.py, push.py)
-# Registered last so its socket handlers (connect, disconnect, call events)
-# are the only ones in effect.
-# ============================================================================
-from call_system import register_call_system  # noqa: E402
+    
 
-call_system = register_call_system(
-    app, db, socketio, User, FCMToken,
-    active_connections=active_connections,
-    user_rooms=user_rooms,
-)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
